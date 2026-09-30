@@ -496,6 +496,22 @@ app.post('/api/meesho/login', async (req, res) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.send(`
+    <div style="font-family: system-ui, sans-serif; text-align: center; padding: 60px 20px; background: #090d16; color: #ffffff; min-height: 100vh; box-sizing: border-box;">
+      <div style="max-width: 500px; margin: 0 auto; background: #131c2e; border: 1px solid #1e293b; padding: 32px; rounded: 24px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #0284c7, #2563eb); border-radius: 16px; margin: 0 auto 16px auto; display: flex; align-items: center; justify-content: center; font-size: 30px;">
+          📦
+        </div>
+        <h1 style="color: #38bdf8; font-size: 24px; margin-bottom: 8px;">Meesho OTP Cloud Worker</h1>
+        <p style="color: #10b981; font-weight: bold; font-size: 14px; margin: 8px 0;">🟢 Status: 100% Online & Live on Render</p>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 24px;">Backend API is actively processing automated Meesho logins and syncing Return Handover OTPs in real-time.</p>
+        <a href="https://meesho-otp-live.web.app" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; font-size: 14px;">Open Web App Dashboard</a>
+      </div>
+    </div>
+  `);
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
