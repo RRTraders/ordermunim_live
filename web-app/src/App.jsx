@@ -7,6 +7,10 @@ import {
   RecaptchaVerifier, 
   signInWithPhoneNumber, 
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
   onAuthStateChanged, 
   signOut 
 } from 'firebase/auth';
@@ -50,7 +54,11 @@ import {
   Sparkles,
   PauseCircle,
   BellRing,
-  X
+  X,
+  User,
+  MailCheck,
+  ArrowLeft,
+  CheckCircle2
 } from 'lucide-react';
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
@@ -74,9 +82,19 @@ export default function App() {
   };
   
   // Auth state
-  const [authTab, setAuthTab] = useState('phone'); // 'phone' (Customer Login) | 'admin'
+  const [authTab, setAuthTab] = useState('customer'); // 'customer' | 'admin'
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup' | 'forgot'
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPassword, setCustomerPassword] = useState('');
+  const [customerConfirmPass, setCustomerConfirmPass] = useState('');
+  const [emailNeedsVerification, setEmailNeedsVerification] = useState(false);
+
+  // Super Admin Credentials
   const [adminEmail, setAdminEmail] = useState('rrtradersofficials@gmail.com');
   const [adminPassword, setAdminPassword] = useState('@rrt123');
+
+  // Phone Auth state
   const [phone, setPhone] = useState('+91');
   const [otpSent, setOtpSent] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState(null);
@@ -168,7 +186,15 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
+        const isSuper = (currentUser.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || currentUser.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
+        if (!isSuper && currentUser.email && !currentUser.emailVerified) {
+          setEmailNeedsVerification(true);
+        } else {
+          setEmailNeedsVerification(false);
+          await loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
+        }
+      } else {
+        setEmailNeedsVerification(false);
       }
       setLoading(false);
     });
@@ -340,6 +366,148 @@ export default function App() {
     }
   };
 
+  // Customer Email Sign In
+  const handleCustomerLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, customerEmail.trim(), customerPassword);
+      const currentUser = cred.user;
+      const isSuper = (currentUser.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || currentUser.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
+      
+      if (!isSuper && !currentUser.emailVerified) {
+        setEmailNeedsVerification(true);
+        setUser(currentUser);
+        // Automatically trigger a fresh verification email link
+        await sendEmailVerification(currentUser).catch(() => {});
+        return;
+      }
+
+      setEmailNeedsVerification(false);
+      setUser(currentUser);
+      await loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
+    } catch (err) {
+      console.error("Customer login error:", err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setAuthError('Invalid email or password. If you do not have an account, click "Create Account" below.');
+      } else {
+        setAuthError(err.message || 'Login failed. Please check your credentials.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Customer Email Sign Up (Requires Full Name, Email, Password + Mandatory Email Verification)
+  const handleCustomerSignup = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    if (!customerName.trim()) {
+      setAuthError('Please enter your full name.');
+      return;
+    }
+    if (customerPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (customerPassword !== customerConfirmPass) {
+      setAuthError('Passwords do not match. Please re-enter your password.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, customerEmail.trim(), customerPassword);
+      const newUser = cred.user;
+
+      // Set display name in Firebase Auth
+      await updateProfile(newUser, { displayName: customerName.trim() }).catch(() => {});
+
+      // Send official email verification link (100% Free)
+      await sendEmailVerification(newUser);
+
+      // Create seller document in Firestore
+      await setDoc(doc(db, 'users', newUser.uid), {
+        name: customerName.trim(),
+        email: customerEmail.trim().toLowerCase(),
+        role: 'seller',
+        maxAccounts: 2, // 2 stores quota by default
+        status: 'active',
+        createdAt: new Date().toISOString()
+      });
+
+      setUser(newUser);
+      setEmailNeedsVerification(true);
+      showToast('Account created! A verification link has been sent to your email.', 'success');
+    } catch (err) {
+      console.error("Signup error:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setAuthError('An account with this email already exists. Please sign in instead.');
+      } else {
+        setAuthError(err.message || 'Signup failed. Please try again.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Check if User clicked verification link in their email
+  const handleCheckVerified = async () => {
+    if (!auth.currentUser) return;
+    setAuthLoading(true);
+    try {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        setEmailNeedsVerification(false);
+        setUser(auth.currentUser);
+        await loadUserProfile(auth.currentUser.uid, auth.currentUser.phoneNumber, auth.currentUser.email);
+        showToast('Email verified successfully! Welcome to Meesho OTP Hub.', 'success');
+      } else {
+        showToast('Email not verified yet. Please check your inbox and click the link.', 'warning');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Resend verification email
+  const handleResendVerificationEmail = async () => {
+    if (!auth.currentUser) return;
+    setAuthLoading(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      showToast('New verification email sent! Check your inbox and spam folder.', 'success');
+    } catch (err) {
+      showToast(`Failed to resend: ${err.message}`, 'error');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Forgot Password handler
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!customerEmail.trim()) {
+      setAuthError('Please enter your registered email address.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, customerEmail.trim());
+      showToast('Password reset link sent to your email inbox!', 'success');
+      setAuthMode('login');
+    } catch (err) {
+      setAuthError(err.message || 'Failed to send password reset email.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   // Super Admin Email & Password login
   const handleAdminEmailLogin = async (e) => {
     e.preventDefault();
@@ -371,6 +539,7 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setUser(null);
+    setEmailNeedsVerification(false);
     setProfile({ maxAccounts: 1, mobile: '', status: 'active' });
     setAccounts([]);
     setAdminAuthenticated(false);
@@ -709,11 +878,74 @@ export default function App() {
     );
   }
 
-  // ===================== AUTH SCREEN (PHONE LOGIN) =====================
+  // ===================== EMAIL VERIFICATION REQUIRED SCREEN =====================
+  if (user && emailNeedsVerification) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl text-center space-y-5">
+          <div className="w-16 h-16 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/25">
+            <MailCheck className="w-8 h-8 text-white" />
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">Verify Your Email</h2>
+            <p className="text-xs text-slate-400 mt-1.5">
+              We have sent an official verification link to:
+            </p>
+            <span className="inline-block mt-2 font-mono text-sm font-bold text-cyan-400 bg-cyan-950/70 border border-cyan-800/80 px-3.5 py-1.5 rounded-xl">
+              {user.email}
+            </span>
+          </div>
+
+          <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+              <span>Open your email inbox (also check Spam/Junk folder if not in Inbox).</span>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+              <span>Click the <strong>verification link</strong> sent by Firebase.</span>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+              <span>Come back here and click <strong>"I Have Verified (Continue)"</strong> below.</span>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={handleCheckVerified}
+              disabled={authLoading}
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {authLoading ? 'Verifying status...' : 'I Have Verified (Continue)'}
+            </button>
+
+            <button
+              onClick={handleResendVerificationEmail}
+              disabled={authLoading}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+            >
+              Resend Verification Link
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="w-full text-xs text-slate-500 hover:text-rose-400 transition-colors pt-2 block"
+            >
+              Log out / Use different account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===================== AUTH SCREEN (CUSTOMER & SUPER ADMIN) =====================
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
-        <div id="recaptcha-container"></div>
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl">
           <div className="text-center mb-6">
             <div className="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-3">
@@ -724,25 +956,25 @@ export default function App() {
           </div>
 
           {authError && (
-            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3 rounded-xl text-xs flex items-center gap-2 mb-4">
+            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3.5 rounded-xl text-xs flex items-center gap-2 mb-5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{authError}</span>
             </div>
           )}
 
-          {/* Toggle between Customer Login and Super Admin */}
+          {/* Top Toggle between Customer and Super Admin */}
           <div className="flex bg-slate-950 p-1.5 rounded-2xl mb-5 border border-slate-800">
             <button
               type="button"
-              onClick={() => { setAuthTab('phone'); setAuthError(''); }}
+              onClick={() => { setAuthTab('customer'); setAuthError(''); }}
               className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                authTab === 'phone' 
+                authTab === 'customer' 
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20' 
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Phone className="w-3.5 h-3.5" />
-              Customer Login
+              <User className="w-3.5 h-3.5" />
+              Customer
             </button>
             <button
               type="button"
@@ -805,74 +1037,251 @@ export default function App() {
               </button>
             </form>
           ) : (
-            /* ================= SELLER PHONE OTP FORM ================= */
-            !otpSent ? (
-              <form onSubmit={handleSendOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                    Mobile Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. 9876543210"
-                      required
-                      className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors"
-                    />
+            /* ================= CUSTOMER AUTHENTICATION (SIGN IN / SIGN UP) ================= */
+            <div>
+              {/* Customer Mode Tabs (Sign In vs Create Account) */}
+              {authMode !== 'forgot' && (
+                <div className="flex items-center justify-center gap-6 border-b border-slate-800 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    className={`text-sm font-bold pb-2 transition-all relative ${
+                      authMode === 'login' 
+                        ? 'text-cyan-400 border-b-2 border-cyan-400' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+                    className={`text-sm font-bold pb-2 transition-all relative ${
+                      authMode === 'signup' 
+                        ? 'text-cyan-400 border-b-2 border-cyan-400' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Create Account (Sign Up)
+                  </button>
+                </div>
+              )}
+
+              {/* 1. CUSTOMER SIGN IN FORM */}
+              {authMode === 'login' && (
+                <form onSubmit={handleCustomerLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="seller@example.com"
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1.5">
-                    A real 6-digit SMS verification code will be sent to your mobile.
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('forgot'); setAuthError(''); }}
+                        className="text-[11px] text-cyan-400 hover:underline"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="password"
+                        value={customerPassword}
+                        onChange={(e) => setCustomerPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                  >
+                    {authLoading ? 'Signing In...' : 'Sign In to Dashboard'}
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <span className="text-xs text-slate-400">
+                      New to Meesho OTP Hub?{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+                        className="text-cyan-400 font-bold hover:underline"
+                      >
+                        Create an Account
+                      </button>
+                    </span>
+                  </div>
+                </form>
+              )}
+
+              {/* 2. CUSTOMER SIGN UP FORM (NAME + EMAIL + PASSWORD + EMAIL VERIFICATION) */}
+              {authMode === 'signup' && (
+                <form onSubmit={handleCustomerSignup} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="e.g. Rajesh Kumar"
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="seller@example.com"
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Create Password (Min 6 Characters)
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="password"
+                        value={customerPassword}
+                        onChange={(e) => setCustomerPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        minLength={6}
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="password"
+                        value={customerConfirmPass}
+                        onChange={(e) => setCustomerConfirmPass(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        minLength={6}
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 p-2.5 rounded-xl">
+                    📧 An official verification link will be sent to your email. You must verify your email before accessing the dashboard.
                   </p>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
-                >
-                  {authLoading ? 'Sending SMS...' : 'Send Login OTP via SMS'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Enter 6-Digit SMS Code
-                  </label>
-                  <p className="text-xs text-slate-400 mb-2">
-                    Enter the OTP code received via SMS on your mobile
-                  </p>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    placeholder="123456"
-                    required
-                    className="w-full text-center tracking-widest text-2xl py-3 bg-slate-950 border border-slate-700 rounded-xl text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                  >
+                    {authLoading ? 'Creating Account...' : 'Sign Up & Send Verification Link'}
+                  </button>
 
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
-                >
-                  {authLoading ? 'Verifying...' : 'Verify & Continue'}
-                </button>
+                  <div className="text-center pt-2">
+                    <span className="text-xs text-slate-400">
+                      Already have an account?{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                        className="text-cyan-400 font-bold hover:underline"
+                      >
+                        Sign In
+                      </button>
+                    </span>
+                  </div>
+                </form>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => setOtpSent(false)}
-                  className="w-full text-xs text-slate-400 hover:text-white transition-colors"
-                >
-                  Change mobile number
-                </button>
-              </form>
-            )
+              {/* 3. FORGOT PASSWORD FORM */}
+              {authMode === 'forgot' && (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="text-center mb-3">
+                    <h3 className="font-bold text-white text-base">Reset Your Password</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Enter your email address and we will send you a password reset link.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="seller@example.com"
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                  >
+                    {authLoading ? 'Sending link...' : 'Send Password Reset Link'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    className="w-full text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1.5 pt-2"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Back to Sign In
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
         </div>

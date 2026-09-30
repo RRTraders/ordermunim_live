@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Meesho Return OTP Auto-Sync",
+  "version": "1.0.0",
+  "description": "Automatically captures Return Handover OTP (Valmo, Shadowfax, Delhivery) from Meesho Supplier panel and syncs to your mobile dashboard in real time.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://supplier.meesho.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meesho OTP Sync"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://supplier.meesho.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

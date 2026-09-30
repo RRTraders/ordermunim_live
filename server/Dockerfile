@@ -2,9 +2,12 @@ FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
 WORKDIR /app
 
-# Install Xvfb for virtual display window (bypasses bot detection)
+# Install Xvfb and dependencies for virtual display and Chrome
 RUN apt-get update && apt-get install -y \
     xvfb \
+    wget \
+    gnupg \
+    ca-certificates \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -20,12 +23,18 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Google Chrome stable directly from Google (.deb)
+RUN wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && (dpkg -i /tmp/chrome.deb || apt-get update && apt-get install -yf) \
+    && rm -f /tmp/chrome.deb \
+    || true
+
 # Copy package definitions
 COPY package*.json ./
 RUN npm install --production
 
-# Ensure playwright chromium is installed
-RUN npx playwright install chromium
+# Ensure playwright chromium and chrome dependencies are installed
+RUN npx playwright install chromium && (npx playwright install chrome || true)
 
 # Copy app files
 COPY . .

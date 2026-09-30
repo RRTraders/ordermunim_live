@@ -1,5 +1,9 @@
 node_modules
 sessions
+user_data*
+test_*
 *.png
+*.exe
+cloudflared.exe
 .git
 .env

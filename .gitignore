@@ -5,19 +5,23 @@ server/node_modules/
 
 # Build outputs
 web-app/dist/
+web-app/.firebase/
 
 # Local session storage & credentials
 server/sessions/
+server/user_data*/
+server/test_*/
 *.png
 .env
 .env.local
 
 # Cloudflared executable & logs
 cloudflared.exe
+server/cloudflared.exe
+*.exe
 *.log
 
 # OS files
 .DS_Store
 Thumbs.db
 
-server/user_data_testlogin/

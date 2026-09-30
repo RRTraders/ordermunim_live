@@ -64,6 +64,36 @@ async function updateFirestoreAccount(syncKey, data) {
   }
 }
 
+// Robust browser launcher: Tries Chrome first, seamlessly falls back to bundled Chromium
+async function launchBrowserContext(sessionDir) {
+  const baseArgs = [
+    '--disable-blink-features=AutomationControlled',
+    '--start-maximized',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--no-first-run'
+  ];
+
+  try {
+    return await chromium.launchPersistentContext(sessionDir, {
+      channel: 'chrome',
+      headless: false,
+      viewport: { width: 1280, height: 800 },
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: baseArgs
+    });
+  } catch (err) {
+    console.warn(`[Browser] Channel 'chrome' unavailable (${err.message}). Launching bundled Chromium fallback...`);
+    return await chromium.launchPersistentContext(sessionDir, {
+      headless: false,
+      viewport: { width: 1280, height: 800 },
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: baseArgs
+    });
+  }
+}
+
 // Function to log in to Meesho and extract return OTP
 async function loginAndExtractMeesho(syncKey, email, password, storeName, userId) {
   console.log(`\n========================================`);
@@ -77,17 +107,7 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
 
   let context;
   try {
-    context = await chromium.launchPersistentContext(sessionDir, {
-      channel: 'chrome',
-      headless: false, // Runs visible on your machine so you see the login action
-      viewport: { width: 1280, height: 800 },
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--start-maximized',
-        '--no-sandbox'
-      ]
-    });
+    context = await launchBrowserContext(sessionDir);
 
     const page = await context.newPage();
     console.log("[Meesho Worker] Navigating to https://supplier.meesho.com/panel/v3/new/root/login...");
@@ -340,17 +360,7 @@ async function checkReturnsForSession(syncKey) {
   console.log(`[Auto-Sync] Checking returns for ${syncKey} (identifier: ${identifier})...`);
   let context;
   try {
-    context = await chromium.launchPersistentContext(sessionDir, {
-      channel: 'chrome',
-      headless: false,
-      viewport: { width: 1280, height: 800 },
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--start-maximized',
-        '--no-sandbox'
-      ]
-    });
+    context = await launchBrowserContext(sessionDir);
 
     const page = await context.newPage();
     const returnsUrl = `https://supplier.meesho.com/panel/v3/new/fulfillment/${identifier}/returns/overview`;
