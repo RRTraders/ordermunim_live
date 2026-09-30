@@ -119,6 +119,9 @@ export default function App() {
   const [meeshoPass, setMeeshoPass] = useState('');
   const [syncingAccount, setSyncingAccount] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [connectStep, setConnectStep] = useState(1); // 1 = enter details, 2 = install extension
+  const [generatedSyncKey, setGeneratedSyncKey] = useState('');
+
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'admin' | 'staff'
   const [staffShareKey, setStaffShareKey] = useState('');
 
@@ -565,7 +568,7 @@ export default function App() {
     }
   };
 
-  // Add a new Meesho Account slot (Automated Cloud Login)
+  // Add a new Meesho Account slot — Extension-based flow (no cloud login)
   const handleCreateAccount = async (e) => {
     e.preventDefault();
     setModalError('');
@@ -576,101 +579,62 @@ export default function App() {
     }
 
     const cleanEmail = meeshoEmail.trim().toLowerCase();
-    const existing = accounts.find(a => 
-      a.email && a.email.trim().toLowerCase() === cleanEmail
-    );
-    if (existing) {
-      setModalError(`Account already added! This Meesho account (${existing.storeName || meeshoEmail}) is already connected.`);
-      return;
+    if (cleanEmail) {
+      const existing = accounts.find(a =>
+        a.email && a.email.trim().toLowerCase() === cleanEmail
+      );
+      if (existing) {
+        setModalError(`Account already added! "${existing.storeName || meeshoEmail}" is already connected.`);
+        return;
+      }
     }
 
     const randomId = Math.floor(1000 + Math.random() * 9000);
     const syncKey = `MSH-${randomId}`;
-    const autoStoreName = newStoreName.trim() || (meeshoEmail ? meeshoEmail.split('@')[0] : 'Meesho Account');
+    const autoStoreName = newStoreName.trim() || (meeshoEmail ? meeshoEmail.split('@')[0] : 'My Meesho Store');
 
     setSyncingAccount(true);
-
     try {
-      // Create initial pending account entry in Firestore
+      // Create Firestore entry — extension will fill in OTP/courier once installed
       const newAccRef = doc(db, 'accounts', syncKey);
       await setDoc(newAccRef, {
         userId: user.uid,
         storeName: autoStoreName,
-        email: meeshoEmail.trim(),
+        email: cleanEmail || '',
         syncKey: syncKey,
-        courier: 'Logging in...',
+        courier: 'Waiting for extension...',
         currentOtp: '----',
         handoverCount: 0,
-        dateTime: 'Connecting...',
-        status: 'syncing',
+        dateTime: 'Install extension to sync',
+        status: 'pending',
         lastUpdated: new Date().toISOString()
       });
 
-      // Send to backend login service
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/meesho/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          syncKey: syncKey,
-          storeName: newStoreName.trim(),
-          email: meeshoEmail.trim(),
-          password: meeshoPass
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        await deleteDoc(newAccRef);
-        try {
-          await fetch(`${backendUrl}/api/meesho/session/${syncKey}`, { method: 'DELETE' }).catch(() => {});
-        } catch(e) {}
-        setModalError(data.error || 'Meesho login failed. Please check your credentials.');
-        return;
-      }
-
-      // Check duplicate store
-      const duplicateStore = accounts.find(a => 
-        a.id !== syncKey && (
-          (a.storeName && data.storeName && a.storeName.trim().toLowerCase() === data.storeName.trim().toLowerCase()) ||
-          (a.identifier && data.identifier && a.identifier === data.identifier) ||
-          (a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail)
-        )
-      );
-
-      if (duplicateStore) {
-        await deleteDoc(newAccRef);
-        try {
-          await fetch(`${backendUrl}/api/meesho/session/${syncKey}`, { method: 'DELETE' }).catch(() => {});
-        } catch(e) {}
-        setModalError(`Store "${data.storeName}" is already linked! Duplicate accounts are not allowed.`);
-        return;
-      }
-
-      // Update Firestore with real storeName & OTP returned by Meesho
-      await updateDoc(newAccRef, {
-        storeName: data.storeName,
-        identifier: data.identifier || '',
-        currentOtp: data.otp || '----',
-        courier: data.courier || '----',
-        handoverCount: data.handoverCount || 0,
-        dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'live'
-      });
-
-      setNewStoreName('');
-      setMeeshoEmail('');
-      setMeeshoPass('');
-      setShowAddModal(false);
-      showToast(`Store "${data.storeName}" connected successfully!`, 'success');
+      // Move to step 2: show extension instructions
+      setGeneratedSyncKey(syncKey);
+      setConnectStep(2);
     } catch (err) {
       console.error(err);
-      setModalError(`Login error: ${err.message}`);
+      setModalError(`Error: ${err.message}`);
     } finally {
       setSyncingAccount(false);
     }
   };
+
+  const handleCloseConnectModal = () => {
+    setShowAddModal(false);
+    setConnectStep(1);
+    setGeneratedSyncKey('');
+    setModalError('');
+    setMeeshoEmail('');
+    setMeeshoPass('');
+    setNewStoreName('');
+    if (connectStep === 2) {
+      showToast(`Store added! Install the extension and open Meesho to sync.`, 'success');
+    }
+  };
+
+
 
   // Delete an account with fancy confirmation dialog
   const handleDeleteAccount = (accId, storeName) => {
@@ -1741,106 +1705,148 @@ export default function App() {
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Package className="w-5 h-5 text-cyan-400" />
-                Connect Meesho Account
+                {connectStep === 1 ? 'Add Meesho Store' : 'Install Chrome Extension'}
               </h3>
-              <button
-                type="button"
-                onClick={() => { setShowAddModal(false); setModalError(''); }}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-              >
+              <button type="button" onClick={handleCloseConnectModal}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Fancy Error Line / Banner */}
+            {/* Error banner */}
             {modalError && (
-              <div className="bg-rose-500/15 border border-rose-500/40 text-rose-200 p-3.5 rounded-2xl text-xs flex items-start justify-between gap-2.5 shadow-lg shadow-rose-950/40 animate-in fade-in duration-200">
+              <div className="bg-rose-500/15 border border-rose-500/40 text-rose-200 p-3.5 rounded-2xl text-xs flex items-start justify-between gap-2.5 animate-in fade-in duration-200">
                 <div className="flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <span className="font-medium leading-relaxed">{modalError}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setModalError('')}
-                  className="text-rose-400 hover:text-white p-0.5 rounded transition-colors"
-                >
+                <button type="button" onClick={() => setModalError('')} className="text-rose-400 hover:text-white p-0.5 rounded transition-colors">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
 
-            <form onSubmit={handleCreateAccount} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Meesho Registered Email or Mobile
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="seller@example.com or 9876543210"
-                  value={meeshoEmail}
-                  onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
-                />
-              </div>
+            {/* ── STEP 1: Enter store info ── */}
+            {connectStep === 1 && (
+              <form onSubmit={handleCreateAccount} className="space-y-4">
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-3.5 text-xs text-cyan-200 leading-relaxed">
+                  <p className="font-semibold mb-1 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> How it works
+                  </p>
+                  <p>We use a <strong>Chrome Extension</strong> to read OTP directly from your Meesho account — from your own browser. No passwords stored on our servers.</p>
+                </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Meesho Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••••••"
-                  value={meeshoPass}
-                  onChange={(e) => { setMeeshoPass(e.target.value); if (modalError) setModalError(''); }}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
-                />
-              </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                    Store Nickname <span className="text-slate-500 font-normal">(What to call this store)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sun Burst, Kaanchan Export"
+                    value={newStoreName}
+                    onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Store Nickname <span className="text-slate-500 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kaanchan Export (Leave empty to auto-detect)"
-                  value={newStoreName}
-                  onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
-                />
-              </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                    Meesho Email <span className="text-slate-500 font-normal">(Optional — for your reference)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="seller@example.com"
+                    value={meeshoEmail}
+                    onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowAddModal(false); setModalError(''); }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button type="button" onClick={handleCloseConnectModal}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={syncingAccount}
+                    className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all">
+                    {syncingAccount ? (
+                      <><RefreshCw className="w-4 h-4 animate-spin" /> Setting up...</>
+                    ) : (
+                      <><Plus className="w-4 h-4" /> Continue</>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── STEP 2: Extension instructions ── */}
+            {connectStep === 2 && (
+              <div className="space-y-4">
+                {/* Sync key display */}
+                <div className="bg-slate-950 border border-cyan-500/40 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-slate-400 mb-1">Your Sync Key</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-2xl font-mono font-bold text-cyan-400 tracking-widest">{generatedSyncKey}</span>
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(generatedSyncKey); showToast('Sync key copied!', 'success'); }}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">You'll enter this in the extension</p>
+                </div>
+
+                {/* Steps */}
+                <div className="space-y-2.5">
+                  {[
+                    { n: 1, text: 'Download & install the Chrome Extension from the link below' },
+                    { n: 2, text: 'Click the extension icon → enter your Sync Key above' },
+                    { n: 3, text: `Open supplier.meesho.com and log in to your Meesho account` },
+                    { n: 4, text: 'Go to Returns page — OTP will sync to this dashboard automatically!' },
+                  ].map(step => (
+                    <div key={step.n} className="flex items-start gap-3 bg-slate-800/50 rounded-xl p-3">
+                      <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-bold flex items-center justify-center shrink-0">{step.n}</span>
+                      <span className="text-xs text-slate-300 leading-relaxed">{step.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Download button */}
+                <a
+                  href="https://github.com/RRTraders/meesho-otp/raw/main/extension/meesho-otp-extension.zip"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={syncingAccount}
-                  className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all"
-                >
-                  {syncingAccount ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Logging in & Fetching Account...
-                    </>
-                  ) : (
-                    'Connect Meesho Account'
-                  )}
-                </button>
+                  <ExternalLink className="w-4 h-4" />
+                  Download Chrome Extension
+                </a>
+
+                <div className="text-center">
+                  <p className="text-xs text-slate-500 mb-2">Already installed the extension?</p>
+                  <button
+                    type="button"
+                    onClick={handleCloseConnectModal}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    Done — Close
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}
+
+
 
       {/* ================= FANCY TOAST NOTIFICATION ================= */}
       {toast && (
