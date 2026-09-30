@@ -2,11 +2,9 @@ FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
 WORKDIR /app
 
-# Install Xvfb and dependencies for virtual display and Chrome
+# Install Xvfb for headless display and needed system libs
 RUN apt-get update && apt-get install -y \
     xvfb \
-    wget \
-    gnupg \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -23,27 +21,20 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome stable directly from Google (.deb)
-RUN wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && (dpkg -i /tmp/chrome.deb || apt-get update && apt-get install -yf) \
-    && rm -f /tmp/chrome.deb \
-    || true
-
 # Copy package definitions
 COPY package*.json ./
 RUN npm install --production
 
-# Ensure playwright chromium and chrome dependencies are installed
-RUN npx playwright install chromium && (npx playwright install chrome || true)
-
 # Copy app files
 COPY . .
 
-# Clean local sessions and temporary png files if copied
+# Clean local sessions and temporary png files
 RUN rm -rf sessions/* *.png
-RUN chmod +x start.sh
+
+RUN chmod +x start.sh 2>/dev/null || true
 
 ENV NODE_ENV=production
+ENV DISPLAY=:99
 
-# Start using startup script
-CMD ["/bin/bash", "./start.sh"]
+# Startup: launch Xvfb + server
+CMD ["bash", "-c", "Xvfb :99 -screen 0 1280x800x24 -ac &>/dev/null & sleep 1 && node server.js"]

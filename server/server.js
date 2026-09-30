@@ -11,91 +11,151 @@ app.use(express.json());
 const PORT = process.env.PORT || 4000;
 const FIREBASE_PROJECT_ID = "meesho-otp-app";
 
+const SESSIONS_DIR = path.join(__dirname, 'sessions');
+if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
 // In-memory debug log ring buffer
 const logBuffer = [];
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
   console.log(msg);
   logBuffer.push(line);
-  if (logBuffer.length > 200) logBuffer.shift();
+  if (logBuffer.length > 300) logBuffer.shift();
 }
 
-// Helper to push updates to Firestore
+// =====================================================================
+// SESSION PERSISTENCE — saves cookies to disk after login
+// =====================================================================
+
+function loadSession(syncKey) {
+  try {
+    const file = path.join(SESSIONS_DIR, syncKey, 'api_session.json');
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {}
+  return null;
+}
+
+function saveSession(syncKey, data) {
+  try {
+    const dir = path.join(SESSIONS_DIR, syncKey);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'api_session.json'), JSON.stringify(data, null, 2));
+  } catch (e) { log(`[Session] Save error: ${e.message}`); }
+}
+
+function deleteSessionData(syncKey) {
+  try {
+    const dir = path.join(SESSIONS_DIR, syncKey);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  } catch (e) {}
+}
+
+// =====================================================================
+// FIRESTORE HELPER
+// =====================================================================
+
 async function updateFirestoreAccount(syncKey, data) {
   try {
     const fieldsToUpdate = [];
     const fieldsObj = {};
 
-    if (data.storeName !== undefined) {
-      fieldsToUpdate.push('storeName');
-      fieldsObj.storeName = { stringValue: data.storeName };
-    }
-    if (data.otp !== undefined) {
-      fieldsToUpdate.push('currentOtp');
-      fieldsObj.currentOtp = { stringValue: data.otp };
-    }
-    if (data.courier !== undefined) {
-      fieldsToUpdate.push('courier');
-      fieldsObj.courier = { stringValue: data.courier };
-    }
-    if (data.handoverCount !== undefined) {
-      fieldsToUpdate.push('handoverCount');
-      fieldsObj.handoverCount = { integerValue: (data.handoverCount || 0).toString() };
-    }
-    if (data.dateTime !== undefined) {
-      fieldsToUpdate.push('dateTime');
-      fieldsObj.dateTime = { stringValue: data.dateTime };
-    }
-    if (data.identifier !== undefined) {
-      fieldsToUpdate.push('identifier');
-      fieldsObj.identifier = { stringValue: data.identifier };
-    }
-    if (data.status !== undefined) {
-      fieldsToUpdate.push('status');
-      fieldsObj.status = { stringValue: data.status };
-    }
+    if (data.storeName !== undefined) { fieldsToUpdate.push('storeName'); fieldsObj.storeName = { stringValue: data.storeName }; }
+    if (data.otp !== undefined) { fieldsToUpdate.push('currentOtp'); fieldsObj.currentOtp = { stringValue: data.otp }; }
+    if (data.courier !== undefined) { fieldsToUpdate.push('courier'); fieldsObj.courier = { stringValue: data.courier }; }
+    if (data.handoverCount !== undefined) { fieldsToUpdate.push('handoverCount'); fieldsObj.handoverCount = { integerValue: String(data.handoverCount || 0) }; }
+    if (data.dateTime !== undefined) { fieldsToUpdate.push('dateTime'); fieldsObj.dateTime = { stringValue: data.dateTime }; }
+    if (data.identifier !== undefined) { fieldsToUpdate.push('identifier'); fieldsObj.identifier = { stringValue: data.identifier }; }
+    if (data.status !== undefined) { fieldsToUpdate.push('status'); fieldsObj.status = { stringValue: data.status }; }
     fieldsToUpdate.push('lastUpdated');
     fieldsObj.lastUpdated = { stringValue: new Date().toISOString() };
 
     const maskParams = fieldsToUpdate.map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}?${maskParams}`;
-    
-    const payload = { fields: fieldsObj };
-
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    console.log(`[Firestore] Updated ${syncKey}: status=${res.status}`);
-  } catch (err) {
-    console.error("[Firestore] Update error:", err.message);
-  }
+    const res = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: fieldsObj }) });
+    log(`[Firestore] Updated ${syncKey}: status=${res.status}`);
+  } catch (err) { log(`[Firestore] Error: ${err.message}`); }
 }
 
-// Robust browser launcher: Tries Chrome first, seamlessly falls back to bundled Chromium
+// =====================================================================
+// MEESHO OTP API — calls Meesho's internal API using saved session cookies
+// =====================================================================
+
+function buildMeeshoHeaders(cookies, identifier) {
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8',
+    'Origin': 'https://supplier.meesho.com',
+    'Referer': `https://supplier.meesho.com/panel/v3/new/fulfillment/${identifier}/returns/overview`,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    'Cookie': cookies
+  };
+}
+
+async function fetchOTPWithCookies(identifier, cookies) {
+  log(`[OTP API] Fetching OTP for ${identifier}...`);
+
+  try {
+    const res = await fetch('https://supplier.meesho.com/api/fulfillment/returnRto/fetchDeliveryOTPs', {
+      method: 'POST',
+      headers: buildMeeshoHeaders(cookies, identifier),
+      body: JSON.stringify({ identifier, child_supplier_identifier: null, child_supplier_id: null })
+    });
+
+    log(`[OTP API] fetchDeliveryOTPs status: ${res.status}`);
+
+    if (res.ok) {
+      const json = await res.json();
+      log(`[OTP API] Response: ${JSON.stringify(json)}`);
+      const otpList = json.supplier_delivery_otp || [];
+      if (otpList.length > 0) {
+        const item = otpList[0];
+        return {
+          otp: item.otp || '----',
+          courier: item.carrier_details?.name || item.carrier_name || 'Courier',
+          handoverCount: item.delivery_shipment_details?.total_shipment_count || item.count || 0,
+          dateTime: item.otp_expiry_timestamp
+            ? new Date(item.otp_expiry_timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+            : new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        };
+      }
+    } else if (res.status === 401 || res.status === 403) {
+      log(`[OTP API] Session expired for ${identifier}, needs re-login`);
+      return null; // Signal session expired
+    }
+  } catch (e) {
+    log(`[OTP API] Error: ${e.message}`);
+  }
+
+  return { otp: '----', courier: 'No active return', handoverCount: 0, dateTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) };
+}
+
+// =====================================================================
+// BROWSER-BASED LOGIN — Only used ONCE per account, then saves cookies
+// =====================================================================
+
 async function launchBrowserContext(sessionDir) {
   const baseArgs = [
     '--disable-blink-features=AutomationControlled',
-    '--start-maximized',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--no-first-run'
+    '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+    '--no-first-run', '--disable-gpu'
   ];
+
+  // On Render (Linux) headless via Xvfb; on Windows headless=false for real Chrome
+  const isLinux = process.platform === 'linux';
 
   try {
     return await chromium.launchPersistentContext(sessionDir, {
       channel: 'chrome',
-      headless: false,
+      headless: isLinux,
       viewport: { width: 1280, height: 800 },
       ignoreDefaultArgs: ['--enable-automation'],
       args: baseArgs
     });
   } catch (err) {
-    console.warn(`[Browser] Channel 'chrome' unavailable (${err.message}). Launching bundled Chromium fallback...`);
+    log(`[Browser] Chrome unavailable (${err.message.split('\n')[0]}), using bundled Chromium...`);
     return await chromium.launchPersistentContext(sessionDir, {
-      headless: false,
+      headless: isLinux,
       viewport: { width: 1280, height: 800 },
       ignoreDefaultArgs: ['--enable-automation'],
       args: baseArgs
@@ -103,434 +163,227 @@ async function launchBrowserContext(sessionDir) {
   }
 }
 
-// Function to log in to Meesho and extract return OTP
 async function loginAndExtractMeesho(syncKey, email, password, storeName, userId) {
-  console.log(`\n========================================`);
-  console.log(`[Meesho Worker] Starting login for: ${storeName} (${email})`);
-  console.log(`========================================`);
+  log(`\n=== [Login] Starting for: ${email} (${syncKey}) ===`);
 
-  const sessionDir = path.join(__dirname, 'sessions', syncKey);
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-  }
+  const sessionDir = path.join(SESSIONS_DIR, syncKey, 'browser');
+  if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
 
   let context;
   try {
     context = await launchBrowserContext(sessionDir);
-
     const page = await context.newPage();
 
-    // Capture login API responses
-    let loginApiResponse = null;
-    let loginApiError = null;
+    log(`[Login] Navigating to Meesho supplier login page...`);
+    await page.goto('https://supplier.meesho.com/panel/v3/new/root/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    page.on('response', async res => {
-      if (res.url().includes('v2-login') || res.url().includes('/user/login') || res.url().includes('/container/user/')) {
-        try {
-          const body = await res.json().catch(() => null);
-          loginApiResponse = { status: res.status(), body };
-          log(`[Meesho Worker] Login API (${res.status()}): ${JSON.stringify(body)}`);
-          if (body && body.error) {
-            loginApiError = body.error;
-          }
-        } catch (e) {}
-      }
-    });
+    // Handle Access Denied
+    const title = await page.title().catch(() => '');
+    if (title.includes('Access Denied') || title.includes('access denied')) {
+      log(`[Login] Akamai block detected on initial load.`);
+      await context.close();
+      return { success: false, error: 'Meesho blocked this server. Use the local app (start_meesho_hub.bat) to add accounts.' };
+    }
 
-    log(`[Meesho Worker] Navigating to https://supplier.meesho.com/panel/v3/new/root/login...`);
-    await page.goto('https://supplier.meesho.com/panel/v3/new/root/login', { waitUntil: 'domcontentloaded' });
-    
-    // Wait for form inputs or already logged in redirection
-    let isAlreadyLoggedIn = false;
+    // Wait for login form
+    let alreadyLoggedIn = false;
     try {
-      await page.waitForSelector('input[name="emailOrPhone"], input[type="text"], h1:has-text("Welcome back")', { timeout: 10000 });
-      if (page.url().includes('growth') || page.url().includes('fulfillment')) {
-        isAlreadyLoggedIn = true;
-      }
+      await page.waitForSelector('input[name="emailOrPhone"]', { timeout: 12000 });
     } catch (e) {
-      log(`[Meesho Worker] Timeout waiting for inputs or welcome header: ${e.message}`);
-    }
-
-    if (isAlreadyLoggedIn || (!page.url().includes('login') && (page.url().includes('growth') || page.url().includes('fulfillment')))) {
-      log("[Meesho Worker] Already logged in with active session!");
-    } else {
-      const pageTitle = await page.title().catch(() => '');
-      if (pageTitle.includes('Access Denied')) {
-        log("[Meesho Worker] Akamai Access Denied encountered.");
-        return {
-          success: false,
-          error: "Meesho security shield temporarily blocked this request. Please wait 1 minute and try again."
-        };
-      }
-
-      log(`[Meesho Worker] Entering credentials for ${email}...`);
-      
-      const emailInput = page.locator('input[name="emailOrPhone"]').first();
-      const passwordInput = page.locator('input[name="password"]').first();
-
-      if (await emailInput.count() === 0) {
-        log("[Meesho Worker] Email input not found on page!");
-        return {
-          success: false,
-          error: "Unable to load Meesho login inputs. Please check your internet connection and try again."
-        };
-      }
-
-      await emailInput.click();
-      await emailInput.fill('');
-      await emailInput.fill(email.trim());
-      await page.waitForTimeout(400);
-
-      await passwordInput.click();
-      await passwordInput.fill('');
-      await passwordInput.fill(password);
-      await page.waitForTimeout(400);
-
-      const submitBtn = page.locator('button:has-text("Log in"), button[type="submit"]').first();
-      if (await submitBtn.count() > 0) {
-        log("[Meesho Worker] Submitting login form...");
-        await submitBtn.click();
-        
-        // Wait dynamically for URL transition or login API response
-        for (let i = 0; i < 20; i++) {
-          await page.waitForTimeout(500);
-          const u = page.url();
-          if (u.includes('growth') || u.includes('fulfillment')) {
-            log(`[Meesho Worker] Navigated successfully to: ${u}`);
-            break;
-          }
-          if (loginApiResponse && loginApiResponse.status >= 400) {
-            log(`[Meesho Worker] Login failed with status ${loginApiResponse.status}`);
-            break;
-          }
-        }
+      if (!page.url().includes('login')) {
+        alreadyLoggedIn = true;
+        log(`[Login] Already logged in!`);
+      } else {
+        log(`[Login] Login form not found: ${e.message}`);
+        await context.close();
+        return { success: false, error: 'Could not load Meesho login form. Please try again in a moment.' };
       }
     }
 
+    if (!alreadyLoggedIn) {
+      log(`[Login] Filling credentials...`);
+      await page.locator('input[name="emailOrPhone"]').fill(email.trim());
+      await page.waitForTimeout(300);
+      await page.locator('input[name="password"]').fill(password);
+      await page.waitForTimeout(300);
+
+      // Submit and wait for navigation
+      await Promise.all([
+        page.waitForNavigation({ timeout: 15000 }).catch(() => {}),
+        page.locator('button[type="submit"]').first().click()
+      ]);
+
+      await page.waitForTimeout(3000);
+
+      const currentUrl = page.url();
+      log(`[Login] URL after submit: ${currentUrl}`);
+
+      if (currentUrl.includes('login')) {
+        // Still on login page — get error text
+        const errorText = await page.evaluate(() => {
+          const selectors = ['[role="alert"]', '[class*="error" i]', '[class*="helper" i]'];
+          for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.innerText && el.innerText.trim().length > 3) return el.innerText.trim();
+          }
+          return null;
+        });
+        log(`[Login] Failed. Page error: ${errorText}`);
+        await context.close();
+        return { success: false, error: errorText || 'Wrong email or password. Please check your Meesho credentials.' };
+      }
+    }
+
+    // --- LOGGED IN SUCCESSFULLY ---
+    // Extract identifier from URL
     const currentUrl = page.url();
-    log(`[Meesho Worker] Current URL after login attempt: ${currentUrl}`);
+    const identifier = (currentUrl.match(/(?:growth|fulfillment)\/([a-zA-Z0-9]+)/) || [])[1] || '';
 
-    if (currentUrl.includes('login') && !currentUrl.includes('growth') && !currentUrl.includes('fulfillment')) {
-      // Check for inline error text on page
-      const visibleError = await page.evaluate(() => {
-        const errorElements = Array.from(document.querySelectorAll('[role="alert"], [class*="error" i], [class*="helper" i], [class*="toast" i]'));
-        for (const el of errorElements) {
-          const t = el.innerText ? el.innerText.trim() : '';
-          if (t && t.length > 3 && !t.includes('\n') && (t.includes('correct') || t.includes('failed') || t.includes('detail') || t.includes('password') || t.includes('invalid'))) {
-            return t;
-          }
-        }
-        return null;
-      });
+    // Extract store name
+    const detectedStoreName = await page.evaluate(() => {
+      const h1 = document.querySelector('h1');
+      if (h1 && h1.innerText.includes('Welcome back')) return h1.innerText.replace('Welcome back,', '').trim();
+      const sidebarName = document.querySelector('[class*="supplier-name"], [class*="store-name"], [class*="supplierName"]');
+      if (sidebarName) return sidebarName.innerText.trim();
+      return '';
+    }) || storeName || email.split('@')[0];
 
-      if (visibleError) {
-        log(`[Meesho Worker] Visible error detected on page: "${visibleError}"`);
-        return { success: false, error: `${visibleError}. Please verify your email/phone and password on supplier.meesho.com.` };
-      }
+    log(`[Login] Store: "${detectedStoreName}", Identifier: "${identifier}"`);
 
-      if (loginApiError) {
-        log(`[Meesho Worker] Login API error: "${loginApiError}"`);
-        return { success: false, error: `${loginApiError}. Please check your Meesho login credentials.` };
-      }
-
-      return { success: false, error: "Login failed. Please check your Meesho email and password." };
+    // Navigate to returns page
+    if (identifier) {
+      await page.goto(`https://supplier.meesho.com/panel/v3/new/fulfillment/${identifier}/returns/overview`, {
+        waitUntil: 'domcontentloaded', timeout: 20000
+      }).catch(() => {});
+      await page.waitForTimeout(5000);
     }
 
-    // 1. Extract Real Store Name and Identifier from Authenticated Page
-    const detectedIdentifier = (currentUrl.match(/(?:growth|fulfillment)\/([a-zA-Z0-9]+)/) || [])[1] || '1ydxc';
-    
-    const detectedStoreName = await page.evaluate(() => {
-      // Look for "Welcome back, StoreName"
-      const h1 = document.querySelector('h1');
-      if (h1 && h1.innerText.includes('Welcome back')) {
-        return h1.innerText.replace('Welcome back,', '').trim();
-      }
-      // Or profile element in header
-      const headerNames = Array.from(document.querySelectorAll('header *, [class*="supplier" i] *'))
-        .map(e => e.innerText ? e.innerText.trim() : '')
-        .filter(t => t.length > 2 && t.length < 35 && !t.includes('\n'));
-      if (headerNames.length > 0) return headerNames[0];
+    // Extract cookies for future API calls
+    const cookies = await context.cookies();
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-      return document.body.innerText.split('\n')[0].trim();
+    // Save session
+    saveSession(syncKey, {
+      email,
+      identifier,
+      storeName: detectedStoreName,
+      cookies: cookieStr,
+      savedAt: new Date().toISOString()
     });
 
-    console.log(`[Meesho Worker] Logged In Successfully! Real Store: "${detectedStoreName}", Identifier: "${detectedIdentifier}"`);
+    // Now fetch OTP via API using the fresh cookies
+    let otpResult = await fetchOTPWithCookies(identifier, cookieStr);
 
-    // Verify if this store is already linked in Firestore (prevent duplicate accounts across different users)
+    // Also try DOM extraction as backup
+    if (!otpResult || otpResult.otp === '----') {
+      otpResult = await page.evaluate(() => {
+        let otp = '----', courier = 'No active return', handoverCount = 0;
+        const dateTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+        const otpNode = Array.from(document.querySelectorAll('*')).find(e =>
+          e.children.length < 3 && e.innerText && /OTP:/i.test(e.innerText) && /\b\d{4,6}\b/.test(e.innerText)
+        );
+        if (otpNode) {
+          const text = otpNode.innerText;
+          const partnerMatch = text.match(/([a-zA-Z]+)\s+OTP:/i);
+          const otpMatch = text.match(/\b(\d{4,6})\b/);
+          if (partnerMatch) courier = partnerMatch[1];
+          if (otpMatch) otp = otpMatch[1];
+
+          const countNode = Array.from(document.querySelectorAll('*')).find(e =>
+            e.children.length < 3 && e.innerText && /Total\s+Handover\s+Count\s*:\s*\d+/i.test(e.innerText)
+          );
+          if (countNode) {
+            const m = countNode.innerText.match(/(\d+)/);
+            if (m) handoverCount = parseInt(m[1], 10);
+          }
+        }
+        return { otp, courier, handoverCount, dateTime };
+      }) || { otp: '----', courier: 'No active return', handoverCount: 0, dateTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) };
+    }
+
+    log(`[Login] OTP result: ${JSON.stringify(otpResult)}`);
+
+    // Duplicate check
     try {
-      const checkUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts`;
-      const chkRes = await fetch(checkUrl);
+      const chkRes = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts`);
       const chkData = await chkRes.json();
       if (chkData.documents) {
-        for (const doc of chkData.documents) {
-          const docKey = doc.name.split('/').pop();
+        for (const docItem of chkData.documents) {
+          const docKey = docItem.name.split('/').pop();
           if (docKey === syncKey) continue;
-          const f = doc.fields || {};
-          const existingName = f.storeName?.stringValue || '';
+          const f = docItem.fields || {};
           const existingEmail = f.email?.stringValue || '';
           const existingIdent = f.identifier?.stringValue || '';
           const existingUser = f.userId?.stringValue || '';
-
-          const matchName = existingName && detectedStoreName && existingName.trim().toLowerCase() === detectedStoreName.trim().toLowerCase();
           const matchEmail = existingEmail && email && existingEmail.trim().toLowerCase() === email.trim().toLowerCase();
-          const matchIdent = existingIdent && detectedIdentifier && existingIdent === detectedIdentifier;
+          const matchIdent = existingIdent && identifier && existingIdent === identifier;
 
-          if (matchName || matchEmail || matchIdent) {
-            // Case 1: If old store was under Admin UID (vJID6QrALTf4ybiDP5TuLvNkyN63), it was a test store -> remove it
+          if ((matchEmail || matchIdent) && existingUser !== userId) {
             if (existingUser === 'vJID6QrALTf4ybiDP5TuLvNkyN63') {
-              console.log(`[Meesho Worker] Removing old admin test store: ${docKey}`);
               fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${docKey}`, { method: 'DELETE' }).catch(() => {});
               continue;
             }
-
-            // Case 2: If store belongs to the SAME user, they are updating / re-connecting their store -> allow
-            if (userId && existingUser === userId) {
-              console.log(`[Meesho Worker] Store ${docKey} already belongs to user ${userId}, updating...`);
-              continue;
-            }
-
-            // Case 3: Belongs to another client
-            console.log(`[Meesho Worker] DUPLICATE REJECTED: Store "${detectedStoreName}" already linked by another client!`);
-            if (context) await context.close().catch(() => {});
-            try {
-              fs.rmSync(sessionDir, { recursive: true, force: true });
-            } catch(e) {}
-            return { 
-              success: false, 
-              duplicate: true,
-              error: `Store "${detectedStoreName}" is already linked by another client.` 
-            };
+            log(`[Login] DUPLICATE: ${email} already linked by another client.`);
+            return { success: false, error: `This Meesho account is already linked by another client.` };
           }
         }
       }
-    } catch(chkErr) {
-      console.error("[Meesho Worker] Error checking duplicates:", chkErr.message);
-    }
-
-    // Save metadata for session
-    try {
-      fs.writeFileSync(path.join(sessionDir, 'meta.json'), JSON.stringify({ identifier: detectedIdentifier, storeName: detectedStoreName }));
-    } catch(e) {}
-
-    // 2. Navigate Directly to the Returns Overview Page
-    const returnsUrl = `https://supplier.meesho.com/panel/v3/new/fulfillment/${detectedIdentifier}/returns/overview`;
-    console.log(`[Meesho Worker] Navigating to Returns page: ${returnsUrl}...`);
-    await page.goto(returnsUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForTimeout(6000);
-    await page.screenshot({ path: path.join(__dirname, 'returns_page.png') });
-
-    // 3. Extract the Live Return Handover OTP and Courier
-    const extracted = await page.evaluate(async (ident) => {
-      let otp = "----";
-      let courier = "No active return";
-      let handoverCount = 0;
-      let dateTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      // First check DOM for live OTP banner
-      const otpNode = Array.from(document.querySelectorAll('*')).find(e => 
-        e.innerText && /OTP:/i.test(e.innerText) && /\b\d{4,6}\b/.test(e.innerText)
-      );
-
-      if (otpNode) {
-        const text = otpNode.innerText;
-        const partnerMatch = text.match(/([a-zA-Z]+)\s+OTP:/i);
-        const otpMatch = text.match(/\b\d{4,6}\b/);
-        const dateMatch = text.match(/\d{1,2}\s+[a-zA-Z]+,\s*\d{1,2}:\d{2}\s*(?:AM|PM)/i);
-        
-        if (partnerMatch) courier = partnerMatch[1];
-        if (otpMatch) otp = otpMatch[0];
-        if (dateMatch) dateTime = dateMatch[0];
-
-        const countNode = Array.from(document.querySelectorAll('*')).find(e => 
-          e.innerText && /Total\s+Handover\s+Count\s*:\s*\d+/i.test(e.innerText)
-        );
-        if (countNode) {
-          const cMatch = countNode.innerText.match(/Total\s+Handover\s+Count\s*:\s*(\d+)/i);
-          if (cMatch) handoverCount = parseInt(cMatch[1], 10);
-        }
-      }
-
-      // Also try calling the internal API from the returns page
-      try {
-        const apiRes = await fetch('/api/fulfillment/returnRto/fetchDeliveryOTPs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: ident, child_supplier_identifier: null, child_supplier_id: null })
-        });
-        if (apiRes.ok) {
-          const json = await apiRes.json();
-          if (json.supplier_delivery_otp && json.supplier_delivery_otp.length > 0) {
-            const item = json.supplier_delivery_otp[0];
-            otp = item.otp || otp;
-            courier = item.carrier_details?.name || item.carrier_name || courier;
-            handoverCount = item.delivery_shipment_details?.total_shipment_count || item.count || handoverCount;
-            if (item.otp_expiry_timestamp) {
-              dateTime = new Date(item.otp_expiry_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            }
-          }
-        }
-      } catch (e) {}
-
-      return {
-        otp,
-        courier,
-        handoverCount,
-        dateTime
-      };
-    }, detectedIdentifier);
-
-    console.log("[Meesho Worker] Extracted Live OTP Result:", extracted);
-
-    await updateFirestoreAccount(syncKey, {
-      storeName: detectedStoreName,
-      identifier: detectedIdentifier,
-      otp: extracted.otp,
-      courier: extracted.courier,
-      handoverCount: extracted.handoverCount,
-      dateTime: extracted.dateTime,
-      status: "live"
-    });
+    } catch (e) { log(`[Login] Duplicate check error: ${e.message}`); }
 
     return {
       success: true,
       storeName: detectedStoreName,
-      identifier: detectedIdentifier,
-      otp: extracted.otp,
-      courier: extracted.courier,
-      handoverCount: extracted.handoverCount,
-      dateTime: extracted.dateTime
+      identifier,
+      otp: otpResult.otp,
+      courier: otpResult.courier,
+      handoverCount: otpResult.handoverCount,
+      dateTime: otpResult.dateTime
     };
 
   } catch (err) {
-    console.error("[Meesho Worker] Error during login flow:", err);
-    return { success: false, error: err.message };
-  } finally {
-    if (context) {
-      // Keep session saved, close window after sync
-      await context.close().catch(() => {});
-    }
-  }
-}
-
-// Helper to re-check returns for an already logged-in session
-async function checkReturnsForSession(syncKey) {
-  const sessionDir = path.join(__dirname, 'sessions', syncKey);
-  if (!fs.existsSync(sessionDir)) return null;
-
-  let identifier = null;
-  const metaPath = path.join(sessionDir, 'meta.json');
-  if (fs.existsSync(metaPath)) {
-    try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-      if (meta.identifier) identifier = meta.identifier;
-    } catch (e) {}
-  }
-  if (!identifier) {
-    try {
-      const res = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${syncKey}`);
-      if (res.ok) {
-        const d = await res.json();
-        identifier = d.fields?.identifier?.stringValue;
-      }
-    } catch(e) {}
-  }
-
-  if (!identifier) {
-    console.warn(`[Auto-Sync] No identifier found in session or Firestore for ${syncKey}, skipping`);
-    return null;
-  }
-
-  console.log(`[Auto-Sync] Checking returns for ${syncKey} (identifier: ${identifier})...`);
-  let context;
-  try {
-    context = await launchBrowserContext(sessionDir);
-
-    const page = await context.newPage();
-    const returnsUrl = `https://supplier.meesho.com/panel/v3/new/fulfillment/${identifier}/returns/overview`;
-    await page.goto(returnsUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForTimeout(6000);
-
-    const title = await page.title();
-    const currentUrl = page.url();
-
-    if (title.includes('Access Denied') || currentUrl.includes('/root/login')) {
-      console.warn(`[Auto-Sync] Warning: Page redirected or denied for ${syncKey} (URL: ${currentUrl}). Skipping update to protect data.`);
-      return null;
-    }
-
-    const extracted = await page.evaluate(async (ident) => {
-      let otp = "----";
-      let courier = "No active return";
-      let handoverCount = 0;
-      let dateTime = "Checked at " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      const otpNode = Array.from(document.querySelectorAll('*')).find(e => 
-        e.innerText && /OTP:/i.test(e.innerText) && /\b\d{4,6}\b/.test(e.innerText)
-      );
-
-      if (otpNode) {
-        const text = otpNode.innerText;
-        const partnerMatch = text.match(/([a-zA-Z]+)\s+OTP:/i);
-        const otpMatch = text.match(/\b\d{4,6}\b/);
-        const dateMatch = text.match(/\d{1,2}\s+[a-zA-Z]+,\s*\d{1,2}:\d{2}\s*(?:AM|PM)/i);
-        
-        if (partnerMatch) courier = partnerMatch[1];
-        if (otpMatch) otp = otpMatch[0];
-        if (dateMatch) dateTime = dateMatch[0];
-
-        const countNode = Array.from(document.querySelectorAll('*')).find(e => 
-          e.innerText && /Total\s+Handover\s+Count\s*:\s*\d+/i.test(e.innerText)
-        );
-        if (countNode) {
-          const cMatch = countNode.innerText.match(/Total\s+Handover\s+Count\s*:\s*(\d+)/i);
-          if (cMatch) handoverCount = parseInt(cMatch[1], 10);
-        }
-      }
-
-      // Also try calling the internal API from the returns page
-      try {
-        const apiRes = await fetch('/api/fulfillment/returnRto/fetchDeliveryOTPs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: ident, child_supplier_identifier: null, child_supplier_id: null })
-        });
-        if (apiRes.ok) {
-          const json = await apiRes.json();
-          if (json.supplier_delivery_otp && json.supplier_delivery_otp.length > 0) {
-            const item = json.supplier_delivery_otp[0];
-            otp = item.otp || otp;
-            courier = item.carrier_details?.name || item.carrier_name || courier;
-            handoverCount = item.delivery_shipment_details?.total_shipment_count || item.count || handoverCount;
-            if (item.otp_expiry_timestamp) {
-              dateTime = new Date(item.otp_expiry_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            }
-          }
-        }
-      } catch (e) {}
-
-      return { otp, courier, handoverCount, dateTime };
-    }, identifier);
-
-    console.log(`[Auto-Sync] Result for ${syncKey}:`, extracted);
-
-    await updateFirestoreAccount(syncKey, {
-      otp: extracted.otp,
-      courier: extracted.courier,
-      handoverCount: extracted.handoverCount,
-      dateTime: extracted.dateTime,
-      status: "live"
-    });
-
-    return extracted;
-  } catch (err) {
-    console.error(`[Auto-Sync] Error checking ${syncKey}:`, err.message);
-    return null;
+    log(`[Login] Error: ${err.message}`);
+    return { success: false, error: `Login error: ${err.message}` };
   } finally {
     if (context) await context.close().catch(() => {});
   }
 }
 
-// Background Auto-Refresh every 3 minutes for all active connected accounts in Firestore
+// =====================================================================
+// AUTO-REFRESH — Uses saved cookies, NO browser needed
+// =====================================================================
+
+async function checkReturnsForSession(syncKey) {
+  const session = loadSession(syncKey);
+  if (!session || !session.identifier || !session.cookies) {
+    log(`[Auto-Sync] No valid session for ${syncKey}`);
+    return null;
+  }
+
+  const { identifier, cookies } = session;
+  log(`[Auto-Sync] Refreshing ${syncKey} (${identifier}) via API...`);
+
+  const result = await fetchOTPWithCookies(identifier, cookies);
+
+  if (result === null) {
+    // Session expired — mark as needs re-login
+    log(`[Auto-Sync] Session expired for ${syncKey}, skipping`);
+    await updateFirestoreAccount(syncKey, { status: 'needs_relogin' });
+    return null;
+  }
+
+  await updateFirestoreAccount(syncKey, {
+    otp: result.otp,
+    courier: result.courier,
+    handoverCount: result.handoverCount,
+    dateTime: result.dateTime,
+    status: 'live'
+  });
+
+  return result;
+}
+
+// Auto-refresh every 3 minutes
 setInterval(async () => {
   try {
     const res = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts`);
@@ -538,49 +391,30 @@ setInterval(async () => {
     if (data.documents) {
       for (const doc of data.documents) {
         const key = doc.name.split('/').pop();
-        if (key.startsWith('MSH-')) {
-          await checkReturnsForSession(key);
-        }
+        if (key.startsWith('MSH-')) await checkReturnsForSession(key);
       }
     }
-  } catch (e) {
-    console.error("[Auto-Sync] Error during interval fetch:", e.message);
-  }
+  } catch (e) { log(`[Auto-Sync] Interval error: ${e.message}`); }
 }, 3 * 60 * 1000);
 
-// DELETE /api/meesho/session/:syncKey (Clean up session folder on delete)
+// =====================================================================
+// ROUTES
+// =====================================================================
+
 app.delete('/api/meesho/session/:syncKey', (req, res) => {
-  const { syncKey } = req.params;
-  const sessionDir = path.join(__dirname, 'sessions', syncKey);
-  if (fs.existsSync(sessionDir)) {
-    try {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[Session] Deleted session folder for ${syncKey}`);
-    } catch (e) {
-      console.error(`[Session] Error deleting session for ${syncKey}:`, e.message);
-    }
-  }
+  deleteSessionData(req.params.syncKey);
   res.json({ success: true });
 });
 
-// POST /api/meesho/refresh/:syncKey
 app.post('/api/meesho/refresh/:syncKey', async (req, res) => {
-  const { syncKey } = req.params;
-  const result = await checkReturnsForSession(syncKey);
-  if (result) {
-    return res.json({ success: true, ...result });
-  } else {
-    return res.status(500).json({ error: "Failed to refresh OTP" });
-  }
+  const result = await checkReturnsForSession(req.params.syncKey);
+  if (result) return res.json({ success: true, ...result });
+  return res.status(500).json({ error: 'Failed to refresh OTP' });
 });
 
-// POST /api/meesho/login
 app.post('/api/meesho/login', async (req, res) => {
   const { userId, syncKey, storeName, email, password } = req.body;
-  if (!email || !password || !syncKey) {
-    return res.status(400).json({ error: "Missing email, password, or syncKey" });
-  }
-
+  if (!email || !password || !syncKey) return res.status(400).json({ error: 'Missing fields' });
   try {
     const result = await loginAndExtractMeesho(syncKey, email, password, storeName, userId);
     return res.json(result);
@@ -589,52 +423,30 @@ app.post('/api/meesho/login', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  // Directly redirect to the live seller web app
-  res.redirect('https://meesho-otp-live.web.app');
-});
+app.get('/', (req, res) => res.redirect('https://meesho-otp-live.web.app'));
 
 app.get('/api/debug/logs', (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.send(logBuffer.join('\n'));
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
-});
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
+// Heartbeat
 async function updateServerHeartbeat(apiUrl) {
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/config/server?updateMask.fieldPaths=lastOnline${apiUrl ? '&updateMask.fieldPaths=apiUrl' : ''}`;
-    const fields = {
-      lastOnline: { stringValue: new Date().toISOString() }
-    };
-    if (apiUrl) {
-      fields.apiUrl = { stringValue: apiUrl };
-    }
-    await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields })
-    });
-  } catch (err) {
-    // Silent catch
-  }
+    const maskParam = apiUrl ? '&updateMask.fieldPaths=apiUrl' : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/config/server?updateMask.fieldPaths=lastOnline${maskParam}`;
+    const fields = { lastOnline: { stringValue: new Date().toISOString() } };
+    if (apiUrl) fields.apiUrl = { stringValue: apiUrl };
+    await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+  } catch (e) {}
 }
 
-const DEFAULT_API_URL = process.env.TUNNEL_URL || 'https://driving-psp-titanium-announce.trycloudflare.com';
-
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Meesho OTP Server] Backend running on port ${PORT}`);
+  log(`[Server] Running on port ${PORT}`);
   const publicUrl = process.env.RENDER_EXTERNAL_URL || process.env.TUNNEL_URL || null;
-  if (publicUrl) {
-    console.log(`[Meesho OTP Server] Publishing public API URL: ${publicUrl}`);
-    updateServerHeartbeat(publicUrl);
-  } else {
-    updateServerHeartbeat();
-  }
-  setInterval(() => {
-    updateServerHeartbeat(publicUrl);
-  }, 60000);
+  if (publicUrl) { log(`[Server] Public: ${publicUrl}`); updateServerHeartbeat(publicUrl); }
+  else updateServerHeartbeat();
+  setInterval(() => updateServerHeartbeat(publicUrl), 60000);
 });
-
