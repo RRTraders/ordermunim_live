@@ -138,30 +138,41 @@ async function launchBrowserContext(sessionDir) {
   const baseArgs = [
     '--disable-blink-features=AutomationControlled',
     '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-    '--no-first-run', '--disable-gpu'
+    '--no-first-run', '--disable-gpu',
+    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
   ];
 
-  // On Render (Linux) headless via Xvfb; on Windows headless=false for real Chrome
   const isLinux = process.platform === 'linux';
+  let context;
 
   try {
-    return await chromium.launchPersistentContext(sessionDir, {
+    context = await chromium.launchPersistentContext(sessionDir, {
       channel: 'chrome',
       headless: isLinux,
-      viewport: { width: 1280, height: 800 },
+      viewport: { width: 1366, height: 768 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       ignoreDefaultArgs: ['--enable-automation'],
       args: baseArgs
     });
   } catch (err) {
     log(`[Browser] Chrome unavailable (${err.message.split('\n')[0]}), using bundled Chromium...`);
-    return await chromium.launchPersistentContext(sessionDir, {
+    context = await chromium.launchPersistentContext(sessionDir, {
       headless: isLinux,
-      viewport: { width: 1280, height: 800 },
+      viewport: { width: 1366, height: 768 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       ignoreDefaultArgs: ['--enable-automation'],
       args: baseArgs
     });
   }
+
+  // Mask webdriver property
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  });
+
+  return context;
 }
+
 
 async function loginAndExtractMeesho(syncKey, email, password, storeName, userId) {
   log(`\n=== [Login] Starting for: ${email} (${syncKey}) ===`);
