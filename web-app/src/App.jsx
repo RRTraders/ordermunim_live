@@ -58,11 +58,15 @@ import {
   User,
   MailCheck,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  Scissors,
+  Printer
 } from 'lucide-react';
+import LabelCropper from './LabelCropper';
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -151,8 +155,9 @@ export default function App() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:4000';
     }
-    return serverConfig?.apiUrl || 'https://driving-psp-titanium-announce.trycloudflare.com';
+    return serverConfig?.tunnelUrl || 'https://exact-take-regression-roommates.trycloudflare.com';
   };
+
 
   // Check URL params for Staff View mode
   useEffect(() => {
@@ -568,7 +573,7 @@ export default function App() {
     }
   };
 
-  // Add a new Meesho Account slot — Extension-based flow (no cloud login)
+  // Add a new Meesho Account slot — calls local/Indian-IP backend
   const handleCreateAccount = async (e) => {
     e.preventDefault();
     setModalError('');
@@ -595,27 +600,75 @@ export default function App() {
 
     setSyncingAccount(true);
     try {
-      // Create Firestore entry — extension will fill in OTP/courier once installed
+      // Create initial pending entry in Firestore
       const newAccRef = doc(db, 'accounts', syncKey);
       await setDoc(newAccRef, {
         userId: user.uid,
         storeName: autoStoreName,
         email: cleanEmail || '',
-        syncKey: syncKey,
-        courier: 'Waiting for extension...',
+        syncKey,
+        courier: 'Logging in...',
         currentOtp: '----',
         handoverCount: 0,
-        dateTime: 'Install extension to sync',
-        status: 'pending',
+        dateTime: 'Connecting...',
+        status: 'syncing',
         lastUpdated: new Date().toISOString()
       });
 
-      // Move to step 2: show extension instructions
-      setGeneratedSyncKey(syncKey);
-      setConnectStep(2);
+      // Call backend login (local Indian-IP server via Cloudflare tunnel)
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/meesho/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          syncKey,
+          storeName: newStoreName.trim(),
+          email: meeshoEmail.trim(),
+          password: meeshoPass
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        await deleteDoc(newAccRef);
+        setModalError(data.error || 'Meesho login failed. Please check your credentials.');
+        return;
+      }
+
+      // Check for duplicate store
+      const duplicateStore = accounts.find(a =>
+        a.id !== syncKey && (
+          (a.identifier && data.identifier && a.identifier === data.identifier) ||
+          (a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail)
+        )
+      );
+      if (duplicateStore) {
+        await deleteDoc(newAccRef);
+        setModalError(`Store "${data.storeName}" is already linked!`);
+        return;
+      }
+
+      // Update Firestore with live OTP data
+      await updateDoc(newAccRef, {
+        storeName: data.storeName || autoStoreName,
+        identifier: data.identifier || '',
+        currentOtp: data.otp || '----',
+        courier: data.courier || '----',
+        handoverCount: data.handoverCount || 0,
+        dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'live'
+      });
+
+      setNewStoreName('');
+      setMeeshoEmail('');
+      setMeeshoPass('');
+      setShowAddModal(false);
+      setConnectStep(1);
+      showToast(`Store "${data.storeName || autoStoreName}" connected successfully!`, 'success');
     } catch (err) {
       console.error(err);
-      setModalError(`Error: ${err.message}`);
+      setModalError(`Login error: ${err.message}`);
     } finally {
       setSyncingAccount(false);
     }
@@ -629,11 +682,7 @@ export default function App() {
     setMeeshoEmail('');
     setMeeshoPass('');
     setNewStoreName('');
-    if (connectStep === 2) {
-      showToast(`Store added! Install the extension and open Meesho to sync.`, 'success');
-    }
   };
-
 
 
   // Delete an account with fancy confirmation dialog
@@ -1309,9 +1358,46 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 space-y-6">
         
-        {/* ================= ADMIN VIEW (SUPER ADMIN ONLY - ZERO OTPs) ================= */}
-        {isSuperAdmin ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 shadow-xl space-y-6">
+        {/* Feature Navigation Tabs */}
+        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl max-w-lg mx-auto shadow-lg">
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab !== 'cropper'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            {isSuperAdmin ? 'Admin Console' : 'Return OTP Hub'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cropper')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'cropper'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Scissors className="w-4 h-4 text-cyan-300" />
+            Label Cropper (4x6 & A4)
+            <span className="bg-amber-400/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold border border-amber-400/30">
+              FREE
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'cropper' ? (
+          <LabelCropper showToast={showToast} />
+        ) : (
+          <>
+            {/* ================= ADMIN VIEW (SUPER ADMIN ONLY - ZERO OTPs) ================= */}
+            {isSuperAdmin ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 shadow-xl space-y-6">
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1699,7 +1785,10 @@ export default function App() {
             )}
           </>
         )}
+          </>
+        )}
       </main>
+
 
       {/* ================= ADD STORE MODAL (CREDENTIALS) ================= */}
       {showAddModal && (
@@ -1731,39 +1820,47 @@ export default function App() {
               </div>
             )}
 
-            {/* ── STEP 1: Enter store info ── */}
+            {/* ── STEP 1: Enter credentials ── */}
             {connectStep === 1 && (
               <form onSubmit={handleCreateAccount} className="space-y-4">
-                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-3.5 text-xs text-cyan-200 leading-relaxed">
-                  <p className="font-semibold mb-1 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4" /> How it works
-                  </p>
-                  <p>We use a <strong>Chrome Extension</strong> to read OTP directly from your Meesho account — from your own browser. No passwords stored on our servers.</p>
-                </div>
 
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                    Store Nickname <span className="text-slate-500 font-normal">(What to call this store)</span>
+                    Meesho Registered Email or Mobile
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Sun Burst, Kaanchan Export"
-                    value={newStoreName}
-                    onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
+                    placeholder="seller@example.com or 9876543210"
+                    value={meeshoEmail}
+                    onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
                     className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
                   />
                 </div>
 
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                    Meesho Email <span className="text-slate-500 font-normal">(Optional — for your reference)</span>
+                    Meesho Password
                   </label>
                   <input
-                    type="email"
-                    placeholder="seller@example.com"
-                    value={meeshoEmail}
-                    onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
+                    type="password"
+                    required
+                    placeholder="••••••••••••"
+                    value={meeshoPass}
+                    onChange={(e) => { setMeeshoPass(e.target.value); if (modalError) setModalError(''); }}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                    Store Nickname <span className="text-slate-500 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kaanchan Export (leave empty to auto-detect)"
+                    value={newStoreName}
+                    onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
                     className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
                   />
                 </div>
@@ -1776,14 +1873,15 @@ export default function App() {
                   <button type="submit" disabled={syncingAccount}
                     className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all">
                     {syncingAccount ? (
-                      <><RefreshCw className="w-4 h-4 animate-spin" /> Setting up...</>
+                      <><RefreshCw className="w-4 h-4 animate-spin" /> Logging in & Fetching OTP...</>
                     ) : (
-                      <><Plus className="w-4 h-4" /> Continue</>
+                      'Connect Meesho Account'
                     )}
                   </button>
                 </div>
               </form>
             )}
+
 
             {/* ── STEP 2: Extension instructions ── */}
             {connectStep === 2 && (
