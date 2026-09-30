@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+web-app/node_modules/
+server/node_modules/
+
+# Build outputs
+web-app/dist/
+
+# Local session storage & credentials
+server/sessions/
+*.png
+.env
+.env.local
+
+# Cloudflared executable & logs
+cloudflared.exe
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: meesho-otp-backend
+    runtime: docker
+    rootDir: server
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
