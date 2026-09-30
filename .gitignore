@@ -10,6 +10,7 @@ web-app/.firebase/
 # Local session storage & credentials
 server/sessions/
 server/user_data*/
+user_data*/
 server/test_*/
 *.png
 .env

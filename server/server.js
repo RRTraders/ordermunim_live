@@ -11,6 +11,15 @@ app.use(express.json());
 const PORT = process.env.PORT || 4000;
 const FIREBASE_PROJECT_ID = "meesho-otp-app";
 
+// In-memory debug log ring buffer
+const logBuffer = [];
+function log(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(msg);
+  logBuffer.push(line);
+  if (logBuffer.length > 200) logBuffer.shift();
+}
+
 // Helper to push updates to Firestore
 async function updateFirestoreAccount(syncKey, data) {
   try {
@@ -110,46 +119,120 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
     context = await launchBrowserContext(sessionDir);
 
     const page = await context.newPage();
-    console.log("[Meesho Worker] Navigating to https://supplier.meesho.com/panel/v3/new/root/login...");
+
+    // Capture login API responses
+    let loginApiResponse = null;
+    let loginApiError = null;
+
+    page.on('response', async res => {
+      if (res.url().includes('v2-login') || res.url().includes('/user/login') || res.url().includes('/container/user/')) {
+        try {
+          const body = await res.json().catch(() => null);
+          loginApiResponse = { status: res.status(), body };
+          log(`[Meesho Worker] Login API (${res.status()}): ${JSON.stringify(body)}`);
+          if (body && body.error) {
+            loginApiError = body.error;
+          }
+        } catch (e) {}
+      }
+    });
+
+    log(`[Meesho Worker] Navigating to https://supplier.meesho.com/panel/v3/new/root/login...`);
     await page.goto('https://supplier.meesho.com/panel/v3/new/root/login', { waitUntil: 'domcontentloaded' });
     
-    // Give page time to load inputs
-    await page.waitForTimeout(3000);
+    // Wait for form inputs or already logged in redirection
+    let isAlreadyLoggedIn = false;
+    try {
+      await page.waitForSelector('input[name="emailOrPhone"], input[type="text"], h1:has-text("Welcome back")', { timeout: 10000 });
+      if (page.url().includes('growth') || page.url().includes('fulfillment')) {
+        isAlreadyLoggedIn = true;
+      }
+    } catch (e) {
+      log(`[Meesho Worker] Timeout waiting for inputs or welcome header: ${e.message}`);
+    }
 
-    // Check if already logged in
-    if (!page.url().includes('login')) {
-      console.log("[Meesho Worker] Already logged in with active session!");
+    if (isAlreadyLoggedIn || (!page.url().includes('login') && (page.url().includes('growth') || page.url().includes('fulfillment')))) {
+      log("[Meesho Worker] Already logged in with active session!");
     } else {
-      console.log(`[Meesho Worker] Entering credentials for ${email}...`);
+      const pageTitle = await page.title().catch(() => '');
+      if (pageTitle.includes('Access Denied')) {
+        log("[Meesho Worker] Akamai Access Denied encountered.");
+        return {
+          success: false,
+          error: "Meesho security shield temporarily blocked this request. Please wait 1 minute and try again."
+        };
+      }
+
+      log(`[Meesho Worker] Entering credentials for ${email}...`);
       
-      // Fill emailOrPhone and password
-      const emailInput = page.locator('input[name="emailOrPhone"], input[type="text"]').first();
-      const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
+      const emailInput = page.locator('input[name="emailOrPhone"]').first();
+      const passwordInput = page.locator('input[name="password"]').first();
 
-      if (await emailInput.count() > 0) {
-        await emailInput.fill(email);
-        await page.waitForTimeout(300);
+      if (await emailInput.count() === 0) {
+        log("[Meesho Worker] Email input not found on page!");
+        return {
+          success: false,
+          error: "Unable to load Meesho login inputs. Please check your internet connection and try again."
+        };
+      }
 
-        if (await passwordInput.count() > 0) {
-          await passwordInput.fill(password);
-          await page.waitForTimeout(300);
+      await emailInput.click();
+      await emailInput.fill('');
+      await emailInput.fill(email.trim());
+      await page.waitForTimeout(400);
 
-          const submitBtn = page.locator('button:has-text("Log in"), button[type="submit"]').first();
-          if (await submitBtn.count() > 0) {
-            console.log("[Meesho Worker] Submitting login form...");
-            await submitBtn.click();
-            console.log("[Meesho Worker] Waiting 6 seconds for login authorization...");
-            await page.waitForTimeout(6000);
+      await passwordInput.click();
+      await passwordInput.fill('');
+      await passwordInput.fill(password);
+      await page.waitForTimeout(400);
+
+      const submitBtn = page.locator('button:has-text("Log in"), button[type="submit"]').first();
+      if (await submitBtn.count() > 0) {
+        log("[Meesho Worker] Submitting login form...");
+        await submitBtn.click();
+        
+        // Wait dynamically for URL transition or login API response
+        for (let i = 0; i < 20; i++) {
+          await page.waitForTimeout(500);
+          const u = page.url();
+          if (u.includes('growth') || u.includes('fulfillment')) {
+            log(`[Meesho Worker] Navigated successfully to: ${u}`);
+            break;
+          }
+          if (loginApiResponse && loginApiResponse.status >= 400) {
+            log(`[Meesho Worker] Login failed with status ${loginApiResponse.status}`);
+            break;
           }
         }
       }
     }
 
     const currentUrl = page.url();
-    console.log(`[Meesho Worker] Current URL after login attempt: ${currentUrl}`);
+    log(`[Meesho Worker] Current URL after login attempt: ${currentUrl}`);
 
     if (currentUrl.includes('login') && !currentUrl.includes('growth') && !currentUrl.includes('fulfillment')) {
-      console.log("[Meesho Worker] Login failed or still on login page.");
+      // Check for inline error text on page
+      const visibleError = await page.evaluate(() => {
+        const errorElements = Array.from(document.querySelectorAll('[role="alert"], [class*="error" i], [class*="helper" i], [class*="toast" i]'));
+        for (const el of errorElements) {
+          const t = el.innerText ? el.innerText.trim() : '';
+          if (t && t.length > 3 && !t.includes('\n') && (t.includes('correct') || t.includes('failed') || t.includes('detail') || t.includes('password') || t.includes('invalid'))) {
+            return t;
+          }
+        }
+        return null;
+      });
+
+      if (visibleError) {
+        log(`[Meesho Worker] Visible error detected on page: "${visibleError}"`);
+        return { success: false, error: `${visibleError}. Please verify your email/phone and password on supplier.meesho.com.` };
+      }
+
+      if (loginApiError) {
+        log(`[Meesho Worker] Login API error: "${loginApiError}"`);
+        return { success: false, error: `${loginApiError}. Please check your Meesho login credentials.` };
+      }
+
       return { success: false, error: "Login failed. Please check your Meesho email and password." };
     }
 
@@ -509,6 +592,11 @@ app.post('/api/meesho/login', async (req, res) => {
 app.get('/', (req, res) => {
   // Directly redirect to the live seller web app
   res.redirect('https://meesho-otp-live.web.app');
+});
+
+app.get('/api/debug/logs', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(logBuffer.join('\n'));
 });
 
 app.get('/api/health', (req, res) => {
