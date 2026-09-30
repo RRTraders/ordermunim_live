@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy package definitions
 COPY package*.json ./
-RUN npm install
+RUN npm install --production
 
 # Ensure playwright chromium is installed
 RUN npx playwright install chromium
@@ -32,10 +32,9 @@ COPY . .
 
 # Clean local sessions and temporary png files if copied
 RUN rm -rf sessions/* *.png
+RUN chmod +x start.sh
 
 ENV NODE_ENV=production
-ENV PORT=4000
-EXPOSE 4000
 
-# Run with virtual display
-CMD ["xvfb-run", "--server-args=-screen 0 1280x800x24 -ac", "node", "server.js"]
+# Start using startup script
+CMD ["/bin/bash", "./start.sh"]
