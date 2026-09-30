@@ -269,33 +269,58 @@ export default function App() {
     }
   }, [accounts.map(a => a.currentOtp).join(',')]);
 
-  // Setup reCAPTCHA for Phone Auth
+  // Setup reCAPTCHA for Phone Auth (Real SMS OTP)
   const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {}
-      });
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (e) {}
+      window.recaptchaVerifier = null;
     }
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => {}
+    });
   };
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!phone || phone.length < 10) {
-      setAuthError('Please enter a valid phone number with country code (e.g. +91 9876543210)');
+
+    let cleanPhone = phone.trim().replace(/[\s-]/g, '');
+    if (!cleanPhone.startsWith('+')) {
+      if (cleanPhone.length === 10) {
+        cleanPhone = '+91' + cleanPhone;
+      } else if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+        cleanPhone = '+91' + cleanPhone.substring(1);
+      } else if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+        cleanPhone = '+' + cleanPhone;
+      } else {
+        cleanPhone = '+91' + cleanPhone;
+      }
+    }
+
+    if (cleanPhone.length < 12) {
+      setAuthError('Please enter a valid 10-digit mobile number.');
       return;
     }
+
     setAuthLoading(true);
     try {
       setupRecaptcha();
       const appVerifier = window.recaptchaVerifier;
-      const confirmation = await signInWithPhoneNumber(auth, phone, appVerifier);
+      const confirmation = await signInWithPhoneNumber(auth, cleanPhone, appVerifier);
       setConfirmationResult(confirmation);
       setOtpSent(true);
     } catch (err) {
       console.error(err);
-      setAuthError(err.message || 'Failed to send OTP. Please check the phone number.');
+      if (err.code === 'auth/invalid-phone-number') {
+        setAuthError('Invalid phone number format. Please enter a valid 10-digit mobile number.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setAuthError('Too many SMS requests sent. Please wait a few minutes before trying again.');
+      } else {
+        setAuthError(err.message || 'Failed to send SMS OTP. Please check the mobile number.');
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -793,11 +818,14 @@ export default function App() {
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91 9876543210"
+                      placeholder="e.g. 9876543210"
                       required
                       className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors"
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    A real 6-digit SMS verification code will be sent to your mobile.
+                  </p>
                 </div>
 
                 <button
@@ -805,15 +833,18 @@ export default function App() {
                   disabled={authLoading}
                   className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
                 >
-                  {authLoading ? 'Sending SMS...' : 'Send Login OTP'}
+                  {authLoading ? 'Sending SMS...' : 'Send Login OTP via SMS'}
                 </button>
               </form>
             ) : (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                    Enter 6-Digit OTP
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Enter 6-Digit SMS Code
                   </label>
+                  <p className="text-xs text-slate-400 mb-2">
+                    Enter the OTP code received via SMS on your mobile
+                  </p>
                   <input
                     type="text"
                     maxLength={6}
