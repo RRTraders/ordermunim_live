@@ -19,3 +19,5 @@ cloudflared.exe
 # OS files
 .DS_Store
 Thumbs.db
+
+server/user_data_testlogin/
