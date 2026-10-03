@@ -66,6 +66,7 @@ export default function LabelCropper({ showToast }) {
   // Settings State (matching screenshot precisely)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
   const [cropPosition, setCropPosition] = useState('auto'); // 'auto' | 'bottom' | 'top'
+  const [cropNudge, setCropNudge] = useState(0); // in points (-20 to +20 fine tune)
   const [printDateTime, setPrintDateTime] = useState(false);
   const [printPageNumber, setPrintPageNumber] = useState(false);
   const [addPackingSlip, setAddPackingSlip] = useState(false);
@@ -186,17 +187,17 @@ export default function LabelCropper({ showToast }) {
 
       // In Image 3, the cut is strictly ABOVE the "TAX INVOICE" bar
       // and includes the solid bottom border of the "Product Details" box.
-      // Standard A4: bottom of Product Details is at pageHeight * 0.476 (~401 pt).
-      // "TAX INVOICE" text is at pageHeight * 0.443 (~373 pt).
+      // In Meesho A4 PDF:
+      // - Product Details bottom border is at pageHeight * 0.593 (~499 pt).
+      // - "TAX INVOICE" text is at pageHeight * 0.568 (~478 pt).
+      // Setting detectedCropBottom to pageHeight * 0.590 (~496.8 pt) cuts cleanly
+      // 2 pt below the Product Details border line and 19 pt ABOVE "TAX INVOICE".
       let detectedCropTop = pageHeight;
-      let detectedCropBottom = pageHeight * 0.476;
+      let detectedCropBottom = pageHeight * 0.590;
 
       if (taxInvoiceY > 0) {
         // Cut at least 16 pt ABOVE the top of the "TAX INVOICE" text
-        detectedCropBottom = Math.max(detectedCropBottom, taxInvoiceY + 16);
-      } else if (productDetailsY > 0) {
-        // Cut 30 pt below the "Product Details" text header (just below SKU/Order No row and border)
-        detectedCropBottom = Math.max(pageHeight * 0.45, productDetailsY - 30);
+        detectedCropBottom = Math.max(pageHeight * 0.585, taxInvoiceY + 16);
       }
 
       return {
@@ -344,16 +345,19 @@ export default function LabelCropper({ showToast }) {
             if (cropPosition === 'top') {
               // Forced Top Half (Meesho Standard)
               cropTop = origH;
-              cropBottom = origH * 0.476;
+              cropBottom = origH * 0.590;
             } else if (cropPosition === 'bottom') {
               // Forced Bottom Half
               cropBottom = 0;
-              cropTop = origH * 0.524;
+              cropTop = origH * 0.410;
             } else {
               // Auto-Detect (Smart): cuts strictly above TAX INVOICE
-              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.476);
+              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.590);
               cropTop = item.detectedCropTop !== undefined ? item.detectedCropTop : origH;
             }
+
+            // Apply fine-tune offset if user tweaked nudge
+            cropBottom = Math.max(0, Math.min(cropTop - 50, cropBottom + cropNudge));
 
             const boxW = Math.max(10, cropRight - cropLeft);
             const boxH = Math.max(10, cropTop - cropBottom);
@@ -989,6 +993,41 @@ export default function LabelCropper({ showToast }) {
                       >
                         Bottom Half
                       </button>
+                    </div>
+
+                    {/* Fine Tune Height Offset */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Cut Line Fine-Tune:</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCropNudge(prev => prev + 5)}
+                          title="Move cut line higher by 5pt"
+                          className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
+                        >
+                          Cut Higher ▲
+                        </button>
+                        <span className="font-mono font-semibold text-slate-700 min-w-[28px] text-center">
+                          {cropNudge > 0 ? `+${cropNudge}` : cropNudge}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCropNudge(prev => prev - 5)}
+                          title="Move cut line lower by 5pt"
+                          className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
+                        >
+                          Cut Lower ▼
+                        </button>
+                        {cropNudge !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setCropNudge(0)}
+                            className="text-[10px] text-rose-500 hover:underline ml-1"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
