@@ -30,8 +30,10 @@ import {
   Check
 } from 'lucide-react';
 
-// Configure pdfjs worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+
+// Configure pdfjs worker locally
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function LabelCropper({ showToast }) {
   // Collapsible cards state
@@ -222,7 +224,7 @@ export default function LabelCropper({ showToast }) {
         quantity: 1,
         storeName: 'Default Store',
         isTop: true,
-        detectedCropBottom: 395,
+        detectedCropBottom: 497,
         detectedCropTop: 842,
         rawText: ''
       };
@@ -352,7 +354,11 @@ export default function LabelCropper({ showToast }) {
               cropTop = origH * 0.410;
             } else {
               // Auto-Detect (Smart): cuts strictly above TAX INVOICE
-              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.590);
+              // Ensure cropBottom is at least origH * 0.590 so TAX INVOICE can NEVER be included
+              const detected = (item.detectedCropBottom && item.detectedCropBottom >= (origH * 0.58)) 
+                ? item.detectedCropBottom 
+                : (origH * 0.590);
+              cropBottom = detected;
               cropTop = item.detectedCropTop !== undefined ? item.detectedCropTop : origH;
             }
 
