@@ -61,10 +61,13 @@ export default function LabelCropper({ showToast }) {
   const [downloadReady, setDownloadReady] = useState(null); // { type: 'single' | 'zip', url, filename, blob }
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showSkuModal, setShowSkuModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Settings State (matching screenshot precisely)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
+  const [cropPosition, setCropPosition] = useState('auto'); // 'auto' | 'bottom' | 'top'
   const [printDateTime, setPrintDateTime] = useState(true);
+
   const [printPageNumber, setPrintPageNumber] = useState(true);
   const [addPackingSlip, setAddPackingSlip] = useState(true);
 
@@ -155,6 +158,43 @@ export default function LabelCropper({ showToast }) {
       const storeMatch = rawText.match(/(?:Sold\s*by|Supplier|Seller)[\s:#-]*([A-Za-z0-9\s]{3,30})/i);
       if (storeMatch) storeName = storeMatch[1].trim();
 
+      // 6. Detect Label Position (Bottom Half vs Top Half)
+      let labelYSum = 0;
+      let labelCount = 0;
+      let invoiceYSum = 0;
+      let invoiceCount = 0;
+
+      const labelMarkers = [
+        'customer address', 'undelivered', 'return to', 'pickup',
+        'product details', 'sku', 'order no', 'payable amount',
+        'valmo', 'delhivery', 'shadowfax', 'xpressbees'
+      ];
+      const invoiceMarkers = [
+        'tax invoice', 'invoice no', 'hsn', 'gross amount',
+        'taxable value', 'reverse charge', 'of supply'
+      ];
+
+      content.items.forEach(it => {
+        const str = (it.str || '').toLowerCase();
+        const y = it.transform ? it.transform[5] : 0;
+        if (labelMarkers.some(m => str.includes(m))) {
+          labelYSum += y;
+          labelCount++;
+        }
+        if (invoiceMarkers.some(m => str.includes(m))) {
+          invoiceYSum += y;
+          invoiceCount++;
+        }
+      });
+
+      const pageView = page.view || [0, 0, 595, 842];
+      const pageHeight = pageView[3] || 842;
+      const avgLabelY = labelCount > 0 ? (labelYSum / labelCount) : (pageHeight * 0.25);
+      const avgInvoiceY = invoiceCount > 0 ? (invoiceYSum / invoiceCount) : (pageHeight * 0.75);
+
+      // If average Y of label items is below half page height, OR lower than invoice Y, it is in the BOTTOM half!
+      const isBottom = avgLabelY < (pageHeight * 0.5) || avgLabelY < avgInvoiceY;
+
       return {
         success: true,
         awb: awb || `LBL-${pageNum}`,
@@ -162,6 +202,7 @@ export default function LabelCropper({ showToast }) {
         sku,
         quantity,
         storeName,
+        isBottom,
         rawText
       };
     } catch (err) {
@@ -173,9 +214,11 @@ export default function LabelCropper({ showToast }) {
         sku: 'Unparsed-Item',
         quantity: 1,
         storeName: 'Default Store',
+        isBottom: true,
         rawText: ''
       };
     }
+
   };
 
   // Main Crop & Sort Execution
@@ -270,9 +313,10 @@ export default function LabelCropper({ showToast }) {
           srcDocsCache.push(await PDFDocument.load(bytes));
         }
 
-        // Standard 4x6 inch thermal page dimensions in points (288 x 432 pt)
-        const THERMAL_W = 288;
-        const THERMAL_H = 432;
+        // 4x6 Thermal Landscape (432 x 288 pt - 150x100mm)
+        // Matches Image 2 perfectly with edge-to-edge printing!
+        const THERMAL_W = 432;
+        const THERMAL_H = 288;
         const totalItems = items.length;
 
         for (let i = 0; i < items.length; i++) {
@@ -286,16 +330,24 @@ export default function LabelCropper({ showToast }) {
           const targetPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
 
           if (labelAction === 'crop') {
-            // CROP LABEL MODE (Meesho standard: top ~50% is shipping label)
+            // Determine whether to crop bottom half or top half
+            const useBottom = cropPosition === 'bottom' ? true :
+                              cropPosition === 'top' ? false :
+                              item.isBottom; // 'auto' -> auto-detected
+
+            // In Meesho A4 PDF, the shipping label is ~48-50% height
+            // If bottom half: y is from 0 to origH * 0.50
+            // If top half: y is from origH * 0.50 to origH
             const cropH = origH * 0.50;
-            const cropY = origH - cropH;
+            const cropY = useBottom ? 0 : (origH - cropH);
+
             srcPage.setCropBox(0, cropY, origW, cropH);
             srcPage.setMediaBox(0, cropY, origW, cropH);
 
             const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
 
-            // Scale to fit 4x6 with comfortable margins
-            const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.93) / cropH);
+            // Fill page cleanly edge-to-edge (98% scale) - EXACTLY MATCHING IMAGE 2!
+            const scale = Math.min((THERMAL_W * 0.98) / origW, (THERMAL_H * 0.98) / cropH);
             const drawW = origW * scale;
             const drawH = cropH * scale;
 
@@ -311,7 +363,7 @@ export default function LabelCropper({ showToast }) {
           } else {
             // KEEP INVOICE / FULL PAGE MODE
             const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
-            const scale = Math.min((THERMAL_W * 0.95) / origW, (THERMAL_H * 0.95) / origH);
+            const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.96) / origH);
             const drawW = origW * scale;
             const drawH = origH * scale;
 
@@ -323,32 +375,32 @@ export default function LabelCropper({ showToast }) {
             });
           }
 
-
-          // Print Header / Footer options
+          // Print Header / Footer options (unobtrusive, placed at absolute bottom edge y=3)
           if (printDateTime) {
             const timeStr = new Date().toLocaleString('en-IN', {
               day: '2-digit', month: '2-digit', year: 'numeric',
               hour: '2-digit', minute: '2-digit', hour12: true
             });
-            targetPage.drawText(`Printed: ${timeStr} | ${item.courier}`, {
-              x: 8,
-              y: THERMAL_H - 12,
-              size: 6.5,
+            targetPage.drawText(`${timeStr} | ${item.courier}`, {
+              x: 6,
+              y: 4,
+              size: 5.5,
               font: helveticaFont,
-              color: rgb(0.2, 0.2, 0.2)
+              color: rgb(0.35, 0.35, 0.35)
             });
           }
 
           if (printPageNumber) {
             targetPage.drawText(`${i + 1} / ${totalItems}`, {
-              x: THERMAL_W - 35,
-              y: THERMAL_H - 12,
-              size: 6.5,
+              x: THERMAL_W - 28,
+              y: 4,
+              size: 5.5,
               font: helveticaBold,
-              color: rgb(0.1, 0.1, 0.1)
+              color: rgb(0.2, 0.2, 0.2)
             });
           }
         }
+
 
         // Add Packing Slip Page In Last if enabled
         if (addPackingSlip) {
@@ -771,7 +823,18 @@ export default function LabelCropper({ showToast }) {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                {downloadReady.type === 'single' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviewModal(true)}
+                    className="px-4 py-3 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview Label
+                  </button>
+                )}
+
                 <a
                   href={downloadReady.url}
                   download={downloadReady.filename}
@@ -852,6 +915,55 @@ export default function LabelCropper({ showToast }) {
                     </button>
                   </div>
                 </div>
+
+                {/* 1b. Crop Position (Smart / Bottom / Top) */}
+                {labelAction === 'crop' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Crop Position
+                      </label>
+                      <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                        {cropPosition === 'auto' ? 'Auto-Detect (Smart)' : cropPosition === 'bottom' ? 'Bottom Half' : 'Top Half'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCropPosition('auto')}
+                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
+                          cropPosition === 'auto'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Auto (Smart)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropPosition('bottom')}
+                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
+                          cropPosition === 'bottom'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Bottom Half
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropPosition('top')}
+                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
+                          cropPosition === 'top'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Top Half
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 2. Print Options */}
                 <div>
@@ -1144,6 +1256,69 @@ export default function LabelCropper({ showToast }) {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= PREVIEW MODAL ================= */}
+      {showPreviewModal && downloadReady && downloadReady.url && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-5 shadow-2xl space-y-3 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  Cropped Thermal Label Preview (4x6" Landscape)
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={downloadReady.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 font-semibold rounded-lg border border-indigo-200 transition-colors"
+                >
+                  Open in New Tab ↗
+                </a>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPreviewModal(false)}
+                  className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100 rounded-xl overflow-hidden min-h-[440px] flex items-center justify-center border border-slate-200">
+              <iframe
+                src={`${downloadReady.url}#toolbar=0&navpanes=0`}
+                title="Cropped PDF Preview"
+                className="w-full h-full min-h-[440px] rounded-xl"
+              />
+            </div>
+
+            <div className="border-t pt-3 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Resolution: 432x288 pt (150x100mm) • Edge-to-Edge Thermal Format
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDirectPrint}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print
+                </button>
+                <a
+                  href={downloadReady.url}
+                  download={downloadReady.filename}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download PDF
+                </a>
+              </div>
             </div>
           </div>
         </div>

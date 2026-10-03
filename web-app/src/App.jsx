@@ -155,7 +155,14 @@ export default function App() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:4000';
     }
-    return serverConfig?.tunnelUrl || 'https://exact-take-regression-roommates.trycloudflare.com';
+    // Always prioritize local residential IP tunnel (Cloudflare) because Meesho blocks Render cloud IPs
+    if (serverConfig?.tunnelUrl && serverConfig.tunnelUrl.includes('trycloudflare.com')) {
+      return serverConfig.tunnelUrl;
+    }
+    if (serverConfig?.apiUrl && !serverConfig.apiUrl.includes('onrender.com')) {
+      return serverConfig.apiUrl;
+    }
+    return serverConfig?.tunnelUrl || serverConfig?.apiUrl || 'https://meesho-otp-backend.onrender.com';
   };
 
 
@@ -600,22 +607,7 @@ export default function App() {
 
     setSyncingAccount(true);
     try {
-      // Create initial pending entry in Firestore
-      const newAccRef = doc(db, 'accounts', syncKey);
-      await setDoc(newAccRef, {
-        userId: user.uid,
-        storeName: autoStoreName,
-        email: cleanEmail || '',
-        syncKey,
-        courier: 'Logging in...',
-        currentOtp: '----',
-        handoverCount: 0,
-        dateTime: 'Connecting...',
-        status: 'syncing',
-        lastUpdated: new Date().toISOString()
-      });
-
-      // Call backend login (local Indian-IP server via Cloudflare tunnel)
+      // 1. Call backend login first — NEVER store dummy placeholders in Firestore!
       const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/meesho/login`, {
         method: 'POST',
@@ -631,7 +623,6 @@ export default function App() {
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        await deleteDoc(newAccRef);
         setModalError(data.error || 'Meesho login failed. Please check your credentials.');
         return;
       }
@@ -644,20 +635,25 @@ export default function App() {
         )
       );
       if (duplicateStore) {
-        await deleteDoc(newAccRef);
         setModalError(`Store "${data.storeName}" is already linked!`);
         return;
       }
 
-      // Update Firestore with live OTP data
-      await updateDoc(newAccRef, {
-        storeName: data.storeName || autoStoreName,
+      // 2. Only store in Firestore when login is 100% SUCCESSFUL with verified store name & OTP!
+      const finalStoreName = data.storeName || newStoreName.trim() || autoStoreName;
+      const newAccRef = doc(db, 'accounts', syncKey);
+      await setDoc(newAccRef, {
+        userId: user.uid,
+        storeName: finalStoreName,
         identifier: data.identifier || '',
+        email: cleanEmail || '',
+        syncKey,
         currentOtp: data.otp || '----',
-        courier: data.courier || '----',
+        courier: data.courier || 'No Return',
         handoverCount: data.handoverCount || 0,
         dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'live'
+        status: 'live',
+        lastUpdated: new Date().toISOString()
       });
 
       setNewStoreName('');
@@ -665,10 +661,10 @@ export default function App() {
       setMeeshoPass('');
       setShowAddModal(false);
       setConnectStep(1);
-      showToast(`Store "${data.storeName || autoStoreName}" connected successfully!`, 'success');
+      showToast(`Store "${finalStoreName}" connected successfully!`, 'success');
     } catch (err) {
       console.error(err);
-      setModalError(`Login error: ${err.message}`);
+      setModalError(`Cannot reach automation server: ${err.message}. Please verify the automation server/tunnel is active.`);
     } finally {
       setSyncingAccount(false);
     }
