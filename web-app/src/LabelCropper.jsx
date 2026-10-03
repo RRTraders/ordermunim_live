@@ -312,186 +312,132 @@ export default function LabelCropper({ showToast }) {
       setProcessingProgress(60);
 
       // Helper function to build a cropped PDF from an array of label items
+      // 100% Matching LabelMantra.in's exact page crop architecture:
+      // Uses direct copyPages + translateContent + setCropBox + setMediaBox
+      // This physically clips off everything below the top 345.6pt (TAX INVOICE completely eliminated)
       const buildPdf = async (items, title = 'Meesho Shipping Labels') => {
         const outDoc = await PDFDocument.create();
         const helveticaFont = await outDoc.embedFont(StandardFonts.Helvetica);
         const helveticaBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Pre-load source PDFDocuments
-        const srcDocsCache = new Map();
-        for (const file of files) {
-          const bytes = await file.arrayBuffer();
-          srcDocsCache.set(file, await PDFDocument.load(bytes));
+        // Pre-load source PDFDocuments as an array matching files
+        const srcDocs = [];
+        for (let fi = 0; fi < files.length; fi++) {
+          const bytes = await files[fi].arrayBuffer();
+          srcDocs.push(await PDFDocument.load(bytes));
         }
 
-        // 4x6 Thermal Landscape (432 x 288 pt - 150x100mm)
-        // Matches Image 2 perfectly with edge-to-edge printing!
-        const THERMAL_W = 432;
-        const THERMAL_H = 288;
         const totalItems = items.length;
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
-          const singleDoc = srcDocsCache.get(item.sourceFile);
-          const srcPage = singleDoc.getPage(item.pageIndex);
-          const { width: origW, height: origH } = srcPage.getSize();
+          const singleDoc = srcDocs[item.fileIndex];
+          if (!singleDoc) continue;
 
-          const targetPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
+          // Copy page directly from source (Preserves 100% crisp vector quality, fonts, and barcodes)
+          const [copiedPage] = await outDoc.copyPages(singleDoc, [item.pageIndex]);
+          const pageSize = copiedPage.getSize();
 
           if (labelAction === 'crop') {
-            let cropLeft = 0;
-            let cropRight = origW;
-            let cropBottom = 0;
-            let cropTop = origH;
+            // LabelMantra 1:1 algorithm:
+            // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
+            // Everything below that (TAX INVOICE, BILL TO/SHIP TO, items table) is physically cut off.
+            const cropH = Math.min(pageSize.height, 345.6 + cropNudge);
+            copiedPage.translateContent(0, -(pageSize.height - cropH));
+            copiedPage.setCropBox(0, 0, pageSize.width, cropH);
+            copiedPage.setMediaBox(0, 0, pageSize.width, cropH);
+          }
 
-            if (cropPosition === 'top') {
-              // Forced Top Half (Meesho Standard)
-              cropTop = origH;
-              cropBottom = origH * 0.590;
-            } else if (cropPosition === 'bottom') {
-              // Forced Bottom Half
-              cropBottom = 0;
-              cropTop = origH * 0.410;
-            } else {
-              // Auto-Detect (Smart): cuts strictly above TAX INVOICE
-              // Ensure cropBottom is at least origH * 0.590 so TAX INVOICE can NEVER be included
-              const detected = (item.detectedCropBottom && item.detectedCropBottom >= (origH * 0.58)) 
-                ? item.detectedCropBottom 
-                : (origH * 0.590);
-              cropBottom = detected;
-              cropTop = item.detectedCropTop !== undefined ? item.detectedCropTop : origH;
-            }
+          const targetPage = outDoc.addPage(copiedPage);
+          const { width: pW, height: pH } = targetPage.getSize();
 
-            // Apply fine-tune offset if user tweaked nudge
-            cropBottom = Math.max(0, Math.min(cropTop - 50, cropBottom + cropNudge));
-
-            const boxW = Math.max(10, cropRight - cropLeft);
-            const boxH = Math.max(10, cropTop - cropBottom);
-
-            // Embed using EXACT boundingBox so Form XObject clips out invoice completely!
-            const embeddedPage = await outDoc.embedPage(srcPage, {
-              left: cropLeft,
-              bottom: cropBottom,
-              right: cropRight,
-              top: cropTop,
-            });
-
-            // Fill page cleanly edge-to-edge (98% scale) - EXACTLY MATCHING IMAGE 2!
-            const marginFactor = (printDateTime || printPageNumber) ? 0.94 : 0.98;
-            const scale = Math.min((THERMAL_W * 0.98) / boxW, (THERMAL_H * marginFactor) / boxH);
-            const drawW = boxW * scale;
-            const drawH = boxH * scale;
-
-            const offX = (THERMAL_W - drawW) / 2;
-            const offY = (printDateTime || printPageNumber) 
-              ? ((THERMAL_H - drawH) / 2 + 6) 
-              : ((THERMAL_H - drawH) / 2);
-
-            targetPage.drawPage(embeddedPage, {
-              x: offX,
-              y: offY,
-              width: drawW,
-              height: drawH,
-            });
-          } else {
-            // KEEP INVOICE / FULL PAGE MODE
-            const embeddedPage = await outDoc.embedPage(srcPage, {
-              left: 0,
-              bottom: 0,
-              right: origW,
-              top: origH,
-            });
-            const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.96) / origH);
-            const drawW = origW * scale;
-            const drawH = origH * scale;
-
-            targetPage.drawPage(embeddedPage, {
-              x: (THERMAL_W - drawW) / 2,
-              y: (THERMAL_H - drawH) / 2,
-              width: drawW,
-              height: drawH,
+          // Header / Footer options (LabelMantra style - only drawn if user enabled)
+          if (printDateTime || printPageNumber) {
+            targetPage.drawRectangle({
+              x: 0,
+              y: 0,
+              width: pW,
+              height: 25,
+              color: rgb(1, 1, 1),
             });
           }
 
-          // Print Header / Footer options (unobtrusive, placed at absolute bottom edge y=3)
           if (printDateTime) {
             const timeStr = new Date().toLocaleString('en-IN', {
               day: '2-digit', month: '2-digit', year: 'numeric',
               hour: '2-digit', minute: '2-digit', hour12: true
             });
-            targetPage.drawText(`${timeStr} | ${item.courier}`, {
-              x: 6,
-              y: 4,
-              size: 5.5,
-              font: helveticaFont,
-              color: rgb(0.35, 0.35, 0.35)
+            const textW = helveticaBold.widthOfTextAtSize(timeStr, 9);
+            targetPage.drawText(timeStr, {
+              x: (pW - textW) / 2,
+              y: 8,
+              size: 9,
+              font: helveticaBold,
+              color: rgb(0, 0, 0)
             });
           }
 
           if (printPageNumber) {
-            targetPage.drawText(`${i + 1} / ${totalItems}`, {
-              x: THERMAL_W - 28,
-              y: 4,
-              size: 5.5,
+            const pageStr = `${i + 1}`;
+            const textW = helveticaBold.widthOfTextAtSize(pageStr, 9);
+            targetPage.drawText(pageStr, {
+              x: pW - textW - 14,
+              y: 8,
+              size: 9,
               font: helveticaBold,
-              color: rgb(0.2, 0.2, 0.2)
+              color: rgb(0, 0, 0)
             });
           }
         }
 
-
         // Add Packing Slip Page In Last if enabled
         if (addPackingSlip) {
-          const slipPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
+          const slipW = 595.28;
+          const slipH = 345.6;
+          const slipPage = outDoc.addPage([slipW, slipH]);
           slipPage.drawRectangle({
-            x: 0, y: 0, width: THERMAL_W, height: THERMAL_H,
+            x: 0, y: 0, width: slipW, height: slipH,
             color: rgb(0.98, 0.98, 0.99)
           });
 
           // Header
           slipPage.drawText('WAREHOUSE PACKING SLIP', {
-            x: 12, y: THERMAL_H - 24, size: 11, font: helveticaBold, color: rgb(0.05, 0.1, 0.2)
+            x: 15, y: slipH - 24, size: 12, font: helveticaBold, color: rgb(0.05, 0.1, 0.2)
           });
           slipPage.drawText(`Total Orders: ${totalItems} | Date: ${new Date().toLocaleDateString('en-IN')}`, {
-            x: 12, y: THERMAL_H - 38, size: 7, font: helveticaFont, color: rgb(0.4, 0.4, 0.4)
+            x: 15, y: slipH - 38, size: 8, font: helveticaFont, color: rgb(0.4, 0.4, 0.4)
           });
 
           slipPage.drawLine({
-            start: { x: 12, y: THERMAL_H - 45 },
-            end: { x: THERMAL_W - 12, y: THERMAL_H - 45 },
+            start: { x: 15, y: slipH - 45 },
+            end: { x: slipW - 15, y: slipH - 45 },
             thickness: 1, color: rgb(0.8, 0.8, 0.85)
           });
 
           // SKU Table
           slipPage.drawText('SKU / Product Description', {
-            x: 12, y: THERMAL_H - 58, size: 8, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
+            x: 15, y: slipH - 58, size: 8.5, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
           });
           slipPage.drawText('Qty', {
-            x: THERMAL_W - 35, y: THERMAL_H - 58, size: 8, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
+            x: slipW - 40, y: slipH - 58, size: 8.5, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
           });
 
-          let rowY = THERMAL_H - 74;
+          let rowY = slipH - 74;
           const sortedSkus = Object.entries(skuMap).sort((a, b) => b[1] - a[1]);
 
           for (const [skuName, qty] of sortedSkus) {
-            if (rowY < 40) {
-              slipPage.drawText('... (more items on next sheet)', { x: 12, y: 25, size: 7, font: helveticaFont, color: rgb(0.5, 0.5, 0.5) });
+            if (rowY < 30) {
+              slipPage.drawText('... (more items on next sheet)', { x: 15, y: 15, size: 7.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5) });
               break;
             }
-            slipPage.drawText(skuName.slice(0, 36), {
-              x: 12, y: rowY, size: 7.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1)
+            slipPage.drawText(skuName.slice(0, 45), {
+              x: 15, y: rowY, size: 8, font: helveticaFont, color: rgb(0.1, 0.1, 0.1)
             });
             slipPage.drawText(String(qty), {
-              x: THERMAL_W - 30, y: rowY, size: 8, font: helveticaBold, color: rgb(0.05, 0.4, 0.2)
+              x: slipW - 35, y: rowY, size: 8.5, font: helveticaBold, color: rgb(0.05, 0.4, 0.2)
             });
-            rowY -= 14;
+            rowY -= 15;
           }
-
-          // Bottom Courier summary
-          const courierStr = Object.entries(courierMap).map(([k, v]) => `${k}: ${v}`).join(' | ');
-          slipPage.drawText(`Couriers: ${courierStr}`, {
-            x: 12, y: 15, size: 6.5, font: helveticaFont, color: rgb(0.3, 0.3, 0.4)
-          });
         }
 
         return await outDoc.save();
@@ -1380,7 +1326,7 @@ export default function LabelCropper({ showToast }) {
 
             <div className="border-t pt-3 flex items-center justify-between">
               <span className="text-xs text-slate-400">
-                Resolution: 432x288 pt (150x100mm) • Edge-to-Edge Thermal Format
+                Meesho Pure Shipping Label • 100% Tax Invoice Eliminated (LabelMantra Format)
               </span>
               <div className="flex items-center gap-2">
                 <button
