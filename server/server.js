@@ -66,6 +66,23 @@ async function updateFirestoreAccount(syncKey, data) {
     if (data.dateTime !== undefined) { fieldsToUpdate.push('dateTime'); fieldsObj.dateTime = { stringValue: data.dateTime }; }
     if (data.identifier !== undefined) { fieldsToUpdate.push('identifier'); fieldsObj.identifier = { stringValue: data.identifier }; }
     if (data.status !== undefined) { fieldsToUpdate.push('status'); fieldsObj.status = { stringValue: data.status }; }
+    if (data.otpList !== undefined) {
+      fieldsToUpdate.push('otpList');
+      fieldsObj.otpList = {
+        arrayValue: {
+          values: (data.otpList || []).map(item => ({
+            mapValue: {
+              fields: {
+                otp:          { stringValue: item.otp || '----' },
+                courier:      { stringValue: item.courier || '' },
+                handoverCount:{ integerValue: String(item.handoverCount || 0) },
+                dateTime:     { stringValue: item.dateTime || '' }
+              }
+            }
+          }))
+        }
+      };
+    }
     fieldsToUpdate.push('lastUpdated');
     fieldsObj.lastUpdated = { stringValue: new Date().toISOString() };
 
@@ -107,17 +124,25 @@ async function fetchOTPWithCookies(identifier, cookies) {
     if (res.ok) {
       const json = await res.json();
       log(`[OTP API] Response: ${JSON.stringify(json)}`);
-      const otpList = json.supplier_delivery_otp || [];
-      if (otpList.length > 0) {
-        const item = otpList[0];
-        return {
+      const rawList = json.supplier_delivery_otp || [];
+      if (rawList.length > 0) {
+        // Map ALL couriers — not just the first one
+        const otpList = rawList.map(item => ({
           otp: item.otp || '----',
           courier: item.carrier_details?.name || item.carrier_name || 'Courier',
-          handoverCount: item.delivery_shipment_details?.total_shipment_count || item.count || 0,
+          // Meesho uses total_handover_count; fallback chain covers API variations
+          handoverCount:
+            item.total_handover_count ??
+            item.delivery_shipment_details?.total_handover_count ??
+            item.delivery_shipment_details?.total_shipment_count ??
+            item.count ??
+            0,
           dateTime: item.otp_expiry_timestamp
             ? new Date(item.otp_expiry_timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
             : new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-        };
+        }));
+        log(`[OTP API] All couriers: ${JSON.stringify(otpList)}`);
+        return { otpList };
       }
     } else if (res.status === 401 || res.status === 403) {
       log(`[OTP API] Session expired for ${identifier}, needs re-login`);
@@ -127,7 +152,7 @@ async function fetchOTPWithCookies(identifier, cookies) {
     log(`[OTP API] Error: ${e.message}`);
   }
 
-  return { otp: '----', courier: 'No active return', handoverCount: 0, dateTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) };
+  return { otpList: [] };
 }
 
 // =====================================================================
@@ -136,19 +161,20 @@ async function fetchOTPWithCookies(identifier, cookies) {
 
 async function launchBrowserContext(sessionDir) {
   const baseArgs = [
+    '--headless=new',
     '--disable-blink-features=AutomationControlled',
     '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-    '--no-first-run', '--disable-gpu',
+    '--no-first-run', '--disable-gpu', '--no-default-browser-check',
+    '--disable-infobars', '--window-position=-2400,-2400',
     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
   ];
 
-  const isLinux = process.platform === 'linux';
   let context;
 
   try {
     context = await chromium.launchPersistentContext(sessionDir, {
       channel: 'chrome',
-      headless: isLinux,
+      headless: true, // 100% invisible background process
       viewport: { width: 1366, height: 768 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       ignoreDefaultArgs: ['--enable-automation'],
@@ -157,7 +183,7 @@ async function launchBrowserContext(sessionDir) {
   } catch (err) {
     log(`[Browser] Chrome unavailable (${err.message.split('\n')[0]}), using bundled Chromium...`);
     context = await chromium.launchPersistentContext(sessionDir, {
-      headless: isLinux,
+      headless: true, // 100% invisible background process
       viewport: { width: 1366, height: 768 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       ignoreDefaultArgs: ['--enable-automation'],
@@ -185,6 +211,27 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
     context = await launchBrowserContext(sessionDir);
     const page = await context.newPage();
 
+    let loginApiError = null;
+    let apiStoreName = null;
+    page.on('response', async res => {
+      const u = res.url();
+      if (u.includes('v2-login') || u.includes('/api/container/user/') || u.includes('/supplier/profile')) {
+        try {
+          const body = await res.json();
+          log(`[Login] API response from ${u.split('?')[0]}: ${JSON.stringify(body).substring(0, 300)}`);
+          if (!res.ok) {
+            loginApiError = body?.error || body?.options?.backendData?.error || 'Authentication failed';
+          } else {
+            const possibleName = body?.data?.supplier_name || body?.data?.store_name || body?.supplier_name || body?.store_name || body?.name || body?.legal_entity_name;
+            if (possibleName && typeof possibleName === 'string' && possibleName.trim().length > 1) {
+              apiStoreName = possibleName.trim();
+              log(`[Login] Detected real store name from API: "${apiStoreName}"`);
+            }
+          }
+        } catch (e) {}
+      }
+    });
+
     log(`[Login] Navigating to Meesho supplier login page...`);
     await page.goto('https://supplier.meesho.com/panel/v3/new/root/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
@@ -193,7 +240,7 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
     if (title.includes('Access Denied') || title.includes('access denied')) {
       log(`[Login] Akamai block detected on initial load.`);
       await context.close();
-      return { success: false, error: 'Meesho blocked this server. Use the local app (start_meesho_hub.bat) to add accounts.' };
+      return { success: false, error: 'Meesho security shield blocked this request. Please wait 1 minute and try again.' };
     }
 
     // Wait for login form
@@ -212,26 +259,35 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
     }
 
     if (!alreadyLoggedIn) {
-      log(`[Login] Filling credentials...`);
+      log(`[Login] Filling credentials for ${email}...`);
       await page.locator('input[name="emailOrPhone"]').fill(email.trim());
       await page.waitForTimeout(300);
       await page.locator('input[name="password"]').fill(password);
       await page.waitForTimeout(300);
 
-      // Submit and wait for navigation
-      await Promise.all([
-        page.waitForNavigation({ timeout: 15000 }).catch(() => {}),
-        page.locator('button[type="submit"]').first().click()
-      ]);
+      // Submit and wait for response or URL change
+      await page.locator('button[type="submit"]').first().click();
 
-      await page.waitForTimeout(3000);
+      // Wait up to 10 seconds for URL change or API error
+      for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(500);
+        const u = page.url();
+        if (u.includes('growth') || u.includes('fulfillment') || u.includes('dashboard')) {
+          log(`[Login] URL changed to dashboard: ${u}`);
+          break;
+        }
+        if (loginApiError) {
+          log(`[Login] API returned error: ${loginApiError}`);
+          break;
+        }
+      }
 
       const currentUrl = page.url();
       log(`[Login] URL after submit: ${currentUrl}`);
 
-      if (currentUrl.includes('login')) {
+      if (currentUrl.includes('login') || loginApiError) {
         // Still on login page — get error text
-        const errorText = await page.evaluate(() => {
+        const errorText = loginApiError || await page.evaluate(() => {
           const selectors = ['[role="alert"]', '[class*="error" i]', '[class*="helper" i]'];
           for (const sel of selectors) {
             const el = document.querySelector(sel);
@@ -239,35 +295,71 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
           }
           return null;
         });
-        log(`[Login] Failed. Page error: ${errorText}`);
+        log(`[Login] Failed. Error: ${errorText}`);
         await context.close();
         return { success: false, error: errorText || 'Wrong email or password. Please check your Meesho credentials.' };
       }
     }
+
 
     // --- LOGGED IN SUCCESSFULLY ---
     // Extract identifier from URL
     const currentUrl = page.url();
     const identifier = (currentUrl.match(/(?:growth|fulfillment)\/([a-zA-Z0-9]+)/) || [])[1] || '';
 
-    // Extract store name
-    const detectedStoreName = await page.evaluate(() => {
-      const h1 = document.querySelector('h1');
-      if (h1 && h1.innerText.includes('Welcome back')) return h1.innerText.replace('Welcome back,', '').trim();
-      const sidebarName = document.querySelector('[class*="supplier-name"], [class*="store-name"], [class*="supplierName"]');
-      if (sidebarName) return sidebarName.innerText.trim();
-      return '';
-    }) || storeName || email.split('@')[0];
-
-    log(`[Login] Store: "${detectedStoreName}", Identifier: "${identifier}"`);
-
-    // Navigate to returns page
+    // Navigate to returns page first so all dashboard elements are rendered
     if (identifier) {
       await page.goto(`https://supplier.meesho.com/panel/v3/new/fulfillment/${identifier}/returns/overview`, {
         waitUntil: 'domcontentloaded', timeout: 20000
       }).catch(() => {});
       await page.waitForTimeout(5000);
     }
+
+    // Save screenshot for verification
+    await page.screenshot({ path: path.join(__dirname, 'last_store_login.png') }).catch(() => {});
+
+    // Extract real account holder / store name from fully rendered page
+    const domStoreName = await page.evaluate(() => {
+      // 1. Check sidebar top element next to the storefront icon
+      const sidebar = document.querySelector('aside, nav, [class*="sidebar" i], [class*="Sidebar" i]');
+      if (sidebar) {
+        const leafNodes = Array.from(sidebar.querySelectorAll('*')).filter(el => {
+          return el.children.length === 0 && el.innerText && el.innerText.trim().length > 1;
+        });
+        for (const el of leafNodes) {
+          const t = el.innerText.trim();
+          if (t.length > 1 && t.length < 50 && !t.includes('\n') &&
+              !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business)/i.test(t)) {
+            return t;
+          }
+        }
+      }
+
+      // 2. Check "Welcome back, {Store Name}"
+      const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, span, p'));
+      for (const h of headings) {
+        if (h.innerText && /Welcome\s+back,?\s*([^\n!.,]+)/i.test(h.innerText)) {
+          const m = h.innerText.match(/Welcome\s+back,?\s*([^\n!.,]+)/i);
+          if (m && m[1].trim().length > 1) return m[1].trim();
+        }
+      }
+
+      // 3. Check any dropdown or header with storefront/user icon
+      const dropdowns = Array.from(document.querySelectorAll('button, [role="button"], header *'));
+      for (const el of dropdowns) {
+        if (el.children.length === 0 && el.innerText) {
+          const t = el.innerText.trim();
+          if (t.length > 1 && t.length < 40 && !t.includes('\n') && !/^(Notice|Support|How|Search|Filter|Sort|Download|Export|Return|RTO|Orders)/i.test(t)) {
+            return t;
+          }
+        }
+      }
+
+      return '';
+    });
+
+    const detectedStoreName = storeName || apiStoreName || domStoreName || (email.includes('@') ? email.split('@')[0] : email);
+    log(`[Login] Final detected Store Name: "${detectedStoreName}" (api="${apiStoreName}", dom="${domStoreName}"), Identifier: "${identifier}"`);
 
     // Extract cookies for future API calls
     const cookies = await context.cookies();
@@ -346,10 +438,12 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
       success: true,
       storeName: detectedStoreName,
       identifier,
-      otp: otpResult.otp,
-      courier: otpResult.courier,
-      handoverCount: otpResult.handoverCount,
-      dateTime: otpResult.dateTime
+      otpList: otpResult.otpList || [],
+      // Keep legacy single-OTP fields from first entry for backward compat
+      otp: (otpResult.otpList?.[0]?.otp) || '----',
+      courier: (otpResult.otpList?.[0]?.courier) || 'No active return',
+      handoverCount: (otpResult.otpList?.[0]?.handoverCount) || 0,
+      dateTime: (otpResult.otpList?.[0]?.dateTime) || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
     };
 
   } catch (err) {
@@ -384,6 +478,7 @@ async function checkReturnsForSession(syncKey) {
   }
 
   await updateFirestoreAccount(syncKey, {
+    otpList: result.otpList || [],
     otp: result.otp,
     courier: result.courier,
     handoverCount: result.handoverCount,
@@ -444,20 +539,67 @@ app.get('/api/debug/logs', (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // Heartbeat
-async function updateServerHeartbeat(apiUrl) {
+// Automatic Cloudflare Tunnel Manager
+const { spawn } = require('child_process');
+let cloudflareProcess = null;
+
+function ensureCloudflareTunnel() {
+  if (process.env.RENDER_EXTERNAL_URL) return;
+  const cfBinary = path.join(__dirname, 'cloudflared.exe');
+  if (!fs.existsSync(cfBinary)) return;
+
+  log('[Tunnel] Starting fresh Cloudflare HTTPS tunnel...');
   try {
-    const maskParam = apiUrl ? '&updateMask.fieldPaths=apiUrl' : '';
+    cloudflareProcess = spawn(cfBinary, ['tunnel', '--url', `http://localhost:${PORT}`], {
+      stdio: 'ignore',
+      detached: false
+    });
+    cloudflareProcess.on('error', (err) => log(`[Tunnel] Error: ${err.message}`));
+  } catch (e) {
+    log(`[Tunnel] Spawn failed: ${e.message}`);
+  }
+}
+
+process.on('exit', () => { if (cloudflareProcess) try { cloudflareProcess.kill(); } catch (e) {} });
+process.on('SIGINT', () => { if (cloudflareProcess) try { cloudflareProcess.kill(); } catch (e) {} process.exit(); });
+
+async function checkLocalTunnel() {
+  if (process.env.RENDER_EXTERNAL_URL) return null;
+  try {
+    const res = await fetch('http://127.0.0.1:20241/quicktunnel');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.hostname) {
+        return `https://${data.hostname}`;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function updateServerHeartbeat(explicitUrl) {
+  try {
+    const autoTunnel = await checkLocalTunnel();
+    const apiUrl = explicitUrl || autoTunnel || process.env.RENDER_EXTERNAL_URL || process.env.TUNNEL_URL || null;
+    const maskParam = apiUrl ? '&updateMask.fieldPaths=apiUrl&updateMask.fieldPaths=tunnelUrl' : '';
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/config/server?updateMask.fieldPaths=lastOnline${maskParam}`;
     const fields = { lastOnline: { stringValue: new Date().toISOString() } };
-    if (apiUrl) fields.apiUrl = { stringValue: apiUrl };
+    if (apiUrl) {
+      fields.apiUrl = { stringValue: apiUrl };
+      fields.tunnelUrl = { stringValue: apiUrl };
+    }
     await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+    if (apiUrl) log(`[Heartbeat] Active Server URL: ${apiUrl}`);
   } catch (e) {}
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   log(`[Server] Running on port ${PORT}`);
-  const publicUrl = process.env.RENDER_EXTERNAL_URL || process.env.TUNNEL_URL || null;
-  if (publicUrl) { log(`[Server] Public: ${publicUrl}`); updateServerHeartbeat(publicUrl); }
-  else updateServerHeartbeat();
-  setInterval(() => updateServerHeartbeat(publicUrl), 60000);
+  ensureCloudflareTunnel();
+  // Wait 4 seconds for quicktunnel to obtain new URL from Cloudflare
+  setTimeout(async () => {
+    await updateServerHeartbeat();
+  }, 4000);
+  setInterval(() => updateServerHeartbeat(), 30000);
 });
+

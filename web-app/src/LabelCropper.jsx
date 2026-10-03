@@ -27,6 +27,7 @@ import {
   Store,
   Layers,
   Sparkles,
+  Heart,
   Check
 } from 'lucide-react';
 
@@ -68,6 +69,7 @@ export default function LabelCropper({ showToast }) {
   // Settings State (matching LabelMantra: always auto crop)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
   const [cropNudge, setCropNudge] = useState(0); // in points (-20 to +20 fine tune)
+  const [printThankYou, setPrintThankYou] = useState(true);
   const [printDateTime, setPrintDateTime] = useState(false);
   const [printPageNumber, setPrintPageNumber] = useState(false);
   const [addPackingSlip, setAddPackingSlip] = useState(false);
@@ -341,53 +343,75 @@ export default function LabelCropper({ showToast }) {
           const pageSize = copiedPage.getSize();
 
           if (labelAction === 'crop') {
-            // LabelMantra 1:1 algorithm:
+            // LabelMantra 1:1 algorithm + Customer Thank You Line:
             // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
             // Everything below that (TAX INVOICE, BILL TO/SHIP TO, items table) is physically cut off.
-            const cropH = Math.min(pageSize.height, 345.6 + cropNudge);
-            copiedPage.translateContent(0, -(pageSize.height - cropH));
-            copiedPage.setCropBox(0, 0, pageSize.width, cropH);
-            copiedPage.setMediaBox(0, 0, pageSize.width, cropH);
+            const labelH = Math.min(pageSize.height, 345.6 + cropNudge);
+            const extraH = printThankYou ? 24 : 0;
+            const totalH = labelH + extraH;
+
+            if (extraH > 0) {
+              copiedPage.translateContent(0, -(pageSize.height - labelH) + extraH);
+            } else {
+              copiedPage.translateContent(0, -(pageSize.height - labelH));
+            }
+            copiedPage.setCropBox(0, 0, pageSize.width, totalH);
+            copiedPage.setMediaBox(0, 0, pageSize.width, totalH);
           }
 
           const targetPage = outDoc.addPage(copiedPage);
           const { width: pW, height: pH } = targetPage.getSize();
 
-          // Header / Footer options (LabelMantra style - only drawn if user enabled)
-          if (printDateTime || printPageNumber) {
+          // Centered Bold line: "Thank you for your order" after cropped label
+          if (labelAction === 'crop' && printThankYou) {
+            const extraH = 24;
+            // Draw clean white background strip to ensure 100% zero bleed from underneath
             targetPage.drawRectangle({
               x: 0,
               y: 0,
               width: pW,
-              height: 25,
+              height: extraH,
               color: rgb(1, 1, 1),
+            });
+
+            // Centered Bold text: "Thank you for your order"
+            const thankText = "Thank you for your order";
+            const fontSize = 11;
+            const textW = helveticaBold.widthOfTextAtSize(thankText, fontSize);
+            targetPage.drawText(thankText, {
+              x: (pW - textW) / 2,
+              y: (extraH - fontSize) / 2 + 1,
+              size: fontSize,
+              font: helveticaBold,
+              color: rgb(0, 0, 0),
             });
           }
 
+          // Optional Date/Time footer (placed on left edge)
           if (printDateTime) {
             const timeStr = new Date().toLocaleString('en-IN', {
               day: '2-digit', month: '2-digit', year: 'numeric',
               hour: '2-digit', minute: '2-digit', hour12: true
             });
-            const textW = helveticaBold.widthOfTextAtSize(timeStr, 9);
             targetPage.drawText(timeStr, {
-              x: (pW - textW) / 2,
-              y: 8,
-              size: 9,
-              font: helveticaBold,
-              color: rgb(0, 0, 0)
+              x: 12,
+              y: 7,
+              size: 7.5,
+              font: helveticaFont,
+              color: rgb(0.35, 0.35, 0.35)
             });
           }
 
+          // Optional Page Number (placed on right edge)
           if (printPageNumber) {
             const pageStr = `${i + 1}`;
-            const textW = helveticaBold.widthOfTextAtSize(pageStr, 9);
+            const textW = helveticaBold.widthOfTextAtSize(pageStr, 8);
             targetPage.drawText(pageStr, {
               x: pW - textW - 14,
-              y: 8,
-              size: 9,
+              y: 7,
+              size: 8,
               font: helveticaBold,
-              color: rgb(0, 0, 0)
+              color: rgb(0.2, 0.2, 0.2)
             });
           }
         }
@@ -963,6 +987,25 @@ export default function LabelCropper({ showToast }) {
                     Print Options
                   </label>
                   <div className="space-y-2">
+                    {/* Thank You Note */}
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      printThankYou ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <Heart className="w-3.5 h-3.5 text-rose-500" />
+                        Print "Thank you for your order"
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={printThankYou}
+                          onChange={(e) => setPrintThankYou(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
                     {/* Date/Time */}
                     <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
                       printDateTime ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
