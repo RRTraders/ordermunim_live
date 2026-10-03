@@ -1,265 +1,643 @@
 import React, { useState, useRef } from 'react';
-import { PDFDocument, PageSizes, degrees } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+import JSZip from 'jszip';
 import { 
-  Printer, 
-  Scissors, 
-  UploadCloud, 
   FileText, 
-  CheckCircle, 
+  CheckCircle2, 
+  Copy, 
+  AlertTriangle, 
+  UploadCloud, 
+  ChevronUp, 
+  ChevronDown, 
+  Scissors, 
+  FileCheck, 
+  Clock, 
+  FileCode, 
+  FilePlus, 
+  Package, 
+  Truck, 
+  Boxes, 
   Download, 
-  RefreshCw, 
+  Printer, 
+  Eye, 
   Trash2, 
-  Settings2, 
-  ShieldCheck, 
-  Sparkles, 
-  Sliders, 
-  Layers, 
-  FileCheck,
-  AlertCircle
+  Plus, 
+  RefreshCw, 
+  Store,
+  Layers,
+  Sparkles,
+  Check
 } from 'lucide-react';
 
+// Configure pdfjs worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
 export default function LabelCropper({ showToast }) {
+  // Collapsible cards state
+  const [reportOpen, setReportOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(true);
+
+  // Files state
   const [files, setFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processedPdfUrl, setProcessedPdfUrl] = useState(null);
-  const [processedFileName, setProcessedFileName] = useState('');
-  const [stats, setStats] = useState({ totalPages: 0, totalLabels: 0 });
-  const [dragActive, setDragActive] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
 
-  // Settings
-  const [cropPreset, setCropPreset] = useState('meesho_thermal'); // 'meesho_thermal' | 'a4_4grid' | 'a4_2grid' | 'custom'
-  const [cropHeightPercent, setCropHeightPercent] = useState(50); // percentage of page height from top
-  const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
+  // Processing Report Metrics
+  const [metrics, setMetrics] = useState({
+    totalLabels: 0,
+    success: 0,
+    duplicates: 0,
+    ocrFailed: 0,
+  });
+
+  // Extracted data details
+  const [parsedLabels, setParsedLabels] = useState([]);
+  const [duplicateList, setDuplicateList] = useState([]);
+  const [skuSummary, setSkuSummary] = useState({});
+  const [courierSummary, setCourierSummary] = useState({});
+
+  // Generated outputs
+  const [downloadReady, setDownloadReady] = useState(null); // { type: 'single' | 'zip', url, filename, blob }
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showSkuModal, setShowSkuModal] = useState(false);
+
+  // Settings State (matching screenshot precisely)
+  const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
+  const [printDateTime, setPrintDateTime] = useState(true);
+  const [printPageNumber, setPrintPageNumber] = useState(true);
+  const [addPackingSlip, setAddPackingSlip] = useState(true);
+
+  // Sort By options (matching screenshot)
+  const [sortSku, setSortSku] = useState(true);
+  const [sortCourier, setSortCourier] = useState(false);
+  const [sortQuantity, setSortQuantity] = useState(false);
+
+  // Output File Type options (matching screenshot)
+  const [outputType, setOutputType] = useState('single'); // 'single' | 'courier' | 'quantity' | 'store'
 
   const fileInputRef = useRef(null);
 
-  // Handle files selection
-  const handleFiles = (newFiles) => {
-    const validPdfs = Array.from(newFiles).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-    if (validPdfs.length === 0) {
-      if (showToast) showToast('Please select valid PDF files only', 'error');
+  // Handle uploaded files
+  const handleFiles = (selectedFiles) => {
+    const valid = Array.from(selectedFiles).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (valid.length === 0) {
+      if (showToast) showToast('Please select valid PDF files', 'error');
       return;
     }
-    setFiles(prev => [...prev, ...validPdfs]);
-    setProcessedPdfUrl(null);
+    setFiles(prev => [...prev, ...valid]);
+    setDownloadReady(null);
   };
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
-    else if (e.type === 'dragleave') setDragActive(false);
+  const removeFile = (idx) => {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
+    setDownloadReady(null);
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files);
+  const clearAllFiles = () => {
+    setFiles([]);
+    setDownloadReady(null);
+    setMetrics({ totalLabels: 0, success: 0, duplicates: 0, ocrFailed: 0 });
+    setParsedLabels([]);
+    setDuplicateList([]);
+    setSkuSummary({});
+    setCourierSummary({});
+  };
+
+  // Helper to extract text and details from a PDF page
+  const extractLabelData = async (pdfDoc, pageNum) => {
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const content = await page.getTextContent();
+      const rawText = content.items.map(it => it.str).join(' ');
+
+      // 1. Detect Courier
+      let courier = 'Unknown';
+      const courierRegexes = [
+        { name: 'Valmo', rx: /\bvalmo\b/i },
+        { name: 'Shadowfax', rx: /\bshadowfax\b/i },
+        { name: 'Delhivery', rx: /\bdelhivery\b/i },
+        { name: 'XpressBees', rx: /\bxpressbees\b/i },
+        { name: 'Ecom Express', rx: /\becom\s*express\b/i },
+        { name: 'DTDC', rx: /\bdtdc\b/i },
+        { name: 'Blue Dart', rx: /\bblue\s*dart\b/i }
+      ];
+      for (const c of courierRegexes) {
+        if (c.rx.test(rawText)) {
+          courier = c.name;
+          break;
+        }
+      }
+
+      // 2. Detect AWB / Tracking number
+      let awb = '';
+      const awbMatch = rawText.match(/(?:AWB|Waybill|Tracking(?:\s*No)?|Airway\s*Bill)[\s:#-]*([A-Z0-9]{8,18})/i) ||
+                       rawText.match(/\b([0-9]{10,14})\b/);
+      if (awbMatch) awb = awbMatch[1];
+
+      // 3. Detect SKU / Product Info
+      let sku = 'General-Item';
+      const skuMatch = rawText.match(/(?:SKU|Product|Item|Style)[\s:#-]*([A-Za-z0-9_\-\.\/\s]{3,35})/i) ||
+                      rawText.match(/SKU\s*Name[\s:#-]*([^\n\r,]+)/i);
+      if (skuMatch && skuMatch[1].trim().length > 2) {
+        sku = skuMatch[1].trim().replace(/\s+/g, ' ').slice(0, 35);
+      }
+
+      // 4. Detect Quantity
+      let quantity = 1;
+      const qtyMatch = rawText.match(/(?:Qty|Quantity)[\s:#-]*([0-9]+)/i);
+      if (qtyMatch) {
+        quantity = parseInt(qtyMatch[1], 10) || 1;
+      }
+
+      // 5. Detect Store Name (if any)
+      let storeName = 'Default Store';
+      const storeMatch = rawText.match(/(?:Sold\s*by|Supplier|Seller)[\s:#-]*([A-Za-z0-9\s]{3,30})/i);
+      if (storeMatch) storeName = storeMatch[1].trim();
+
+      return {
+        success: true,
+        awb: awb || `LBL-${pageNum}`,
+        courier,
+        sku,
+        quantity,
+        storeName,
+        rawText
+      };
+    } catch (err) {
+      console.warn('Text extraction error on page', pageNum, err);
+      return {
+        success: false,
+        awb: `ERR-${pageNum}`,
+        courier: 'Unknown',
+        sku: 'Unparsed-Item',
+        quantity: 1,
+        storeName: 'Default Store',
+        rawText: ''
+      };
     }
   };
 
-  const removeFile = (index) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
-    setProcessedPdfUrl(null);
-  };
-
-  const clearAll = () => {
-    setFiles([]);
-    setProcessedPdfUrl(null);
-    setStats({ totalPages: 0, totalLabels: 0 });
-  };
-
-  // Main Crop & Formatting Logic using pdf-lib (100% in browser)
-  const processLabels = async () => {
+  // Main Crop & Sort Execution
+  const processCropAndSort = async () => {
     if (files.length === 0) {
       if (showToast) showToast('Please upload at least one PDF file', 'warning');
       return;
     }
 
     setIsProcessing(true);
+    setProcessingProgress(10);
+
     try {
-      // 4x6 inches in points = 288 x 432 pt
-      const THERMAL_WIDTH = 288;
-      const THERMAL_HEIGHT = 432;
-      
-      // Standard A4 in points = 595.28 x 841.89 pt
-      const A4_WIDTH = 595.28;
-      const A4_HEIGHT = 841.89;
+      const allParsed = [];
+      const seenAwbs = new Map();
+      const duplicateItems = [];
+      let ocrFailedCount = 0;
 
-      const mergedDoc = await PDFDocument.create();
-      let labelCount = 0;
-
+      // STEP 1: Parse and analyze all labels
+      let fileIdx = 0;
       for (const file of files) {
-        const fileBytes = await file.arrayBuffer();
-        const srcDoc = await PDFDocument.load(fileBytes);
-        const pageCount = srcDoc.getPageCount();
+        const arrayBuf = await file.arrayBuffer();
+        const pdfJsDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+        const totalPgs = pdfJsDoc.numPages;
 
-        for (let i = 0; i < pageCount; i++) {
-          const srcPage = srcDoc.getPage(i);
-          const { width: origW, height: origH } = srcPage.getSize();
+        for (let p = 1; p <= totalPgs; p++) {
+          const extracted = await extractLabelData(pdfJsDoc, p);
+          if (!extracted.success) ocrFailedCount++;
 
-          // Calculate crop box (Meesho label is in the top portion)
-          // In PDF coords: (0,0) is bottom-left, height is top
-          const cropRatio = cropHeightPercent / 100;
-          const cropH = origH * cropRatio;
-          const cropY = origH - cropH; // starting Y for top half
-
-          if (cropPreset === 'meesho_thermal' || cropPreset === 'custom') {
-            // Mode: Thermal 4x6 inch single label
-            const [embeddedPage] = await mergedDoc.embedPdf(srcDoc, [i]);
-            const newPage = mergedDoc.addPage([THERMAL_WIDTH, THERMAL_HEIGHT]);
-
-            // Scale cropped area to fill 4x6
-            const scaleX = THERMAL_WIDTH / origW;
-            const scaleY = THERMAL_HEIGHT / cropH;
-            const scale = Math.min(scaleX, scaleY) * 0.96; // 4% padding for clean margins
-
-            const drawW = origW * scale;
-            const drawH = origH * scale;
-
-            // Center on 4x6 page
-            const offsetX = (THERMAL_WIDTH - drawW) / 2;
-            // Shift Y so the cropped top half sits neatly centered
-            const offsetY = (THERMAL_HEIGHT - (cropH * scale)) / 2 - (cropY * scale);
-
-            newPage.drawImage(embeddedPage, {
-              x: offsetX,
-              y: offsetY,
-              width: drawW,
-              height: drawH,
-              rotate: degrees(rotation)
-            });
-
-            labelCount++;
-          } else if (cropPreset === 'a4_4grid') {
-            // 4 labels per A4 page (2x2 grid)
-            // We accumulate 4 labels then add a page
-            // Handled below in grid accumulator
+          const isDuplicate = extracted.awb && seenAwbs.has(extracted.awb);
+          if (isDuplicate) {
+            duplicateItems.push({ ...extracted, file: file.name, page: p });
+          } else if (extracted.awb) {
+            seenAwbs.set(extracted.awb, true);
           }
-        }
-      }
 
-      // Handle A4 4-Grid Mode if selected
-      if (cropPreset === 'a4_4grid') {
-        const allEmbedded = [];
-        for (const file of files) {
-          const fileBytes = await file.arrayBuffer();
-          const srcDoc = await PDFDocument.load(fileBytes);
-          const pageIndices = Array.from({ length: srcDoc.getPageCount() }, (_, i) => i);
-          const embedded = await mergedDoc.embedPdf(srcDoc, pageIndices);
-          embedded.forEach((emb, idx) => {
-            const page = srcDoc.getPage(idx);
-            allEmbedded.push({ emb, size: page.getSize() });
+          allParsed.push({
+            ...extracted,
+            fileIndex: fileIdx,
+            pageIndex: p - 1, // 0-based
+            sourceFile: file,
+            isDuplicate
           });
         }
+        fileIdx++;
+      }
 
-        const quadrantW = A4_WIDTH / 2;
-        const quadrantH = A4_HEIGHT / 2;
+      setProcessingProgress(40);
 
-        for (let i = 0; i < allEmbedded.length; i += 4) {
-          const newPage = mergedDoc.addPage([A4_WIDTH, A4_HEIGHT]);
-          const chunk = allEmbedded.slice(i, i + 4);
+      // Summaries
+      const skuMap = {};
+      const courierMap = {};
+      allParsed.forEach(item => {
+        skuMap[item.sku] = (skuMap[item.sku] || 0) + item.quantity;
+        courierMap[item.courier] = (courierMap[item.courier] || 0) + 1;
+      });
 
-          chunk.forEach((item, pos) => {
-            // positions: 0=top-left, 1=top-right, 2=bottom-left, 3=bottom-right
-            const col = pos % 2;
-            const row = Math.floor(pos / 2); // 0 = top, 1 = bottom
+      setMetrics({
+        totalLabels: allParsed.length,
+        success: allParsed.length - ocrFailedCount,
+        duplicates: duplicateItems.length,
+        ocrFailed: ocrFailedCount
+      });
+      setDuplicateList(duplicateItems);
+      setSkuSummary(skuMap);
+      setCourierSummary(courierMap);
+      setParsedLabels(allParsed);
 
-            const qX = col * quadrantW;
-            const qY = row === 0 ? quadrantH : 0; // In PDF Y=0 is bottom
+      // STEP 2: Sort labels based on user settings
+      let sortedLabels = [...allParsed];
 
-            const { width: origW, height: origH } = item.size;
-            const cropRatio = cropHeightPercent / 100;
-            const cropH = origH * cropRatio;
+      if (sortSku) {
+        sortedLabels.sort((a, b) => a.sku.localeCompare(b.sku));
+      } else if (sortCourier) {
+        sortedLabels.sort((a, b) => a.courier.localeCompare(b.courier));
+      } else if (sortQuantity) {
+        sortedLabels.sort((a, b) => a.quantity - b.quantity);
+      }
+
+      setProcessingProgress(60);
+
+      // Helper function to build a cropped PDF from an array of label items
+      const buildPdf = async (items, title = 'Meesho Shipping Labels') => {
+        const outDoc = await PDFDocument.create();
+        const helveticaFont = await outDoc.embedFont(StandardFonts.Helvetica);
+        const helveticaBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
+
+        // Pre-load source PDFDocuments
+        const srcDocsCache = [];
+        for (const file of files) {
+          const bytes = await file.arrayBuffer();
+          srcDocsCache.push(await PDFDocument.load(bytes));
+        }
+
+        // Standard 4x6 inch thermal page dimensions in points (288 x 432 pt)
+        const THERMAL_W = 288;
+        const THERMAL_H = 432;
+        const totalItems = items.length;
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const srcDoc = srcDocsCache[item.fileIndex];
+          const [embeddedPage] = await outDoc.embedPdf(srcDoc, [item.pageIndex]);
+
+          const srcPage = srcDoc.getPage(item.pageIndex);
+          const { width: origW, height: origH } = srcPage.getSize();
+
+          const targetPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
+
+          if (labelAction === 'crop') {
+            // CROP LABEL MODE (Meesho standard: top ~50% is shipping label)
+            const cropFraction = 0.50;
+            const cropH = origH * cropFraction;
             const cropY = origH - cropH;
 
-            const scale = Math.min((quadrantW * 0.95) / origW, (quadrantH * 0.95) / cropH);
+            // Scale to fit 4x6 with comfortable margins
+            const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.93) / cropH);
             const drawW = origW * scale;
             const drawH = origH * scale;
 
-            const offX = qX + (quadrantW - drawW) / 2;
-            const offY = qY + (quadrantH - (cropH * scale)) / 2 - (cropY * scale);
+            const offX = (THERMAL_W - drawW) / 2;
+            const offY = (THERMAL_H - (cropH * scale)) / 2 - (cropY * scale);
 
-            newPage.drawImage(item.emb, {
+            targetPage.drawImage(embeddedPage, {
               x: offX,
               y: offY,
               width: drawW,
               height: drawH
             });
-            labelCount++;
+          } else {
+            // KEEP INVOICE / FULL PAGE MODE
+            const scale = Math.min((THERMAL_W * 0.95) / origW, (THERMAL_H * 0.95) / origH);
+            const drawW = origW * scale;
+            const drawH = origH * scale;
+            targetPage.drawImage(embeddedPage, {
+              x: (THERMAL_W - drawW) / 2,
+              y: (THERMAL_H - drawH) / 2,
+              width: drawW,
+              height: drawH
+            });
+          }
+
+          // Print Header / Footer options
+          if (printDateTime) {
+            const timeStr = new Date().toLocaleString('en-IN', {
+              day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit', hour12: true
+            });
+            targetPage.drawText(`Printed: ${timeStr} | ${item.courier}`, {
+              x: 8,
+              y: THERMAL_H - 12,
+              size: 6.5,
+              font: helveticaFont,
+              color: rgb(0.2, 0.2, 0.2)
+            });
+          }
+
+          if (printPageNumber) {
+            targetPage.drawText(`${i + 1} / ${totalItems}`, {
+              x: THERMAL_W - 35,
+              y: THERMAL_H - 12,
+              size: 6.5,
+              font: helveticaBold,
+              color: rgb(0.1, 0.1, 0.1)
+            });
+          }
+        }
+
+        // Add Packing Slip Page In Last if enabled
+        if (addPackingSlip) {
+          const slipPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
+          slipPage.drawRectangle({
+            x: 0, y: 0, width: THERMAL_W, height: THERMAL_H,
+            color: rgb(0.98, 0.98, 0.99)
+          });
+
+          // Header
+          slipPage.drawText('WAREHOUSE PACKING SLIP', {
+            x: 12, y: THERMAL_H - 24, size: 11, font: helveticaBold, color: rgb(0.05, 0.1, 0.2)
+          });
+          slipPage.drawText(`Total Orders: ${totalItems} | Date: ${new Date().toLocaleDateString('en-IN')}`, {
+            x: 12, y: THERMAL_H - 38, size: 7, font: helveticaFont, color: rgb(0.4, 0.4, 0.4)
+          });
+
+          slipPage.drawLine({
+            start: { x: 12, y: THERMAL_H - 45 },
+            end: { x: THERMAL_W - 12, y: THERMAL_H - 45 },
+            thickness: 1, color: rgb(0.8, 0.8, 0.85)
+          });
+
+          // SKU Table
+          slipPage.drawText('SKU / Product Description', {
+            x: 12, y: THERMAL_H - 58, size: 8, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
+          });
+          slipPage.drawText('Qty', {
+            x: THERMAL_W - 35, y: THERMAL_H - 58, size: 8, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
+          });
+
+          let rowY = THERMAL_H - 74;
+          const sortedSkus = Object.entries(skuMap).sort((a, b) => b[1] - a[1]);
+
+          for (const [skuName, qty] of sortedSkus) {
+            if (rowY < 40) {
+              slipPage.drawText('... (more items on next sheet)', { x: 12, y: 25, size: 7, font: helveticaFont, color: rgb(0.5, 0.5, 0.5) });
+              break;
+            }
+            slipPage.drawText(skuName.slice(0, 36), {
+              x: 12, y: rowY, size: 7.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1)
+            });
+            slipPage.drawText(String(qty), {
+              x: THERMAL_W - 30, y: rowY, size: 8, font: helveticaBold, color: rgb(0.05, 0.4, 0.2)
+            });
+            rowY -= 14;
+          }
+
+          // Bottom Courier summary
+          const courierStr = Object.entries(courierMap).map(([k, v]) => `${k}: ${v}`).join(' | ');
+          slipPage.drawText(`Couriers: ${courierStr}`, {
+            x: 12, y: 15, size: 6.5, font: helveticaFont, color: rgb(0.3, 0.3, 0.4)
           });
         }
+
+        return await outDoc.save();
+      };
+
+      setProcessingProgress(80);
+
+      // STEP 3: Handle Output File Type
+      const dateTag = new Date().toISOString().slice(0, 10);
+
+      if (outputType === 'single') {
+        const finalPdfBytes = await buildPdf(sortedLabels, 'Meesho Shipping Labels');
+        const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setDownloadReady({
+          type: 'single',
+          url,
+          filename: `Meesho_Cropped_Labels_${dateTag}.pdf`,
+          blob
+        });
+      } else if (outputType === 'courier') {
+        // Group by courier
+        const groups = {};
+        sortedLabels.forEach(it => {
+          if (!groups[it.courier]) groups[it.courier] = [];
+          groups[it.courier].push(it);
+        });
+
+        const zip = new JSZip();
+        for (const [cName, items] of Object.entries(groups)) {
+          const cBytes = await buildPdf(items, `${cName} Shipping Labels`);
+          zip.file(`Meesho_${cName}_${items.length}_Labels.pdf`, cBytes);
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const zipUrl = URL.createObjectURL(zipBlob);
+        setDownloadReady({
+          type: 'zip',
+          url: zipUrl,
+          filename: `Meesho_Labels_By_Courier_${dateTag}.zip`,
+          blob: zipBlob
+        });
+      } else if (outputType === 'quantity') {
+        const singleQty = sortedLabels.filter(it => it.quantity === 1);
+        const multiQty = sortedLabels.filter(it => it.quantity > 1);
+
+        const zip = new JSZip();
+        if (singleQty.length > 0) {
+          const sBytes = await buildPdf(singleQty, 'Single Quantity Orders');
+          zip.file(`Single_Item_Orders_${singleQty.length}.pdf`, sBytes);
+        }
+        if (multiQty.length > 0) {
+          const mBytes = await buildPdf(multiQty, 'Multi Quantity Orders');
+          zip.file(`Multi_Item_Orders_${multiQty.length}.pdf`, mBytes);
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const zipUrl = URL.createObjectURL(zipBlob);
+        setDownloadReady({
+          type: 'zip',
+          url: zipUrl,
+          filename: `Meesho_Labels_By_Quantity_${dateTag}.zip`,
+          blob: zipBlob
+        });
+      } else if (outputType === 'store') {
+        const groups = {};
+        sortedLabels.forEach(it => {
+          const sName = it.storeName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+          if (!groups[sName]) groups[sName] = [];
+          groups[sName].push(it);
+        });
+
+        const zip = new JSZip();
+        for (const [sName, items] of Object.entries(groups)) {
+          const sBytes = await buildPdf(items, `${sName} Labels`);
+          zip.file(`Store_${sName}_${items.length}_Labels.pdf`, sBytes);
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const zipUrl = URL.createObjectURL(zipBlob);
+        setDownloadReady({
+          type: 'zip',
+          url: zipUrl,
+          filename: `Meesho_Labels_By_Store_${dateTag}.zip`,
+          blob: zipBlob
+        });
       }
 
-      const pdfBytes = await mergedDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-
-      setProcessedPdfUrl(url);
-      setProcessedFileName(`Meesho_Labels_Cropped_${new Date().toISOString().slice(0, 10)}.pdf`);
-      setStats({ totalPages: mergedDoc.getPageCount(), totalLabels: labelCount });
-
-      if (showToast) showToast(`Successfully cropped ${labelCount} labels!`, 'success');
+      setProcessingProgress(100);
+      if (showToast) showToast(`Successfully processed ${allParsed.length} labels!`, 'success');
     } catch (err) {
       console.error(err);
-      if (showToast) showToast(`Error processing PDF: ${err.message}`, 'error');
+      if (showToast) showToast(`Processing error: ${err.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handlePrint = () => {
-    if (!processedPdfUrl) return;
-    const printWindow = window.open(processedPdfUrl);
-    if (printWindow) {
-      printWindow.onload = () => printWindow.print();
+  const handleDirectPrint = () => {
+    if (!downloadReady?.url) return;
+    const printWin = window.open(downloadReady.url);
+    if (printWin) {
+      printWin.onload = () => printWin.print();
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-900/40 via-cyan-900/30 to-slate-900 border border-cyan-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-semibold mb-2">
-              <Scissors className="w-3.5 h-3.5" />
-              Meesho & E-commerce Smart Cropper
-            </div>
-            <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
-              Shipping Label PDF Cropper
-            </h2>
-            <p className="text-xs md:text-sm text-slate-300 mt-1 max-w-xl">
-              Crop Meesho, Flipkart, and Amazon shipping labels to standard <strong>4x6 inch thermal printer</strong> or <strong>A4 4-in-1 sheets</strong>. Saves 75% paper and ink.
-            </p>
-          </div>
+    <div className="bg-slate-50 min-h-screen text-slate-800 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl">
+      {/* ================= HEADER SECTION ================= */}
+      <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+            Meesho Label Cropping and sorting tools
+          </h1>
+          <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
+            Crop, sort, and process your Meesho shipping labels automatically. Save time and reduce errors with powerful PDF tools.
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-700/60 text-xs text-slate-300 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              100% Private (Browser only)
-            </span>
+        {/* Meesho Logo Badge matching image */}
+        <div className="flex items-center gap-2">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-900 to-pink-900 flex flex-col items-center justify-center text-white shadow-md shadow-pink-950/20">
+            <span className="font-extrabold text-base leading-none">m</span>
+            <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">meesho</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Upload & Settings */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Drag & Drop Upload Zone */}
+      {/* ================= TOP PROCESSING REPORT CARD ================= */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm mb-6 overflow-hidden transition-all">
+        <div 
+          onClick={() => setReportOpen(!reportOpen)}
+          className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
+            {/* Bar chart red icon */}
+            <svg className="w-4 h-4 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Processing Report
+          </div>
+          <button type="button" className="text-slate-400 hover:text-slate-600 p-1">
+            {reportOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {reportOpen && (
+          <div className="p-4 md:p-5 grid grid-cols-2 md:grid-cols-4 gap-3.5">
+            {/* Total Labels */}
+            <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500">Total Labels</div>
+                  <div className="text-lg font-bold text-blue-600 font-mono leading-tight">
+                    {metrics.success} <span className="text-slate-400 text-xs font-normal">/ {metrics.totalLabels}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Success */}
+            <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500">Success</div>
+                  <div className="text-lg font-bold text-emerald-600 font-mono leading-tight">
+                    {metrics.success}
+                  </div>
+                </div>
+              </div>
+              {parsedLabels.length > 0 && (
+                <button 
+                  type="button" 
+                  onClick={() => setShowSkuModal(true)} 
+                  title="View SKU Summary"
+                  className="text-emerald-400 hover:text-emerald-700 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Duplicates */}
+            <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Copy className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500">Duplicates</div>
+                  <div className="text-lg font-bold text-indigo-600 font-mono leading-tight">
+                    {metrics.duplicates}
+                  </div>
+                </div>
+              </div>
+              {metrics.duplicates > 0 && (
+                <button 
+                  type="button" 
+                  onClick={() => setShowDuplicateModal(true)}
+                  title="View duplicate labels"
+                  className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* OCR Failed */}
+            <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500">OCR Failed</div>
+                  <div className="text-lg font-bold text-rose-600 font-mono leading-tight">
+                    {metrics.ocrFailed}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ================= TWO COLUMN WORKSPACE ================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* ================= LEFT COLUMN: UPLOAD & ACTION ================= */}
+        <div className="lg:col-span-8 space-y-5">
+          {/* Upload Dropzone */}
           <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
-              dragActive 
-                ? 'border-cyan-400 bg-cyan-500/10 scale-[1.01]' 
-                : 'border-slate-700/80 bg-slate-900/60 hover:border-cyan-500/50 hover:bg-slate-900'
-            }`}
+            className="border-2 border-dashed border-rose-200 bg-rose-50/20 hover:bg-rose-50/40 rounded-2xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
           >
             <input
               ref={fileInputRef}
@@ -269,218 +647,501 @@ export default function LabelCropper({ showToast }) {
               onChange={(e) => handleFiles(e.target.files)}
               className="hidden"
             />
-            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center mx-auto mb-3">
-              <UploadCloud className="w-7 h-7" />
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+              <UploadCloud className="w-5 h-5" />
             </div>
-            <h4 className="text-sm md:text-base font-bold text-white mb-1">
-              Click to upload or drag & drop Meesho label PDFs
-            </h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Select one or multiple label PDFs. All files will be automatically merged, cropped, and formatted.
+            <h3 className="text-sm font-bold text-slate-800">
+              Upload PDF Files
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Drag & drop or click to select files
             </p>
           </div>
 
-          {/* Uploaded Files List */}
-          {files.length > 0 && (
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-cyan-400" />
-                  Uploaded PDFs ({files.length})
-                </span>
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Clear All
-                </button>
+          {/* PDF Files Container Card */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <FileText className="w-4 h-4 text-rose-500" />
+                PDF Files {files.length > 0 && `(${files.length})`}
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {files.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs">
-                    <div className="flex items-center gap-2.5 truncate max-w-[80%]">
-                      <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span className="text-slate-200 font-medium truncate">{file.name}</span>
-                      <span className="text-slate-500 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+              <div className="flex items-center gap-2">
+                {files.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFiles}
+                    className="text-xs text-rose-500 hover:text-rose-700 px-2.5 py-1 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                >
+                  <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                  Select PDFs
+                </button>
+              </div>
+            </div>
+
+            {/* List / Empty view */}
+            <div className="p-6">
+              {files.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No PDF files selected.
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  {files.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <div className="flex items-center gap-3 truncate max-w-[85%]">
+                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 truncate">{file.name}</span>
+                        <span className="text-slate-400 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx)}
-                      className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Primary Action Button (Matching screenshot) */}
+          <button
+            type="button"
+            disabled={files.length === 0 || isProcessing}
+            onClick={processCropAndSort}
+            className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+          >
+            {isProcessing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Processing Labels ({processingProgress}%)...
+              </>
+            ) : (
+              <>
+                <Scissors className="w-4 h-4" />
+                Start Crop & Sort Process
+              </>
+            )}
+          </button>
+
+          {/* Result / Download Area */}
+          {downloadReady && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
                   </div>
-                ))}
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Processing Complete!
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      {metrics.success} labels ready • Sorted & Formatted for Thermal 4x6
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSkuModal(true)}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    View SKU Summary
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                <a
+                  href={downloadReady.url}
+                  download={downloadReady.filename}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors text-center"
+                >
+                  <Download className="w-4 h-4" />
+                  Download {downloadReady.type === 'zip' ? 'ZIP Archive' : 'Cropped PDF'}
+                </a>
+
+                {downloadReady.type === 'single' && (
+                  <button
+                    type="button"
+                    onClick={handleDirectPrint}
+                    className="px-5 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Directly
+                  </button>
+                )}
               </div>
             </div>
           )}
+        </div>
 
-          {/* Crop & Printer Preset Settings */}
-          <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-cyan-400" />
-              Printer & Crop Settings
-            </h4>
-
-            {/* Presets Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => { setCropPreset('meesho_thermal'); setCropHeightPercent(50); }}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
-                  cropPreset === 'meesho_thermal'
-                    ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-950/50'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <Printer className="w-4 h-4 text-cyan-400" />
-                  {cropPreset === 'meesho_thermal' && <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />}
-                </div>
-                <p className="font-bold text-xs text-white">Thermal 4x6"</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Top Half $\rightarrow$ 100x150mm Rollo/TSC/TVS</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setCropPreset('a4_4grid'); setCropHeightPercent(50); }}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
-                  cropPreset === 'a4_4grid'
-                    ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-950/50'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <Layers className="w-4 h-4 text-purple-400" />
-                  {cropPreset === 'a4_4grid' && <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />}
-                </div>
-                <p className="font-bold text-xs text-white">A4 4-in-1 Grid</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">4 Labels per sheet (Saves 75% paper)</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCropPreset('custom')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
-                  cropPreset === 'custom'
-                    ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-950/50'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <Sliders className="w-4 h-4 text-amber-400" />
-                  {cropPreset === 'custom' && <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />}
-                </div>
-                <p className="font-bold text-xs text-white">Custom Ratio</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Adjust exact crop height</p>
+        {/* ================= RIGHT COLUMN: PROCESSING SETTINGS ================= */}
+        <div className="lg:col-span-4 space-y-5">
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden">
+            {/* Header */}
+            <div 
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
+            >
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Processing Settings
+              </div>
+              <button type="button" className="text-slate-400 hover:text-slate-600 p-1">
+                {settingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             </div>
 
-            {/* Custom slider if custom mode */}
-            {cropPreset === 'custom' && (
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Crop Height from Top:</span>
-                  <span className="text-cyan-400 font-bold font-mono">{cropHeightPercent}%</span>
+            {settingsOpen && (
+              <div className="p-5 space-y-5">
+                
+                {/* 1. Label Action */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Label Action
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setLabelAction('crop')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                        labelAction === 'crop'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700 shadow-sm'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Scissors className="w-3.5 h-3.5 text-emerald-600" />
+                      Crop Label
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLabelAction('keep_invoice')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                        labelAction === 'keep_invoice'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700 shadow-sm'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-500" />
+                      Keep Invoice
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min="30"
-                  max="90"
-                  value={cropHeightPercent}
-                  onChange={(e) => setCropHeightPercent(parseInt(e.target.value, 10))}
-                  className="w-full accent-cyan-500 cursor-pointer"
-                />
+
+                {/* 2. Print Options */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Print Options
+                  </label>
+                  <div className="space-y-2">
+                    {/* Date/Time */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <Clock className="w-3.5 h-3.5 text-cyan-500" />
+                        Print Date/Time
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={printDateTime}
+                          onChange={(e) => setPrintDateTime(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Page Number */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <FileCode className="w-3.5 h-3.5 text-purple-500" />
+                        Print Page Number
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={printPageNumber}
+                          onChange={(e) => setPrintPageNumber(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Packing Slip */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <FilePlus className="w-3.5 h-3.5 text-blue-500" />
+                        Add Packing Slip Page In Last
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={addPackingSlip}
+                          onChange={(e) => setAddPackingSlip(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Sort By */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Sort By
+                  </label>
+                  <div className="space-y-2">
+                    {/* SKU Wise */}
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      sortSku ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <Package className="w-3.5 h-3.5 text-emerald-600" />
+                        SKU wise
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sortSku}
+                          onChange={(e) => {
+                            setSortSku(e.target.checked);
+                            if (e.target.checked) { setSortCourier(false); setSortQuantity(false); }
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Courier Wise */}
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      sortCourier ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <Truck className="w-3.5 h-3.5 text-rose-500" />
+                        Courier wise
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sortCourier}
+                          onChange={(e) => {
+                            setSortCourier(e.target.checked);
+                            if (e.target.checked) { setSortSku(false); setSortQuantity(false); }
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Quantity Wise */}
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      sortQuantity ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                        <Boxes className="w-3.5 h-3.5 text-amber-600" />
+                        Quantity wise
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sortQuantity}
+                          onChange={(e) => {
+                            setSortQuantity(e.target.checked);
+                            if (e.target.checked) { setSortSku(false); setSortCourier(false); }
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Output File Type (2x2 Grid) */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Output File Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOutputType('single')}
+                      className={`p-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                        outputType === 'single'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Single PDF
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOutputType('courier')}
+                      className={`p-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                        outputType === 'courier'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      By Courier
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOutputType('quantity')}
+                      className={`p-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                        outputType === 'quantity'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Boxes className="w-3.5 h-3.5" />
+                      By Quantity
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOutputType('store')}
+                      className={`p-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                        outputType === 'store'
+                          ? 'border-emerald-500 bg-emerald-50/70 text-emerald-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      By Store
+                    </button>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Actions, Stats & Download */}
-        <div className="space-y-5">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              Process & Download
-            </h3>
+      </div>
 
-            {/* Summary */}
-            <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800/80 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Selected Files:</span>
-                <span className="font-bold text-white">{files.length}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Target Output:</span>
-                <span className="font-bold text-cyan-400">
-                  {cropPreset === 'meesho_thermal' ? 'Thermal 4x6" (100x150mm)' : cropPreset === 'a4_4grid' ? 'A4 4-in-1 Sheet' : 'Custom'}
-                </span>
-              </div>
-              {stats.totalLabels > 0 && (
-                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
-                  <span className="text-slate-400">Cropped Labels:</span>
-                  <span className="font-bold text-emerald-400 font-mono text-sm">{stats.totalLabels} Labels</span>
-                </div>
-              )}
+      {/* ================= SKU SUMMARY MODAL ================= */}
+      {showSkuModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Package className="w-5 h-5 text-emerald-600" />
+                SKU & Order Summary ({Object.keys(skuSummary).length} Unique Items)
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowSkuModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                ✕
+              </button>
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-2.5">
+            <div className="overflow-y-auto flex-1 pr-1 space-y-2">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b text-slate-400 font-semibold">
+                    <th className="pb-2">SKU Name</th>
+                    <th className="pb-2 text-right">Quantity</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {Object.entries(skuSummary).sort((a,b) => b[1] - a[1]).map(([sku, qty], i) => (
+                    <tr key={i} className="hover:bg-slate-50/80">
+                      <td className="py-2.5 text-slate-800 font-mono text-[11px] truncate max-w-[280px]">{sku}</td>
+                      <td className="py-2.5 text-right font-bold text-emerald-600 font-mono">{qty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t pt-3 flex justify-end">
               <button
                 type="button"
-                disabled={files.length === 0 || isProcessing}
-                onClick={processLabels}
-                className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+                onClick={() => setShowSkuModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
               >
-                {isProcessing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Cropping Labels in Browser...
-                  </>
-                ) : (
-                  <>
-                    <Scissors className="w-4 h-4" />
-                    Crop Shipping Labels Now
-                  </>
-                )}
+                Close
               </button>
-
-              {processedPdfUrl && (
-                <>
-                  <a
-                    href={processedPdfUrl}
-                    download={processedFileName}
-                    className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-sm font-bold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Cropped PDF
-                  </a>
-
-                  <button
-                    type="button"
-                    onClick={handlePrint}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Print Directly (Browser)
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Security Notice */}
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-300 leading-relaxed flex items-start gap-2">
-              <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
-              <span>
-                <strong>Zero server upload:</strong> All label cropping runs securely inside your local browser memory using WebAssembly.
-              </span>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ================= DUPLICATE LABELS MODAL ================= */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Copy className="w-5 h-5 text-indigo-600" />
+                Detected Duplicate Labels ({duplicateList.length})
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowDuplicateModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-1 space-y-2">
+              <p className="text-xs text-slate-500 mb-2">
+                The following labels appeared more than once across your uploaded files:
+              </p>
+              {duplicateList.map((item, i) => (
+                <div key={i} className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-indigo-900 font-mono">{item.awb}</span>
+                    <span className="text-slate-500 block text-[11px]">{item.sku} • {item.courier}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Page {item.page}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t pt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDuplicateModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
