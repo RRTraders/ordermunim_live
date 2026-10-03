@@ -277,29 +277,32 @@ export default function LabelCropper({ showToast }) {
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
-          const srcDoc = srcDocsCache[item.fileIndex];
-          const [embeddedPage] = await outDoc.embedPdf(srcDoc, [item.pageIndex]);
-
-          const srcPage = srcDoc.getPage(item.pageIndex);
+          // Load fresh copy of source document page to avoid mutating shared cache
+          const bytes = await item.sourceFile.arrayBuffer();
+          const singleDoc = await PDFDocument.load(bytes);
+          const srcPage = singleDoc.getPage(item.pageIndex);
           const { width: origW, height: origH } = srcPage.getSize();
 
           const targetPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
 
           if (labelAction === 'crop') {
             // CROP LABEL MODE (Meesho standard: top ~50% is shipping label)
-            const cropFraction = 0.50;
-            const cropH = origH * cropFraction;
+            const cropH = origH * 0.50;
             const cropY = origH - cropH;
+            srcPage.setCropBox(0, cropY, origW, cropH);
+            srcPage.setMediaBox(0, cropY, origW, cropH);
+
+            const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
 
             // Scale to fit 4x6 with comfortable margins
             const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.93) / cropH);
             const drawW = origW * scale;
-            const drawH = origH * scale;
+            const drawH = cropH * scale;
 
             const offX = (THERMAL_W - drawW) / 2;
-            const offY = (THERMAL_H - (cropH * scale)) / 2 - (cropY * scale);
+            const offY = (THERMAL_H - drawH) / 2;
 
-            targetPage.drawImage(embeddedPage, {
+            targetPage.drawPage(embeddedPage, {
               x: offX,
               y: offY,
               width: drawW,
@@ -307,16 +310,19 @@ export default function LabelCropper({ showToast }) {
             });
           } else {
             // KEEP INVOICE / FULL PAGE MODE
+            const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
             const scale = Math.min((THERMAL_W * 0.95) / origW, (THERMAL_H * 0.95) / origH);
             const drawW = origW * scale;
             const drawH = origH * scale;
-            targetPage.drawImage(embeddedPage, {
+
+            targetPage.drawPage(embeddedPage, {
               x: (THERMAL_W - drawW) / 2,
               y: (THERMAL_H - drawH) / 2,
               width: drawW,
               height: drawH
             });
           }
+
 
           // Print Header / Footer options
           if (printDateTime) {
