@@ -973,42 +973,7 @@ export default function LabelCropper({ showToast }) {
                   </div>
                 </div>
 
-                {/* 1b. Cut Line Fine-Tune (Always Automatic Smart Crop) */}
-                {labelAction === 'crop' && (
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Cut Line Fine-Tune:</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setCropNudge(prev => prev + 5)}
-                        title="Move cut line higher by 5pt"
-                        className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
-                      >
-                        Cut Higher ▲
-                      </button>
-                      <span className="font-mono font-semibold text-slate-700 min-w-[28px] text-center">
-                        {cropNudge > 0 ? `+${cropNudge}` : cropNudge}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCropNudge(prev => prev - 5)}
-                        title="Move cut line lower by 5pt"
-                        className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
-                      >
-                        Cut Lower ▼
-                      </button>
-                      {cropNudge !== 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setCropNudge(0)}
-                          className="text-[10px] text-rose-500 hover:underline ml-1"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* 2. Print Options */}
                 <div>

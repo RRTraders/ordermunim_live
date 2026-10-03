@@ -1,0 +1,114 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+// Native Android Plugin Bridge for direct Meesho API execution
+const NativeMeesho = registerPlugin('MeeshoDirect');
+
+export function isNativeMobile() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
+        if (window.Capacitor.isNativePlatform()) return true;
+      }
+      if (window.location && (window.location.protocol === 'capacitor:' || window.location.hostname === 'localhost')) {
+        return true;
+      }
+    }
+    return typeof Capacitor !== 'undefined' && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Native Direct Login to Meesho Supplier API from mobile device (1-2 SECONDS, NO SERVER)
+ */
+export async function directMeeshoLogin(email, password) {
+  try {
+    console.log('[Native Meesho] Calling native Android login...');
+    const res = await NativeMeesho.login({ 
+      email: email.trim(), 
+      password: password 
+    });
+    console.log('[Native Meesho] Login result:', res);
+    return res;
+  } catch (err) {
+    console.error('[Native Meesho] Exception:', err);
+    return { success: false, error: err.message || 'Login failed' };
+  }
+}
+
+/**
+ * Native Direct OTP Fetch from Meesho Supplier API (500ms, NO SERVER)
+ */
+export async function directFetchDeliveryOTPs(identifier, cookies, supplierId) {
+  try {
+    const res = await NativeMeesho.fetchOtp({ 
+      identifier: identifier || '', 
+      supplierId: supplierId || 0,
+      cookies: cookies || '' 
+    });
+    return res;
+  } catch (err) {
+    console.warn('[Native Meesho] OTP fetch error:', err);
+    return {
+      otp: '----',
+      courier: 'No Return',
+      handoverCount: 0,
+      dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      otpList: []
+    };
+  }
+}
+
+/**
+ * Sync active accounts to Android native background service for 24/7 background alerts
+ */
+export async function syncBackgroundSessions(sessionsObj) {
+  try {
+    if (!isNativeMobile()) return;
+    await NativeMeesho.syncSessions({ sessions: sessionsObj });
+  } catch (err) {
+    console.warn('[Native Meesho] syncSessions failed:', err);
+  }
+}
+
+/**
+ * Start native foreground monitoring service
+ */
+export async function startBackgroundMonitoring() {
+  try {
+    if (!isNativeMobile()) return;
+    await NativeMeesho.startBackgroundService();
+  } catch (err) {
+    console.warn('[Native Meesho] startBackgroundService failed:', err);
+  }
+}
+
+/**
+ * Re-trigger battery optimization prompt or check exemption
+ */
+export async function requestBatteryOptimization() {
+  try {
+    if (!isNativeMobile()) return { isNative: false, isIgnoring: false };
+    const res = await NativeMeesho.requestBatteryOptimization();
+    return res || { success: true };
+  } catch (err) {
+    console.warn('[Native Meesho] requestBatteryOptimization failed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Open Android system App Info Settings
+ */
+export async function openAppSettings() {
+  try {
+    if (!isNativeMobile()) return { isNative: false };
+    const res = await NativeMeesho.openAppSettings();
+    return res || { success: true };
+  } catch (err) {
+    console.warn('[Native Meesho] openAppSettings failed:', err);
+    throw err;
+  }
+}
+
