@@ -158,42 +158,59 @@ export default function LabelCropper({ showToast }) {
       const storeMatch = rawText.match(/(?:Sold\s*by|Supplier|Seller)[\s:#-]*([A-Za-z0-9\s]{3,30})/i);
       if (storeMatch) storeName = storeMatch[1].trim();
 
-      // 6. Detect Label Position (Bottom Half vs Top Half)
-      let labelYSum = 0;
-      let labelCount = 0;
-      let invoiceYSum = 0;
-      let invoiceCount = 0;
+      // 6. Compute exact crop bounds dynamically from text positions
+      let minLabelY = Infinity;
+      let maxLabelY = -Infinity;
+      let minInvoiceY = Infinity;
+      let maxInvoiceY = -Infinity;
+      let labelFound = false;
+      let invoiceFound = false;
 
-      const labelMarkers = [
-        'customer address', 'undelivered', 'return to', 'pickup',
-        'product details', 'sku', 'order no', 'payable amount',
-        'valmo', 'delhivery', 'shadowfax', 'xpressbees'
-      ];
-      const invoiceMarkers = [
-        'tax invoice', 'invoice no', 'hsn', 'gross amount',
-        'taxable value', 'reverse charge', 'of supply'
-      ];
+      const labelRegex = /(?:product\s*details|sku|order\s*no|size|color|qty|valmo|customer\s*address|if\s*undelivered|pickup|shadowfax|delhivery|xpressbees|ecom|dtdc)/i;
+      const invoiceRegex = /(?:tax\s*invoice|bill\s*to|sold\s*by|gstin|original\s*for\s*recipient|hsn|taxable|gross\s*amount|of\s*supply)/i;
 
       content.items.forEach(it => {
-        const str = (it.str || '').toLowerCase();
+        const str = it.str || '';
         const y = it.transform ? it.transform[5] : 0;
-        if (labelMarkers.some(m => str.includes(m))) {
-          labelYSum += y;
-          labelCount++;
+        if (labelRegex.test(str)) {
+          labelFound = true;
+          if (y < minLabelY) minLabelY = y;
+          if (y > maxLabelY) maxLabelY = y;
         }
-        if (invoiceMarkers.some(m => str.includes(m))) {
-          invoiceYSum += y;
-          invoiceCount++;
+        if (invoiceRegex.test(str)) {
+          invoiceFound = true;
+          if (y < minInvoiceY) minInvoiceY = y;
+          if (y > maxInvoiceY) maxInvoiceY = y;
         }
       });
 
       const pageView = page.view || [0, 0, 595, 842];
       const pageHeight = pageView[3] || 842;
-      const avgLabelY = labelCount > 0 ? (labelYSum / labelCount) : (pageHeight * 0.25);
-      const avgInvoiceY = invoiceCount > 0 ? (invoiceYSum / invoiceCount) : (pageHeight * 0.75);
 
-      // If average Y of label items is below half page height, OR lower than invoice Y, it is in the BOTTOM half!
-      const isBottom = avgLabelY < (pageHeight * 0.5) || avgLabelY < avgInvoiceY;
+      // In Image 1, Shipping label is on TOP (maxLabelY > pageHeight * 0.5)
+      const isTop = labelFound ? (maxLabelY > (pageHeight * 0.5)) : true;
+
+      let detectedCropBottom, detectedCropTop;
+      if (isTop) {
+        detectedCropTop = pageHeight;
+        if (invoiceFound && maxInvoiceY < minLabelY) {
+          // Divider between bottom of Product Details and top of Tax Invoice
+          detectedCropBottom = Math.max(0, (minLabelY + maxInvoiceY) / 2 - 4);
+        } else if (labelFound && minLabelY > 0 && minLabelY < pageHeight) {
+          detectedCropBottom = Math.max(0, minLabelY - 18);
+        } else {
+          detectedCropBottom = pageHeight * 0.468;
+        }
+      } else {
+        detectedCropBottom = 0;
+        if (invoiceFound && minInvoiceY > maxLabelY) {
+          detectedCropTop = Math.min(pageHeight, (maxLabelY + minInvoiceY) / 2 + 4);
+        } else if (labelFound && maxLabelY > 0) {
+          detectedCropTop = Math.min(pageHeight, maxLabelY + 18);
+        } else {
+          detectedCropTop = pageHeight * 0.532;
+        }
+      }
 
       return {
         success: true,
@@ -202,7 +219,9 @@ export default function LabelCropper({ showToast }) {
         sku,
         quantity,
         storeName,
-        isBottom,
+        isTop,
+        detectedCropBottom,
+        detectedCropTop,
         rawText
       };
     } catch (err) {
@@ -214,7 +233,9 @@ export default function LabelCropper({ showToast }) {
         sku: 'Unparsed-Item',
         quantity: 1,
         storeName: 'Default Store',
-        isBottom: true,
+        isTop: true,
+        detectedCropBottom: 395,
+        detectedCropTop: 842,
         rawText: ''
       };
     }
@@ -307,10 +328,10 @@ export default function LabelCropper({ showToast }) {
         const helveticaBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
 
         // Pre-load source PDFDocuments
-        const srcDocsCache = [];
+        const srcDocsCache = new Map();
         for (const file of files) {
           const bytes = await file.arrayBuffer();
-          srcDocsCache.push(await PDFDocument.load(bytes));
+          srcDocsCache.set(file, await PDFDocument.load(bytes));
         }
 
         // 4x6 Thermal Landscape (432 x 288 pt - 150x100mm)
@@ -321,48 +342,68 @@ export default function LabelCropper({ showToast }) {
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
-          // Load fresh copy of source document page to avoid mutating shared cache
-          const bytes = await item.sourceFile.arrayBuffer();
-          const singleDoc = await PDFDocument.load(bytes);
+          const singleDoc = srcDocsCache.get(item.sourceFile);
           const srcPage = singleDoc.getPage(item.pageIndex);
           const { width: origW, height: origH } = srcPage.getSize();
 
           const targetPage = outDoc.addPage([THERMAL_W, THERMAL_H]);
 
           if (labelAction === 'crop') {
-            // Determine whether to crop bottom half or top half
-            const useBottom = cropPosition === 'bottom' ? true :
-                              cropPosition === 'top' ? false :
-                              item.isBottom; // 'auto' -> auto-detected
+            let cropLeft = 0;
+            let cropRight = origW;
+            let cropBottom = 0;
+            let cropTop = origH;
 
-            // In Meesho A4 PDF, the shipping label is ~48-50% height
-            // If bottom half: y is from 0 to origH * 0.50
-            // If top half: y is from origH * 0.50 to origH
-            const cropH = origH * 0.50;
-            const cropY = useBottom ? 0 : (origH - cropH);
+            if (cropPosition === 'top') {
+              // Forced Top Half (Meesho Standard)
+              cropTop = origH;
+              cropBottom = origH * 0.468;
+            } else if (cropPosition === 'bottom') {
+              // Forced Bottom Half
+              cropBottom = 0;
+              cropTop = origH * 0.532;
+            } else {
+              // Auto-Detect (Smart): uses detected coordinates
+              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.468);
+              cropTop = item.detectedCropTop !== undefined ? item.detectedCropTop : origH;
+            }
 
-            srcPage.setCropBox(0, cropY, origW, cropH);
-            srcPage.setMediaBox(0, cropY, origW, cropH);
+            const boxW = Math.max(10, cropRight - cropLeft);
+            const boxH = Math.max(10, cropTop - cropBottom);
 
-            const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
+            // Embed using EXACT boundingBox so Form XObject clips out invoice completely!
+            const embeddedPage = await outDoc.embedPage(srcPage, {
+              left: cropLeft,
+              bottom: cropBottom,
+              right: cropRight,
+              top: cropTop,
+            });
 
             // Fill page cleanly edge-to-edge (98% scale) - EXACTLY MATCHING IMAGE 2!
-            const scale = Math.min((THERMAL_W * 0.98) / origW, (THERMAL_H * 0.98) / cropH);
-            const drawW = origW * scale;
-            const drawH = cropH * scale;
+            const marginFactor = (printDateTime || printPageNumber) ? 0.94 : 0.98;
+            const scale = Math.min((THERMAL_W * 0.98) / boxW, (THERMAL_H * marginFactor) / boxH);
+            const drawW = boxW * scale;
+            const drawH = boxH * scale;
 
             const offX = (THERMAL_W - drawW) / 2;
-            const offY = (THERMAL_H - drawH) / 2;
+            const offY = (printDateTime || printPageNumber) 
+              ? ((THERMAL_H - drawH) / 2 + 6) 
+              : ((THERMAL_H - drawH) / 2);
 
             targetPage.drawPage(embeddedPage, {
               x: offX,
               y: offY,
               width: drawW,
-              height: drawH
+              height: drawH,
             });
           } else {
             // KEEP INVOICE / FULL PAGE MODE
-            const [embeddedPage] = await outDoc.embedPdf(singleDoc, [item.pageIndex]);
+            const embeddedPage = await outDoc.embedPage(srcPage, {
+              left: 0,
+              bottom: 0,
+              right: origW,
+              top: origH,
+            });
             const scale = Math.min((THERMAL_W * 0.96) / origW, (THERMAL_H * 0.96) / origH);
             const drawW = origW * scale;
             const drawH = origH * scale;
@@ -371,7 +412,7 @@ export default function LabelCropper({ showToast }) {
               x: (THERMAL_W - drawW) / 2,
               y: (THERMAL_H - drawH) / 2,
               width: drawW,
-              height: drawH
+              height: drawH,
             });
           }
 
