@@ -66,10 +66,9 @@ export default function LabelCropper({ showToast }) {
   // Settings State (matching screenshot precisely)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
   const [cropPosition, setCropPosition] = useState('auto'); // 'auto' | 'bottom' | 'top'
-  const [printDateTime, setPrintDateTime] = useState(true);
-
-  const [printPageNumber, setPrintPageNumber] = useState(true);
-  const [addPackingSlip, setAddPackingSlip] = useState(true);
+  const [printDateTime, setPrintDateTime] = useState(false);
+  const [printPageNumber, setPrintPageNumber] = useState(false);
+  const [addPackingSlip, setAddPackingSlip] = useState(false);
 
   // Sort By options (matching screenshot)
   const [sortSku, setSortSku] = useState(true);
@@ -159,57 +158,45 @@ export default function LabelCropper({ showToast }) {
       if (storeMatch) storeName = storeMatch[1].trim();
 
       // 6. Compute exact crop bounds dynamically from text positions
-      let minLabelY = Infinity;
-      let maxLabelY = -Infinity;
-      let minInvoiceY = Infinity;
-      let maxInvoiceY = -Infinity;
-      let labelFound = false;
-      let invoiceFound = false;
-
-      const labelRegex = /(?:product\s*details|sku|order\s*no|size|color|qty|valmo|customer\s*address|if\s*undelivered|pickup|shadowfax|delhivery|xpressbees|ecom|dtdc)/i;
-      const invoiceRegex = /(?:tax\s*invoice|bill\s*to|sold\s*by|gstin|original\s*for\s*recipient|hsn|taxable|gross\s*amount|of\s*supply)/i;
+      // Find the exact Y coordinate of "TAX INVOICE" header and "Product Details" box
+      let taxInvoiceY = -1;
+      let productDetailsY = -1;
 
       content.items.forEach(it => {
-        const str = it.str || '';
+        const str = (it.str || '').trim();
         const y = it.transform ? it.transform[5] : 0;
-        if (labelRegex.test(str)) {
-          labelFound = true;
-          if (y < minLabelY) minLabelY = y;
-          if (y > maxLabelY) maxLabelY = y;
+        
+        // Exact match for "TAX INVOICE" or "Original For Recipient"
+        if (/tax\s*invoice/i.test(str) || /original\s*for\s*recipient/i.test(str)) {
+          if (taxInvoiceY === -1 || y > taxInvoiceY) {
+            taxInvoiceY = y;
+          }
         }
-        if (invoiceRegex.test(str)) {
-          invoiceFound = true;
-          if (y < minInvoiceY) minInvoiceY = y;
-          if (y > maxInvoiceY) maxInvoiceY = y;
+        
+        // Match "Product Details" header
+        if (/product\s*details/i.test(str)) {
+          if (productDetailsY === -1 || y < productDetailsY) {
+            productDetailsY = y;
+          }
         }
       });
 
       const pageView = page.view || [0, 0, 595, 842];
       const pageHeight = pageView[3] || 842;
 
-      // In Image 1, Shipping label is on TOP (maxLabelY > pageHeight * 0.5)
-      const isTop = labelFound ? (maxLabelY > (pageHeight * 0.5)) : true;
+      // In Image 3, the cut is strictly ABOVE the "TAX INVOICE" bar
+      // and includes the solid bottom border of the "Product Details" box.
+      // Standard A4: bottom of Product Details is at pageHeight * 0.476 (~401 pt).
+      // "TAX INVOICE" text is at pageHeight * 0.443 (~373 pt).
+      let detectedCropTop = pageHeight;
+      let detectedCropBottom = pageHeight * 0.476;
 
-      let detectedCropBottom, detectedCropTop;
-      if (isTop) {
-        detectedCropTop = pageHeight;
-        if (invoiceFound && maxInvoiceY < minLabelY) {
-          // Divider between bottom of Product Details and top of Tax Invoice
-          detectedCropBottom = Math.max(0, (minLabelY + maxInvoiceY) / 2 - 4);
-        } else if (labelFound && minLabelY > 0 && minLabelY < pageHeight) {
-          detectedCropBottom = Math.max(0, minLabelY - 18);
-        } else {
-          detectedCropBottom = pageHeight * 0.468;
-        }
-      } else {
-        detectedCropBottom = 0;
-        if (invoiceFound && minInvoiceY > maxLabelY) {
-          detectedCropTop = Math.min(pageHeight, (maxLabelY + minInvoiceY) / 2 + 4);
-        } else if (labelFound && maxLabelY > 0) {
-          detectedCropTop = Math.min(pageHeight, maxLabelY + 18);
-        } else {
-          detectedCropTop = pageHeight * 0.532;
-        }
+      if (taxInvoiceY > 0) {
+        // Cut at least 16 pt ABOVE the top of the "TAX INVOICE" text
+        detectedCropBottom = Math.max(detectedCropBottom, taxInvoiceY + 16);
+      } else if (productDetailsY > 0) {
+        // Cut 30 pt below the "Product Details" text header (just below SKU/Order No row and border)
+        detectedCropBottom = Math.max(pageHeight * 0.45, productDetailsY - 30);
       }
 
       return {
@@ -357,14 +344,14 @@ export default function LabelCropper({ showToast }) {
             if (cropPosition === 'top') {
               // Forced Top Half (Meesho Standard)
               cropTop = origH;
-              cropBottom = origH * 0.468;
+              cropBottom = origH * 0.476;
             } else if (cropPosition === 'bottom') {
               // Forced Bottom Half
               cropBottom = 0;
-              cropTop = origH * 0.532;
+              cropTop = origH * 0.524;
             } else {
-              // Auto-Detect (Smart): uses detected coordinates
-              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.468);
+              // Auto-Detect (Smart): cuts strictly above TAX INVOICE
+              cropBottom = item.detectedCropBottom !== undefined ? item.detectedCropBottom : (origH * 0.476);
               cropTop = item.detectedCropTop !== undefined ? item.detectedCropTop : origH;
             }
 
@@ -965,7 +952,7 @@ export default function LabelCropper({ showToast }) {
                         Crop Position
                       </label>
                       <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                        {cropPosition === 'auto' ? 'Auto-Detect (Smart)' : cropPosition === 'bottom' ? 'Bottom Half' : 'Top Half'}
+                        {cropPosition === 'auto' ? 'Auto (Above Tax Invoice)' : cropPosition === 'bottom' ? 'Bottom Half' : 'Top Half'}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -982,17 +969,6 @@ export default function LabelCropper({ showToast }) {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCropPosition('bottom')}
-                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
-                          cropPosition === 'bottom'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Bottom Half
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setCropPosition('top')}
                         className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
                           cropPosition === 'top'
@@ -1001,6 +977,17 @@ export default function LabelCropper({ showToast }) {
                         }`}
                       >
                         Top Half
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropPosition('bottom')}
+                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
+                          cropPosition === 'bottom'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Bottom Half
                       </button>
                     </div>
                   </div>
@@ -1013,7 +1000,9 @@ export default function LabelCropper({ showToast }) {
                   </label>
                   <div className="space-y-2">
                     {/* Date/Time */}
-                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      printDateTime ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
                       <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
                         <Clock className="w-3.5 h-3.5 text-cyan-500" />
                         Print Date/Time
@@ -1030,7 +1019,9 @@ export default function LabelCropper({ showToast }) {
                     </div>
 
                     {/* Page Number */}
-                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      printPageNumber ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
                       <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
                         <FileCode className="w-3.5 h-3.5 text-purple-500" />
                         Print Page Number
@@ -1047,7 +1038,9 @@ export default function LabelCropper({ showToast }) {
                     </div>
 
                     {/* Packing Slip */}
-                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/30">
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      addPackingSlip ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    }`}>
                       <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
                         <FilePlus className="w-3.5 h-3.5 text-blue-500" />
                         Add Packing Slip Page In Last
