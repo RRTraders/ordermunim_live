@@ -73,9 +73,9 @@ export default function LabelCropper({ showToast }) {
   const [printPageNumber, setPrintPageNumber] = useState(false);
   const [addPackingSlip, setAddPackingSlip] = useState(false);
 
-  // Sort By options (matching screenshot)
-  const [sortSku, setSortSku] = useState(true);
-  const [sortCourier, setSortCourier] = useState(false);
+  // Sort By options (matching user screenshot: Courier wise ON)
+  const [sortSku, setSortSku] = useState(false);
+  const [sortCourier, setSortCourier] = useState(true);
   const [sortQuantity, setSortQuantity] = useState(false);
 
   // Output File Type options (matching screenshot)
@@ -114,104 +114,87 @@ export default function LabelCropper({ showToast }) {
     try {
       const page = await pdfDoc.getPage(pageNum);
       const content = await page.getTextContent();
-      const rawText = content.items.map(it => it.str).join(' ');
+      // Join with newline to preserve multi-line structure for regex matching
+      const rawText = content.items.map(it => it.str).join('\n');
 
-      // 1. Detect Courier
-      let courier = 'Unknown';
-      const courierRegexes = [
-        { name: 'Valmo', rx: /\bvalmo\b/i },
-        { name: 'Shadowfax', rx: /\bshadowfax\b/i },
-        { name: 'Delhivery', rx: /\bdelhivery\b/i },
-        { name: 'XpressBees', rx: /\bxpressbees\b/i },
-        { name: 'Ecom Express', rx: /\becom\s*express\b/i },
-        { name: 'DTDC', rx: /\bdtdc\b/i },
-        { name: 'Blue Dart', rx: /\bblue\s*dart\b/i }
-      ];
-      for (const c of courierRegexes) {
-        if (c.rx.test(rawText)) {
-          courier = c.name;
-          break;
-        }
+      const n = (rx, src = rawText) => {
+        const m = src.match(rx);
+        return m ? (m[1] || m[0]).trim() : '';
+      };
+
+      // 1. Detect Courier Name
+      let courier = n(/([A-Za-z0-9\-]+(?:\s+[A-Za-z0-9\-]+)?)\s+Pickup/i);
+      courier = courier.replace(/^(?:app|via|by|return|cash|cod|prepaid|amount|rs)\s+/i, '').trim();
+      if (courier.toLowerCase() === 'valmoplus') courier = 'Valmo';
+
+      // Comprehensive fallback courier patterns
+      if (!courier || courier.length < 2 || /^(?:the|on|app)$/i.test(courier)) {
+        if (/\bvalmo\b/i.test(rawText) || /\bVL\d{8,}/i.test(rawText)) courier = 'Valmo';
+        else if (/\bshadowfax\b/i.test(rawText) || /\bSF\d{8,}/i.test(rawText)) courier = 'Shadowfax';
+        else if (/\bdelhivery\b/i.test(rawText)) courier = 'Delhivery';
+        else if (/\bxpress\s*bees\b/i.test(rawText) || /\bxpressbees\b/i.test(rawText)) courier = 'XpressBees';
+        else if (/\becom\s*express\b/i.test(rawText)) courier = 'Ecom Express';
+        else if (/\bdtdc\b/i.test(rawText)) courier = 'DTDC';
+        else if (/\bblue\s*dart\b/i.test(rawText)) courier = 'Blue Dart';
+        else if (/\bsmartr\b/i.test(rawText)) courier = 'Smartr';
+        else if (/\bamazon\b/i.test(rawText) || /\bats\b/i.test(rawText)) courier = 'Amazon Shipping';
+        else if (/\bekart\b/i.test(rawText)) courier = 'Ekart';
+        else courier = 'Unknown Courier';
       }
 
-      // 2. Detect AWB / Tracking number
-      let awb = '';
-      const awbMatch = rawText.match(/(?:AWB|Waybill|Tracking(?:\s*No)?|Airway\s*Bill)[\s:#-]*([A-Z0-9]{8,18})/i) ||
-                       rawText.match(/\b([0-9]{10,14})\b/);
-      if (awbMatch) awb = awbMatch[1];
-
-      // 3. Detect SKU / Product Info
+      // 2. Detect SKU / Size / Quantity / Color / Order Number
       let sku = 'General-Item';
-      const skuMatch = rawText.match(/(?:SKU|Product|Item|Style)[\s:#-]*([A-Za-z0-9_\-\.\/\s]{3,35})/i) ||
-                      rawText.match(/SKU\s*Name[\s:#-]*([^\n\r,]+)/i);
-      if (skuMatch && skuMatch[1].trim().length > 2) {
-        sku = skuMatch[1].trim().replace(/\s+/g, ' ').slice(0, 35);
-      }
-
-      // 4. Detect Quantity
+      let size = '';
+      let color = '';
       let quantity = 1;
-      const qtyMatch = rawText.match(/(?:Qty|Quantity)[\s:#-]*([0-9]+)/i);
-      if (qtyMatch) {
-        quantity = parseInt(qtyMatch[1], 10) || 1;
+      let orderNumber = '';
+
+      let p = rawText.match(/SKU\s+Size\s+Qty\s+Color\s+(?:Net Units|Order No\.?)\s+(.*?)\s+(Free Size|\d+-\d+\s+[A-Za-z]+|\S+)\s+(\d+)\s+(?:\(One\)\s+)?([A-Za-z\s\-\&/]+?)\s+([a-zA-Z0-9_]{10,})/is);
+      if (!p) {
+        p = rawText.match(/SKU\s+Size\s+Qty\s+(.*?)\s+(Free Size|\d+-\d+\s+[A-Za-z]+|\S+)\s+(\d+)(?=\s|$)/i);
       }
 
-      // 5. Detect Store Name (if any)
+      if (p) {
+        sku = p[1].trim().replace(/\s+/g, ' ').slice(0, 45);
+        size = p[2].trim();
+        quantity = parseInt(p[3], 10) || 1;
+        if (p[4]) color = p[4].trim();
+        if (p[5]) orderNumber = p[5].trim();
+      } else {
+        const skuMatch = rawText.match(/(?:SKU|Product|Item|Style)[\s:#-]*([A-Za-z0-9_\-\.\/\s]{3,35})/i) ||
+                         rawText.match(/SKU\s*Name[\s:#-]*([^\n\r,]+)/i);
+        if (skuMatch && skuMatch[1].trim().length > 2) {
+          sku = skuMatch[1].trim().replace(/\s+/g, ' ').slice(0, 35);
+        }
+        const qtyMatch = rawText.match(/(?:Qty|Quantity)[\s:#-]*([0-9]+)/i);
+        if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
+      }
+
+      // 3. Detect AWB / Tracking number
+      let awb = n(/\b(VL\d{8,16}|SF\d{8,16}|[A-Z]{0,3}\d{8,16}[A-Z]*)\b/);
+      if (!awb) {
+        const awbMatch = rawText.match(/(?:AWB|Waybill|Tracking(?:\s*No)?|Airway\s*Bill)[\s:#-]*([A-Z0-9]{8,18})/i) ||
+                         rawText.match(/\b([0-9]{10,14})\b/);
+        if (awbMatch) awb = awbMatch[1];
+      }
+      if (!awb) awb = `LBL-${pageNum}`;
+
+      // 4. Detect Store / Supplier Name
       let storeName = 'Default Store';
       const storeMatch = rawText.match(/(?:Sold\s*by|Supplier|Seller)[\s:#-]*([A-Za-z0-9\s]{3,30})/i);
       if (storeMatch) storeName = storeMatch[1].trim();
 
-      // 6. Compute exact crop bounds dynamically from text positions
-      // Find the exact Y coordinate of "TAX INVOICE" header and "Product Details" box
-      let taxInvoiceY = -1;
-      let productDetailsY = -1;
-
-      content.items.forEach(it => {
-        const str = (it.str || '').trim();
-        const y = it.transform ? it.transform[5] : 0;
-        
-        // Exact match for "TAX INVOICE" or "Original For Recipient"
-        if (/tax\s*invoice/i.test(str) || /original\s*for\s*recipient/i.test(str)) {
-          if (taxInvoiceY === -1 || y > taxInvoiceY) {
-            taxInvoiceY = y;
-          }
-        }
-        
-        // Match "Product Details" header
-        if (/product\s*details/i.test(str)) {
-          if (productDetailsY === -1 || y < productDetailsY) {
-            productDetailsY = y;
-          }
-        }
-      });
-
-      const pageView = page.view || [0, 0, 595, 842];
-      const pageHeight = pageView[3] || 842;
-
-      // In Image 3, the cut is strictly ABOVE the "TAX INVOICE" bar
-      // and includes the solid bottom border of the "Product Details" box.
-      // In Meesho A4 PDF:
-      // - Product Details bottom border is at pageHeight * 0.593 (~499 pt).
-      // - "TAX INVOICE" text is at pageHeight * 0.568 (~478 pt).
-      // Setting detectedCropBottom to pageHeight * 0.590 (~496.8 pt) cuts cleanly
-      // 2 pt below the Product Details border line and 19 pt ABOVE "TAX INVOICE".
-      let detectedCropTop = pageHeight;
-      let detectedCropBottom = pageHeight * 0.590;
-
-      if (taxInvoiceY > 0) {
-        // Cut at least 16 pt ABOVE the top of the "TAX INVOICE" text
-        detectedCropBottom = Math.max(pageHeight * 0.585, taxInvoiceY + 16);
-      }
-
       return {
         success: true,
-        awb: awb || `LBL-${pageNum}`,
+        awb,
         courier,
         sku,
+        size,
+        color,
         quantity,
+        orderNumber,
         storeName,
-        isTop,
-        detectedCropBottom,
-        detectedCropTop,
+        isTop: true,
         rawText
       };
     } catch (err) {
@@ -219,17 +202,17 @@ export default function LabelCropper({ showToast }) {
       return {
         success: false,
         awb: `ERR-${pageNum}`,
-        courier: 'Unknown',
+        courier: 'Unknown Courier',
         sku: 'Unparsed-Item',
+        size: '',
+        color: '',
         quantity: 1,
+        orderNumber: '',
         storeName: 'Default Store',
         isTop: true,
-        detectedCropBottom: 497,
-        detectedCropTop: 842,
         rawText: ''
       };
     }
-
   };
 
   // Main Crop & Sort Execution
@@ -298,16 +281,36 @@ export default function LabelCropper({ showToast }) {
       setCourierSummary(courierMap);
       setParsedLabels(allParsed);
 
-      // STEP 2: Sort labels based on user settings
+      // STEP 2: Rearrange and sort labels based on user filter selections (Courier wise, SKU wise, Quantity wise)
       let sortedLabels = [...allParsed];
 
-      if (sortSku) {
-        sortedLabels.sort((a, b) => a.sku.localeCompare(b.sku));
-      } else if (sortCourier) {
-        sortedLabels.sort((a, b) => a.courier.localeCompare(b.courier));
-      } else if (sortQuantity) {
-        sortedLabels.sort((a, b) => a.quantity - b.quantity);
-      }
+      sortedLabels.sort((a, b) => {
+        // Priority 1: Courier wise grouping (matches user screenshot)
+        if (sortCourier) {
+          const cComp = (a.courier || '').localeCompare(b.courier || '');
+          if (cComp !== 0) return cComp;
+        }
+
+        // Priority 2: SKU wise sorting
+        if (sortSku) {
+          const sComp = (a.sku || '').localeCompare(b.sku || '');
+          if (sComp !== 0) return sComp;
+        }
+
+        // Priority 3: Quantity wise sorting
+        if (sortQuantity) {
+          const qComp = (a.quantity || 0) - (b.quantity || 0);
+          if (qComp !== 0) return qComp;
+        }
+
+        // Default secondary grouping if only Courier wise is selected: group identical SKUs within courier
+        if (sortCourier && !sortSku) {
+          const sComp = (a.sku || '').localeCompare(b.sku || '');
+          if (sComp !== 0) return sComp;
+        }
+
+        return (a.awb || '').localeCompare(b.awb || '');
+      });
 
       setProcessingProgress(60);
 
@@ -667,6 +670,24 @@ export default function LabelCropper({ showToast }) {
                 </div>
               </div>
             </div>
+            {/* Courier Breakdown Chips */}
+            {Object.keys(courierSummary).length > 0 && (
+              <div className="col-span-2 md:col-span-4 mt-1 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mr-1">
+                  <Truck className="w-4 h-4 text-emerald-600" />
+                  Rearranged by Courier:
+                </span>
+                {Object.entries(courierSummary).sort((a, b) => a[0].localeCompare(b[0])).map(([cName, count]) => (
+                  <span
+                    key={cName}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-900 shadow-2xs"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    {cName}: <span className="font-mono text-indigo-700 font-bold">{count} labels</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1049,75 +1070,78 @@ export default function LabelCropper({ showToast }) {
                   </div>
                 </div>
 
-                {/* 3. Sort By */}
+                {/* 3. Sort By (Matching LabelMantra UI) */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                  <label className="text-xs font-bold text-purple-700 block mb-2.5">
                     Sort By
                   </label>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {/* SKU Wise */}
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                      sortSku ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    <div className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      sortSku ? 'border-emerald-400 bg-emerald-50/60 shadow-xs' : 'border-slate-200 bg-white'
                     }`}>
-                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
-                        <Package className="w-3.5 h-3.5 text-emerald-600" />
-                        SKU wise
+                      <div className="flex items-center gap-3 text-xs font-semibold text-slate-800">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 text-base">
+                          🛍️
+                        </div>
+                        <span className={sortSku ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                          SKU wise
+                        </span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
                           checked={sortSku}
-                          onChange={(e) => {
-                            setSortSku(e.target.checked);
-                            if (e.target.checked) { setSortCourier(false); setSortQuantity(false); }
-                          }}
+                          onChange={(e) => setSortSku(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                       </label>
                     </div>
 
                     {/* Courier Wise */}
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                      sortCourier ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    <div className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      sortCourier ? 'border-emerald-400 bg-emerald-50/60 shadow-xs ring-1 ring-emerald-400/30' : 'border-slate-200 bg-white'
                     }`}>
-                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
-                        <Truck className="w-3.5 h-3.5 text-rose-500" />
-                        Courier wise
+                      <div className="flex items-center gap-3 text-xs font-semibold text-slate-800">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 text-base">
+                          🚚
+                        </div>
+                        <span className={sortCourier ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                          Courier wise
+                        </span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
                           checked={sortCourier}
-                          onChange={(e) => {
-                            setSortCourier(e.target.checked);
-                            if (e.target.checked) { setSortSku(false); setSortQuantity(false); }
-                          }}
+                          onChange={(e) => setSortCourier(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                       </label>
                     </div>
 
                     {/* Quantity Wise */}
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                      sortQuantity ? 'border-emerald-200/80 bg-emerald-50/30' : 'border-slate-200 bg-white'
+                    <div className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      sortQuantity ? 'border-emerald-400 bg-emerald-50/60 shadow-xs' : 'border-slate-200 bg-white'
                     }`}>
-                      <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
-                        <Boxes className="w-3.5 h-3.5 text-amber-600" />
-                        Quantity wise
+                      <div className="flex items-center gap-3 text-xs font-semibold text-slate-800">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 text-base">
+                          📦
+                        </div>
+                        <span className={sortQuantity ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                          Quantity wise
+                        </span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
                           checked={sortQuantity}
-                          onChange={(e) => {
-                            setSortQuantity(e.target.checked);
-                            if (e.target.checked) { setSortSku(false); setSortCourier(false); }
-                          }}
+                          onChange={(e) => setSortQuantity(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                       </label>
                     </div>
                   </div>
