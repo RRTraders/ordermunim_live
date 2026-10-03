@@ -65,9 +65,8 @@ export default function LabelCropper({ showToast }) {
   const [showSkuModal, setShowSkuModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
-  // Settings State (matching screenshot precisely)
+  // Settings State (matching LabelMantra: always auto crop)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
-  const [cropPosition, setCropPosition] = useState('auto'); // 'auto' | 'bottom' | 'top'
   const [cropNudge, setCropNudge] = useState(0); // in points (-20 to +20 fine tune)
   const [printDateTime, setPrintDateTime] = useState(false);
   const [printPageNumber, setPrintPageNumber] = useState(false);
@@ -921,86 +920,39 @@ export default function LabelCropper({ showToast }) {
                   </div>
                 </div>
 
-                {/* 1b. Crop Position (Smart / Bottom / Top) */}
+                {/* 1b. Cut Line Fine-Tune (Always Automatic Smart Crop) */}
                 {labelAction === 'crop' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[11px] font-bold text-slate-600">
-                        Crop Position
-                      </label>
-                      <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                        {cropPosition === 'auto' ? 'Auto (Above Tax Invoice)' : cropPosition === 'bottom' ? 'Bottom Half' : 'Top Half'}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Cut Line Fine-Tune:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCropNudge(prev => prev + 5)}
+                        title="Move cut line higher by 5pt"
+                        className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
+                      >
+                        Cut Higher ▲
+                      </button>
+                      <span className="font-mono font-semibold text-slate-700 min-w-[28px] text-center">
+                        {cropNudge > 0 ? `+${cropNudge}` : cropNudge}
                       </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setCropPosition('auto')}
-                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
-                          cropPosition === 'auto'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
+                        onClick={() => setCropNudge(prev => prev - 5)}
+                        title="Move cut line lower by 5pt"
+                        className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
                       >
-                        Auto (Smart)
+                        Cut Lower ▼
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setCropPosition('top')}
-                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
-                          cropPosition === 'top'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Top Half
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCropPosition('bottom')}
-                        className={`py-2 px-1.5 rounded-lg border text-[11px] font-medium text-center transition-all ${
-                          cropPosition === 'bottom'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 font-bold shadow-xs'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Bottom Half
-                      </button>
-                    </div>
-
-                    {/* Fine Tune Height Offset */}
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Cut Line Fine-Tune:</span>
-                      <div className="flex items-center gap-1.5">
+                      {cropNudge !== 0 && (
                         <button
                           type="button"
-                          onClick={() => setCropNudge(prev => prev + 5)}
-                          title="Move cut line higher by 5pt"
-                          className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
+                          onClick={() => setCropNudge(0)}
+                          className="text-[10px] text-rose-500 hover:underline ml-1"
                         >
-                          Cut Higher ▲
+                          Reset
                         </button>
-                        <span className="font-mono font-semibold text-slate-700 min-w-[28px] text-center">
-                          {cropNudge > 0 ? `+${cropNudge}` : cropNudge}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCropNudge(prev => prev - 5)}
-                          title="Move cut line lower by 5pt"
-                          className="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 font-mono text-[10px]"
-                        >
-                          Cut Lower ▼
-                        </button>
-                        {cropNudge !== 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setCropNudge(0)}
-                            className="text-[10px] text-rose-500 hover:underline ml-1"
-                          >
-                            Reset
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
