@@ -336,61 +336,112 @@ export default function LabelCropper({ showToast }) {
           const singleDoc = srcDocs[item.fileIndex];
           if (!singleDoc) continue;
 
-          // Copy page directly from source (Preserves 100% crisp vector quality, fonts, and barcodes)
-          const [copiedPage] = await outDoc.copyPages(singleDoc, [item.pageIndex]);
-          const pageSize = copiedPage.getSize();
+          const srcPage = singleDoc.getPage(item.pageIndex);
+          const pageSize = srcPage.getSize();
 
           if (labelAction === 'crop') {
-            // LabelMantra 1:1 algorithm:
             // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
-            // Everything below that (TAX INVOICE, BILL TO/SHIP TO, items table) is physically cut off.
-            const cropH = Math.min(pageSize.height, 345.6 + cropNudge);
-            copiedPage.translateContent(0, -(pageSize.height - cropH));
-            copiedPage.setCropBox(0, 0, pageSize.width, cropH);
-            copiedPage.setMediaBox(0, 0, pageSize.width, cropH);
-          }
+            // Form XObject strictly clips everything below origH - labelH (TAX INVOICE completely eliminated).
+            const labelH = Math.min(pageSize.height, 345.6 + cropNudge);
+            const extraH = 24; // 1-line white space at bottom
+            const targetH = labelH + extraH;
 
-          const targetPage = outDoc.addPage(copiedPage);
-          const { width: pW, height: pH } = targetPage.getSize();
+            const embeddedPage = await outDoc.embedPage(srcPage, {
+              left: 0,
+              bottom: pageSize.height - labelH,
+              right: pageSize.width,
+              top: pageSize.height,
+            });
 
-          // Header / Footer options (LabelMantra style - only drawn if user enabled)
-          if (printDateTime || printPageNumber) {
-            targetPage.drawRectangle({
+            const targetPage = outDoc.addPage([pageSize.width, targetH]);
+            const pW = pageSize.width;
+
+            // Draw pristine shipping label above the 24pt bottom white space
+            targetPage.drawPage(embeddedPage, {
               x: 0,
-              y: 0,
-              width: pW,
-              height: 25,
-              color: rgb(1, 1, 1),
+              y: extraH,
+              width: pageSize.width,
+              height: labelH,
             });
-          }
 
-          // Optional Date/Time footer (placed on left edge)
-          if (printDateTime) {
-            const timeStr = new Date().toLocaleString('en-IN', {
-              day: '2-digit', month: '2-digit', year: 'numeric',
-              hour: '2-digit', minute: '2-digit', hour12: true
-            });
-            const textW = helveticaBold.widthOfTextAtSize(timeStr, 9);
-            targetPage.drawText(timeStr, {
+            // Centered Bold text: "Thank you for your order"
+            const thankText = "Thank you for your order";
+            const fontSize = 11;
+            const textW = helveticaBold.widthOfTextAtSize(thankText, fontSize);
+            targetPage.drawText(thankText, {
               x: (pW - textW) / 2,
-              y: 8,
-              size: 9,
+              y: (extraH - fontSize) / 2 + 1,
+              size: fontSize,
               font: helveticaBold,
-              color: rgb(0, 0, 0)
+              color: rgb(0, 0, 0),
             });
-          }
 
-          // Optional Page Number (placed on right edge)
-          if (printPageNumber) {
-            const pageStr = `${i + 1}`;
-            const textW = helveticaBold.widthOfTextAtSize(pageStr, 9);
-            targetPage.drawText(pageStr, {
-              x: pW - textW - 14,
-              y: 8,
-              size: 9,
-              font: helveticaBold,
-              color: rgb(0, 0, 0)
-            });
+            // Optional Date/Time footer (placed on left edge of the bottom line)
+            if (printDateTime) {
+              const timeStr = new Date().toLocaleString('en-IN', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+              });
+              targetPage.drawText(timeStr, {
+                x: 12,
+                y: (extraH - 8) / 2 + 1,
+                size: 7.5,
+                font: helveticaFont,
+                color: rgb(0.35, 0.35, 0.35)
+              });
+            }
+
+            // Optional Page Number (placed on right edge of the bottom line)
+            if (printPageNumber) {
+              const pageStr = `${i + 1}`;
+              const textW = helveticaBold.widthOfTextAtSize(pageStr, 8);
+              targetPage.drawText(pageStr, {
+                x: pW - textW - 14,
+                y: (extraH - 8) / 2 + 1,
+                size: 8,
+                font: helveticaBold,
+                color: rgb(0.2, 0.2, 0.2)
+              });
+            }
+          } else {
+            // Keep full page / invoice mode
+            const [copiedPage] = await outDoc.copyPages(singleDoc, [item.pageIndex]);
+            const targetPage = outDoc.addPage(copiedPage);
+            const { width: pW } = targetPage.getSize();
+            if (printDateTime || printPageNumber) {
+              targetPage.drawRectangle({
+                x: 0,
+                y: 0,
+                width: pW,
+                height: 25,
+                color: rgb(1, 1, 1),
+              });
+            }
+            if (printDateTime) {
+              const timeStr = new Date().toLocaleString('en-IN', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+              });
+              const textW = helveticaBold.widthOfTextAtSize(timeStr, 9);
+              targetPage.drawText(timeStr, {
+                x: (pW - textW) / 2,
+                y: 8,
+                size: 9,
+                font: helveticaBold,
+                color: rgb(0, 0, 0)
+              });
+            }
+            if (printPageNumber) {
+              const pageStr = `${i + 1}`;
+              const textW = helveticaBold.widthOfTextAtSize(pageStr, 9);
+              targetPage.drawText(pageStr, {
+                x: pW - textW - 14,
+                y: 8,
+                size: 9,
+                font: helveticaBold,
+                color: rgb(0, 0, 0)
+              });
+            }
           }
         }
 
