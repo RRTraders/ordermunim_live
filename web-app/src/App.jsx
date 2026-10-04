@@ -154,7 +154,8 @@ export default function App() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminInputPass, setAdminInputPass] = useState('');
   const [allUsersList, setAllUsersList] = useState([]);
-  const [adminUserTab, setAdminUserTab] = useState('activated'); // 'activated' | 'pending' | 'broadcast'
+  const [adminUserTab, setAdminUserTab] = useState('activated'); // 'activated' | 'pending'
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminCurrentPage, setAdminCurrentPage] = useState(1);
   const ADMIN_PAGE_SIZE = 10;
@@ -2052,6 +2053,42 @@ export default function App() {
               </div>
             </div>
 
+            {/* App Update Broadcast Section (Super Admin Only) */}
+            {isSuperAdmin && (
+              <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Rocket className="w-4 h-4 text-cyan-400" />
+                    App Update Broadcast
+                  </span>
+                  {broadcastActive ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                      Live v{broadcastVersionName}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                      Inactive
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Manage app releases, push in-app update notices, configure direct APK download link, and set force-lock deadlines for all clients.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastModal(true)}
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-850 text-cyan-300 border border-cyan-500/40 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                >
+                  <Rocket className="w-3.5 h-3.5 text-cyan-400" />
+                  App Update Broadcast
+                  {broadcastActive && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Broadcast Active"></span>
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Background Sync & Battery Optimization Card */}
             <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
               <div className="flex items-center justify-between">
@@ -2200,51 +2237,34 @@ export default function App() {
                           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                         )}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { setAdminUserTab('broadcast'); }}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 relative ${
-                          adminUserTab === 'broadcast'
-                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200 bg-slate-950/60 border border-transparent'
-                        }`}
-                      >
-                        <Rocket className="w-3.5 h-3.5 text-cyan-400" />
-                        App Update Broadcast
-                        {broadcastActive && (
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Broadcast Active"></span>
-                        )}
-                      </button>
                     </div>
 
-                    {/* Search Bar (Only shown on activated & pending tabs) */}
-                    {adminUserTab !== 'broadcast' && (
-                      <div className="relative w-full md:w-80">
-                        <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-                        <input
-                          type="text"
-                          value={adminSearchQuery}
-                          onChange={(e) => {
-                            setAdminSearchQuery(e.target.value);
+                    {/* Search Bar */}
+                    <div className="relative w-full md:w-80">
+                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={adminSearchQuery}
+                        onChange={(e) => {
+                          setAdminSearchQuery(e.target.value);
+                          setAdminCurrentPage(1);
+                        }}
+                        placeholder="Search email, name, UID, store..."
+                        className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                      />
+                      {adminSearchQuery && (
+                        <button
+                          onClick={() => {
+                            setAdminSearchQuery('');
                             setAdminCurrentPage(1);
                           }}
-                          placeholder="Search email, name, UID, store..."
-                          className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
-                        />
-                        {adminSearchQuery && (
-                          <button
-                            onClick={() => {
-                              setAdminSearchQuery('');
-                              setAdminCurrentPage(1);
-                            }}
-                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
-                            title="Clear search"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    )}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* TAB 1: ACTIVATED ACCOUNTS */}
@@ -2514,273 +2534,8 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* TAB 3: APP UPDATE & NOTICE BROADCAST */}
-                  {adminUserTab === 'broadcast' && (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      {/* Live Status Header Card */}
-                      <div className={`p-5 rounded-2xl border transition-all ${
-                        broadcastActive
-                          ? 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-950 border-emerald-500/40 shadow-xl shadow-emerald-950/20'
-                          : 'bg-slate-950 border-slate-800'
-                      }`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                              broadcastActive
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-slate-800 text-slate-400 border border-slate-700'
-                            }`}>
-                              <Rocket className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-base text-white">Broadcast Status:</h3>
-                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
-                                  broadcastActive
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
-                                }`}>
-                                  <span className={`w-2 h-2 rounded-full ${broadcastActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
-                                  {broadcastActive ? 'LIVE TO ALL CLIENTS' : 'INACTIVE / STOPPED'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {broadcastActive
-                                  ? `Currently targeting version v${broadcastVersionName} (Code ${broadcastVersionCode}) with ${broadcastMode === 'grace_period' ? `${broadcastGraceDays} days grace period` : broadcastMode === 'force_immediate' ? 'Immediate Force Lock' : 'Optional notice'}.`
-                                  : 'No update notification is currently active for clients.'}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {broadcastActive ? (
-                              <button
-                                type="button"
-                                disabled={broadcastSaving}
-                                onClick={() => handleSaveAppUpdateBroadcast(false)}
-                                className="px-4 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
-                              >
-                                Stop Broadcast
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={broadcastSaving}
-                                onClick={() => handleSaveAppUpdateBroadcast(true)}
-                                className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
-                              >
-                                <Rocket className="w-4 h-4" />
-                                Start Broadcast
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Broadcast Settings Form */}
-                      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 md:p-6 space-y-5">
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-                          <Settings className="w-4 h-4 text-cyan-400" />
-                          Configure App Update & Force Deadline
-                        </h3>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {/* Target Version Code */}
-                          <div>
-                            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                              Target Version Code (Integer)
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={broadcastVersionCode}
-                              onChange={(e) => setBroadcastVersionCode(Number(e.target.value))}
-                              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
-                              placeholder="e.g. 2"
-                            />
-                            <span className="text-[11px] text-slate-500 mt-1 block">Clients on version code lower than this will see the update prompt.</span>
-                          </div>
-
-                          {/* Target Version Name */}
-                          <div>
-                            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                              Display Version Name
-                            </label>
-                            <input
-                              type="text"
-                              value={broadcastVersionName}
-                              onChange={(e) => setBroadcastVersionName(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500"
-                              placeholder="e.g. 1.1 or 2.0"
-                            />
-                            <span className="text-[11px] text-slate-500 mt-1 block">Shown in user badges (e.g. "v1.1").</span>
-                          </div>
-                        </div>
-
-                        {/* Notice Title */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                            Snackbar Title
-                          </label>
-                          <input
-                            type="text"
-                            value={broadcastTitle}
-                            onChange={(e) => setBroadcastTitle(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500"
-                            placeholder="e.g. New Update Available!"
-                          />
-                        </div>
-
-                        {/* Notice Message */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                            Notice Text / Changelog
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={broadcastMessage}
-                            onChange={(e) => setBroadcastMessage(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500 leading-relaxed"
-                            placeholder="Explain why clients should update (e.g., bug fixes, bottom navigation redesign, etc.)"
-                          />
-                        </div>
-
-                        {/* APK Download URL */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                            Direct APK Download URL
-                          </label>
-                          <input
-                            type="text"
-                            value={broadcastUrl}
-                            onChange={(e) => setBroadcastUrl(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-500"
-                            placeholder="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
-                          />
-                          <span className="text-[11px] text-slate-500 mt-1 block">Default: Your Firebase CDN URL. Tapping "Install" downloads directly from here.</span>
-                        </div>
-
-                        {/* Update Mode Selection */}
-                        <div className="space-y-3 pt-2 border-t border-slate-800">
-                          <label className="text-xs font-semibold text-slate-300 block">
-                            Update Mode & Grace Period Enforcement
-                          </label>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            {/* Option 1: Grace Period */}
-                            <div
-                              onClick={() => setBroadcastMode('grace_period')}
-                              className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                                broadcastMode === 'grace_period'
-                                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
-                                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name="updateMode"
-                                  checked={broadcastMode === 'grace_period'}
-                                  onChange={() => setBroadcastMode('grace_period')}
-                                  className="accent-amber-500"
-                                />
-                                <span className="font-bold text-xs text-white">Grace Period (Timed Force)</span>
-                              </div>
-                              <p className="text-[11px] mt-1.5 leading-relaxed text-slate-400">
-                                Users can dismiss snackbar for {broadcastGraceDays} days. After that, app forcefully locks until updated.
-                              </p>
-                            </div>
-
-                            {/* Option 2: Immediate Force Lock */}
-                            <div
-                              onClick={() => setBroadcastMode('force_immediate')}
-                              className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                                broadcastMode === 'force_immediate'
-                                  ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
-                                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name="updateMode"
-                                  checked={broadcastMode === 'force_immediate'}
-                                  onChange={() => setBroadcastMode('force_immediate')}
-                                  className="accent-rose-500"
-                                />
-                                <span className="font-bold text-xs text-white">Immediate Force Lock</span>
-                              </div>
-                              <p className="text-[11px] mt-1.5 leading-relaxed text-slate-400">
-                                Zero grace period. Full-screen blocker locks the app immediately until client installs the update.
-                              </p>
-                            </div>
-
-                            {/* Option 3: Optional Notice */}
-                            <div
-                              onClick={() => setBroadcastMode('optional')}
-                              className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                                broadcastMode === 'optional'
-                                  ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
-                                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name="updateMode"
-                                  checked={broadcastMode === 'optional'}
-                                  onChange={() => setBroadcastMode('optional')}
-                                  className="accent-cyan-500"
-                                />
-                                <span className="font-bold text-xs text-white">Optional Notice Only</span>
-                              </div>
-                              <p className="text-[11px] mt-1.5 leading-relaxed text-slate-400">
-                                Snackbar informs user of update. Users can dismiss anytime; never forcefully locks.
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Grace Days Dropdown */}
-                          {broadcastMode === 'grace_period' && (
-                            <div className="pt-2 flex items-center gap-3">
-                              <span className="text-xs text-slate-300 font-semibold">Select Grace Period Duration:</span>
-                              <select
-                                value={broadcastGraceDays}
-                                onChange={(e) => setBroadcastGraceDays(Number(e.target.value))}
-                                className="bg-slate-900 border border-slate-700 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500 cursor-pointer"
-                              >
-                                <option value={1}>1 Day (24 Hours)</option>
-                                <option value={2}>2 Days (48 Hours) - Recommended</option>
-                                <option value={3}>3 Days (72 Hours)</option>
-                                <option value={5}>5 Days</option>
-                                <option value={7}>7 Days</option>
-                              </select>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Save / Publish Button */}
-                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                          <button
-                            type="button"
-                            disabled={broadcastSaving}
-                            onClick={() => handleSaveAppUpdateBroadcast(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all cursor-pointer"
-                          >
-                            {broadcastSaving ? (
-                              <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />
-                            ) : (
-                              <Rocket className="w-4 h-4" />
-                            )}
-                            {broadcastActive ? 'Update & Save Active Broadcast' : 'Publish & Broadcast to All Clients'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Pagination Controls Bar */}
-                  {(adminUserTab === 'activated' || adminUserTab === 'pending') && totalUsersCount > 0 && (
+                  {totalUsersCount > 0 && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800/80 text-xs text-slate-400">
                       <div>
                         Showing <strong className="text-white">{startIndex + 1}</strong> to <strong className="text-white">{Math.min(startIndex + ADMIN_PAGE_SIZE, totalUsersCount)}</strong> of <strong className="text-cyan-400 font-mono">{totalUsersCount}</strong> {adminUserTab === 'activated' ? 'activated' : 'pending'} accounts
@@ -3432,6 +3187,294 @@ export default function App() {
               >
                 <DownloadCloud className="w-4 h-4" />
                 Install Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= APP UPDATE BROADCAST MODAL (SUPER ADMIN) ================= */}
+      {showBroadcastModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-2xl w-full p-5 md:p-6 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Rocket className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">App Update Broadcast</h3>
+                  <p className="text-[11px] text-slate-400">Deploy in-app updates and notices to all client apps</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBroadcastModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Live Status Header Card */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              broadcastActive
+                ? 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-950 border-emerald-500/40 shadow-xl shadow-emerald-950/20'
+                : 'bg-slate-950 border-slate-800'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    broadcastActive
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}>
+                    <Rocket className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-white">Broadcast Status:</h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
+                        broadcastActive
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${broadcastActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
+                        {broadcastActive ? 'LIVE TO ALL CLIENTS' : 'INACTIVE / STOPPED'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {broadcastActive
+                        ? `Targeting v${broadcastVersionName} (Code ${broadcastVersionCode}) • ${broadcastMode === 'grace_period' ? `${broadcastGraceDays} days grace` : broadcastMode === 'force_immediate' ? 'Immediate Force' : 'Optional notice'}`
+                        : 'No active update notification currently visible to clients.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {broadcastActive ? (
+                    <button
+                      type="button"
+                      disabled={broadcastSaving}
+                      onClick={() => handleSaveAppUpdateBroadcast(false)}
+                      className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      Stop Broadcast
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={broadcastSaving}
+                      onClick={() => handleSaveAppUpdateBroadcast(true)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                      Start Broadcast
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Broadcast Settings Form */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Target Version Code */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Target Version Code (Integer)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={broadcastVersionCode}
+                    onChange={(e) => setBroadcastVersionCode(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                    placeholder="e.g. 2"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Clients with lower version code will see the update.</span>
+                </div>
+
+                {/* Target Version Name */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Display Version Name
+                  </label>
+                  <input
+                    type="text"
+                    value={broadcastVersionName}
+                    onChange={(e) => setBroadcastVersionName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500"
+                    placeholder="e.g. 1.1 or 2.0"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Shown in user badges (e.g. "v1.1").</span>
+                </div>
+              </div>
+
+              {/* Notice Title */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Snackbar Title
+                </label>
+                <input
+                  type="text"
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500"
+                  placeholder="e.g. New Update Available!"
+                />
+              </div>
+
+              {/* Notice Message */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Notice Text / Changelog
+                </label>
+                <textarea
+                  rows={2}
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500 leading-relaxed"
+                  placeholder="Explain what's new in this release..."
+                />
+              </div>
+
+              {/* APK Download URL */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Direct APK Download URL
+                </label>
+                <input
+                  type="text"
+                  value={broadcastUrl}
+                  onChange={(e) => setBroadcastUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                  placeholder="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
+                />
+              </div>
+
+              {/* Update Mode Selection */}
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <label className="text-[11px] font-semibold text-slate-300 block">
+                  Update Mode & Grace Period Enforcement
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div
+                    onClick={() => setBroadcastMode('grace_period')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      broadcastMode === 'grace_period'
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="updateModeModal"
+                        checked={broadcastMode === 'grace_period'}
+                        onChange={() => setBroadcastMode('grace_period')}
+                        className="accent-amber-500"
+                      />
+                      <span className="font-bold text-xs text-white">Grace Period</span>
+                    </div>
+                    <p className="text-[10px] mt-1 leading-relaxed text-slate-400">
+                      Dismissible for {broadcastGraceDays} days, then locks.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setBroadcastMode('force_immediate')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      broadcastMode === 'force_immediate'
+                        ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="updateModeModal"
+                        checked={broadcastMode === 'force_immediate'}
+                        onChange={() => setBroadcastMode('force_immediate')}
+                        className="accent-rose-500"
+                      />
+                      <span className="font-bold text-xs text-white">Immediate Force</span>
+                    </div>
+                    <p className="text-[10px] mt-1 leading-relaxed text-slate-400">
+                      Locks immediately until updated.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setBroadcastMode('optional')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      broadcastMode === 'optional'
+                        ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="updateModeModal"
+                        checked={broadcastMode === 'optional'}
+                        onChange={() => setBroadcastMode('optional')}
+                        className="accent-cyan-500"
+                      />
+                      <span className="font-bold text-xs text-white">Optional Notice</span>
+                    </div>
+                    <p className="text-[10px] mt-1 leading-relaxed text-slate-400">
+                      Informs user, dismissible anytime.
+                    </p>
+                  </div>
+                </div>
+
+                {broadcastMode === 'grace_period' && (
+                  <div className="pt-1.5 flex items-center gap-2">
+                    <span className="text-[11px] text-slate-300 font-semibold">Grace Period Duration:</span>
+                    <select
+                      value={broadcastGraceDays}
+                      onChange={(e) => setBroadcastGraceDays(Number(e.target.value))}
+                      className="bg-slate-950 border border-slate-700 text-white text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value={1}>1 Day (24 Hours)</option>
+                      <option value={2}>2 Days (48 Hours)</option>
+                      <option value={3}>3 Days (72 Hours)</option>
+                      <option value={5}>5 Days</option>
+                      <option value={7}>7 Days</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowBroadcastModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Close
+              </button>
+
+              <button
+                type="button"
+                disabled={broadcastSaving}
+                onClick={async () => {
+                  await handleSaveAppUpdateBroadcast(true);
+                  setShowBroadcastModal(false);
+                }}
+                className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all cursor-pointer"
+              >
+                {broadcastSaving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />
+                ) : (
+                  <Rocket className="w-4 h-4" />
+                )}
+                {broadcastActive ? 'Update & Save' : 'Publish & Broadcast'}
               </button>
             </div>
           </div>
