@@ -649,6 +649,28 @@ public class MeeshoDirectPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void getAppInfo(PluginCall call) {
+        try {
+            Context context = getContext();
+            android.content.pm.PackageInfo pInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            long versionCode;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                versionCode = pInfo.getLongVersionCode();
+            } else {
+                versionCode = pInfo.versionCode;
+            }
+            String versionName = pInfo.versionName != null ? pInfo.versionName : "1.4";
+            JSObject ret = new JSObject();
+            ret.put("versionCode", versionCode);
+            ret.put("versionName", versionName);
+            ret.put("packageName", context.getPackageName());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get app info: " + e.getMessage());
+        }
+    }
+
     private String readStream(InputStream is) {
         if (is == null) return "";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {

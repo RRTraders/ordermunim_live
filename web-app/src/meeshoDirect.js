@@ -149,3 +149,24 @@ export async function downloadAndInstallApk(url, onProgress) {
   }
 }
 
+/**
+ * Retrieve installed app version info from Android package manager (or fallback)
+ */
+export async function getAppVersionInfo() {
+  if (isNativeMobile()) {
+    try {
+      const info = await NativeMeesho.getAppInfo();
+      if (info && info.versionCode) {
+        return {
+          versionCode: Number(info.versionCode),
+          versionName: String(info.versionName || '1.4')
+        };
+      }
+    } catch (err) {
+      console.warn('[Native Meesho] getAppInfo error:', err);
+    }
+  }
+  return null;
+}
+
+

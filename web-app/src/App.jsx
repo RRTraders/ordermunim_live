@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
   auth, 
   db 
@@ -72,8 +72,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 2;
-const CURRENT_APP_VERSION_NAME = "1.1";
+const CURRENT_APP_VERSION_CODE = 4;
+const CURRENT_APP_VERSION_NAME = "1.4";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -161,6 +161,25 @@ export default function App() {
   const ADMIN_PAGE_SIZE = 10;
 
   // In-App Update & Broadcast State
+  const [installedVersionCode, setInstalledVersionCode] = useState(() => {
+    const cached = localStorage.getItem('om_installed_version_code');
+    return cached ? Number(cached) : CURRENT_APP_VERSION_CODE;
+  });
+  const [installedVersionName, setInstalledVersionName] = useState(() => {
+    return localStorage.getItem('om_installed_version_name') || CURRENT_APP_VERSION_NAME;
+  });
+
+  useEffect(() => {
+    getAppVersionInfo().then((info) => {
+      if (info && info.versionCode) {
+        setInstalledVersionCode(info.versionCode);
+        setInstalledVersionName(info.versionName);
+        localStorage.setItem('om_installed_version_code', String(info.versionCode));
+        localStorage.setItem('om_installed_version_name', String(info.versionName));
+      }
+    });
+  }, []);
+
   const [appUpdateConfig, setAppUpdateConfig] = useState(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [updateDownloading, setUpdateDownloading] = useState(false);
@@ -1168,7 +1187,7 @@ export default function App() {
     }
 
     const targetVersion = Number(appUpdateConfig.versionCode) || 1;
-    const isOlder = CURRENT_APP_VERSION_CODE < targetVersion;
+    const isOlder = installedVersionCode < targetVersion;
     if (!isOlder) {
       return { shouldPrompt: false };
     }
@@ -1255,6 +1274,13 @@ export default function App() {
         } else if (progress.status === 'installing') {
           setDownloadProgress(100);
           setUpdateStatusText('Download complete! Launching package installer...');
+          const newCode = Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE;
+          const newName = String(appUpdateConfig?.versionName || CURRENT_APP_VERSION_NAME);
+          localStorage.setItem('om_installed_version_code', String(newCode));
+          localStorage.setItem('om_installed_version_name', String(newName));
+          setInstalledVersionCode(newCode);
+          setInstalledVersionName(newName);
+          setUpdateDismissed(true);
         } else if (progress.status === 'connecting') {
           setUpdateStatusText('Connecting to update server...');
         }
@@ -1458,7 +1484,7 @@ export default function App() {
           <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-left space-y-2">
             <div className="flex items-center justify-between text-slate-400">
               <span>Installed Version</span>
-              <span className="font-mono text-slate-400">v{CURRENT_APP_VERSION_NAME}</span>
+              <span className="font-mono text-slate-400">v{installedVersionName}</span>
             </div>
             <div className="flex items-center justify-between text-slate-400">
               <span>Required Version</span>
@@ -2050,6 +2076,21 @@ export default function App() {
                 <strong className="text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                 </strong>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>App Version</span>
+                <div className="flex items-center gap-2">
+                  <strong className="text-white font-mono">v{installedVersionName}</strong>
+                  {installedVersionCode >= (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Check className="w-2.5 h-2.5" /> Up to date
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                      Update Available
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
