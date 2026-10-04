@@ -11,9 +11,9 @@ web-app/.firebase/
 server/sessions/
 server/user_data*/
 user_data*/
-server/test_*/
 *.png
-.env
+!web-app/public/*.png
+!web-app/android/app/src/main/res/**/*.png
 .env.local
 
 # Cloudflared executable & logs

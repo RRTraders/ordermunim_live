@@ -1397,7 +1397,7 @@ export default function App() {
           </div>
 
           <div className="space-y-1.5">
-            <h3 className="text-base font-bold text-white">Updating Meesho OTP</h3>
+            <h3 className="text-base font-bold text-white">Updating OrdersMunim</h3>
             <p className="text-xs text-slate-300">
               {updateStatusText || 'Downloading update package...'}
             </p>
@@ -1700,11 +1700,11 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl">
           <div className="text-center mb-6">
-            <div className="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-3">
-              <Package className="w-7 h-7 text-white" />
+            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-3 overflow-hidden bg-white p-1 border border-slate-700">
+              <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Meesho OTP Hub</h1>
-            <p className="text-xs text-slate-400 mt-1">Multi-Account Return Handover OTP Management</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">OrdersMunim</h1>
+            <p className="text-xs text-slate-400 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
           </div>
 
           {authError && (
@@ -1973,11 +1973,10 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           {/* Left: Mobile App Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-md ${
-              isSuperAdmin ? 'bg-gradient-to-tr from-amber-500 to-amber-600 shadow-amber-500/20' : 'bg-gradient-to-tr from-cyan-600 to-blue-600 shadow-cyan-500/20'
-            }`}>
-              {isSuperAdmin ? <Crown className="w-5 h-5 text-slate-950" /> : <Package className="w-5 h-5 text-white" />}
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-md border border-slate-700/60 flex items-center justify-center p-0.5">
+              <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
+            <span className="text-xs font-bold text-white hidden sm:inline-block">OrdersMunim</span>
           </div>
 
           {/* Center: Welcome User's Name */}
