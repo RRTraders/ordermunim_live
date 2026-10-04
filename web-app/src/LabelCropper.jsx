@@ -139,8 +139,22 @@ export default function LabelCropper({ showToast }) {
   // Settings State (matching LabelMantra: always auto crop)
   const [labelAction, setLabelAction] = useState('crop'); // 'crop' | 'keep_invoice'
   const [cropNudge, setCropNudge] = useState(0); // in points (-20 to +20 fine tune)
-  const [printDateTime, setPrintDateTime] = useState(false);
-  const [printPageNumber, setPrintPageNumber] = useState(false);
+  const [printDateTime, setPrintDateTime] = useState(() => {
+    try {
+      const saved = localStorage.getItem('label_print_datetime');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [printPageNumber, setPrintPageNumber] = useState(() => {
+    try {
+      const saved = localStorage.getItem('label_print_pagenum');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
   const [addPackingSlip, setAddPackingSlip] = useState(false);
 
   // Thanks Line Customization (Footer White Line, max 10 words, persisted in localStorage)
@@ -617,7 +631,7 @@ export default function LabelCropper({ showToast }) {
               // Determine footer height dynamically based on Thanks Line and Date/Page number settings
               const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
               const hasDateOrPage = Boolean(printDateTime || printPageNumber);
-              const footerH = (hasThanks && hasDateOrPage) ? 30 : (hasThanks ? 22 : (hasDateOrPage ? 14 : 0));
+              const footerH = (hasThanks && hasDateOrPage) ? 38 : (hasThanks ? 24 : (hasDateOrPage ? 20 : 0));
               const padding = 4;
               const targetW = srcW + (padding * 2);
               const targetH = srcH + (padding * 2) + footerH;
@@ -631,28 +645,28 @@ export default function LabelCropper({ showToast }) {
                 height: srcH,
               });
 
-              // Bottom margin for Date & Page number: 4.5 pt from bottom edge
-              const metaY = 4.5;
+              // Bottom margin for Date & Page number: 7.5 pt from bottom edge (clean white margin, matching Image 1)
+              const metaY = 7.5;
 
-              // Optional Date/Time footer (bold font, solid black, with seconds, matching Image 1)
+              // Date/Time footer (bold font, solid black, with seconds, matching Image 1)
               if (printDateTime) {
                 targetPage.drawText(batchDateTimeStr, {
                   x: padding + 2,
                   y: metaY,
-                  size: 6.5,
+                  size: 7,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
                 });
               }
 
-              // Optional Page Number (bold font, solid black)
+              // Page Number (bold font, solid black)
               if (printPageNumber) {
                 const pageStr = `${i + 1}`;
-                const textW = helveticaBold.widthOfTextAtSize(pageStr, 7);
+                const textW = helveticaBold.widthOfTextAtSize(pageStr, 7.5);
                 targetPage.drawText(pageStr, {
                   x: targetW - textW - padding - 2,
                   y: metaY,
-                  size: 7,
+                  size: 7.5,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
                 });
@@ -661,14 +675,14 @@ export default function LabelCropper({ showToast }) {
               // Thanks Line (placed cleanly above date line without disturbing, font size 9.5pt)
               if (hasThanks) {
                 const thankStr = thanksLineText.trim();
-                const fontSize = hasDateOrPage ? 9.5 : 10;
+                const fontSize = hasDateOrPage ? 9.5 : 10.5;
                 let drawFontSize = fontSize;
                 let textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
                 if (textW > targetW - 12) {
                   drawFontSize = Math.max(6, Math.floor(fontSize * (targetW - 12) / textW));
                   textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
                 }
-                const thanksY = hasDateOrPage ? 16.5 : (footerH - drawFontSize) / 2 + 1;
+                const thanksY = hasDateOrPage ? 21 : (footerH - drawFontSize) / 2 + 1;
                 targetPage.drawText(thankStr, {
                   x: (targetW - textW) / 2,
                   y: thanksY,
@@ -684,7 +698,7 @@ export default function LabelCropper({ showToast }) {
               const labelH = Math.min(pageSize.height, 345.6 + cropNudge);
               const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
               const hasDateOrPage = Boolean(printDateTime || printPageNumber);
-              const extraH = (hasThanks && hasDateOrPage) ? 32 : (hasThanks ? 24 : (hasDateOrPage ? 16 : 0));
+              const extraH = (hasThanks && hasDateOrPage) ? 40 : (hasThanks ? 24 : (hasDateOrPage ? 20 : 0));
               const targetH = labelH + extraH;
 
               const embeddedPage = await outDoc.embedPage(srcPage, {
@@ -705,27 +719,27 @@ export default function LabelCropper({ showToast }) {
                 height: labelH,
               });
 
-              const metaY = 4.5;
+              const metaY = 8;
 
-              // Optional Date/Time footer (bold font, solid black, with seconds)
+              // Date/Time footer (bold font, solid black, with seconds)
               if (printDateTime) {
                 targetPage.drawText(batchDateTimeStr, {
                   x: 12,
                   y: metaY,
-                  size: 7,
+                  size: 8,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
                 });
               }
 
-              // Optional Page Number (bold font, solid black)
+              // Page Number (bold font, solid black)
               if (printPageNumber) {
                 const pageStr = `${i + 1}`;
-                const textW = helveticaBold.widthOfTextAtSize(pageStr, 8);
+                const textW = helveticaBold.widthOfTextAtSize(pageStr, 8.5);
                 targetPage.drawText(pageStr, {
                   x: pW - textW - 14,
                   y: metaY,
-                  size: 8,
+                  size: 8.5,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
                 });
@@ -741,7 +755,7 @@ export default function LabelCropper({ showToast }) {
                   drawFontSize = Math.max(7, Math.floor(fontSize * (pW - 16) / textW));
                   textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
                 }
-                const thanksY = hasDateOrPage ? 17.5 : (extraH - drawFontSize) / 2 + 1;
+                const thanksY = hasDateOrPage ? 22 : (extraH - drawFontSize) / 2 + 1;
                 targetPage.drawText(thankText, {
                   x: (pW - textW) / 2,
                   y: thanksY,
@@ -1456,7 +1470,10 @@ export default function LabelCropper({ showToast }) {
                         <input
                           type="checkbox"
                           checked={printDateTime}
-                          onChange={(e) => setPrintDateTime(e.target.checked)}
+                          onChange={(e) => {
+                            setPrintDateTime(e.target.checked);
+                            try { localStorage.setItem('label_print_datetime', String(e.target.checked)); } catch {}
+                          }}
                           className="sr-only peer"
                         />
                         <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -1475,7 +1492,10 @@ export default function LabelCropper({ showToast }) {
                         <input
                           type="checkbox"
                           checked={printPageNumber}
-                          onChange={(e) => setPrintPageNumber(e.target.checked)}
+                          onChange={(e) => {
+                            setPrintPageNumber(e.target.checked);
+                            try { localStorage.setItem('label_print_pagenum', String(e.target.checked)); } catch {}
+                          }}
                           className="sr-only peer"
                         />
                         <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
