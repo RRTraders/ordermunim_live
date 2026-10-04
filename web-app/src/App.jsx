@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk } from './meeshoDirect';
 import { 
   auth, 
   db 
@@ -162,6 +162,9 @@ export default function App() {
   // In-App Update & Broadcast State
   const [appUpdateConfig, setAppUpdateConfig] = useState(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0); // 0 to 100
+  const [updateStatusText, setUpdateStatusText] = useState('');
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
@@ -1236,20 +1239,33 @@ export default function App() {
     };
   };
 
-  // Trigger APK Download
-  const handleInstallAppUpdate = (url) => {
+  // Trigger In-App APK Download & Direct Android Install
+  const handleInstallAppUpdate = async (url) => {
     const targetUrl = url || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
-    showToast('Starting update download...', 'info');
+    setUpdateDownloading(true);
+    setDownloadProgress(0);
+    setUpdateStatusText('Connecting to update server...');
+
     try {
-      const link = document.createElement('a');
-      link.href = targetUrl;
-      link.download = 'Meesho_OTP.apk';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch {
-      window.open(targetUrl, '_system');
+      await downloadAndInstallApk(targetUrl, (progress) => {
+        if (progress.status === 'downloading') {
+          setDownloadProgress(progress.percent || 0);
+          setUpdateStatusText(`Downloading update... ${progress.percent}%`);
+        } else if (progress.status === 'installing') {
+          setDownloadProgress(100);
+          setUpdateStatusText('Download complete! Launching package installer...');
+        } else if (progress.status === 'connecting') {
+          setUpdateStatusText('Connecting to update server...');
+        }
+      });
+
+      setTimeout(() => {
+        setUpdateDownloading(false);
+      }, 4000);
+    } catch (err) {
+      console.error("Install update error:", err);
+      showToast(`Update error: ${err.message || err}`, 'error');
+      setUpdateDownloading(false);
     }
   };
 
@@ -1371,6 +1387,44 @@ export default function App() {
     });
   };
 
+  const renderUpdateProgressModal = () => {
+    if (!updateDownloading) return null;
+    return (
+      <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-5 shadow-2xl shadow-cyan-950/70 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 mx-auto flex items-center justify-center shadow-lg shadow-cyan-950/50">
+            <DownloadCloud className="w-8 h-8 animate-bounce" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="text-base font-bold text-white">Updating Meesho OTP</h3>
+            <p className="text-xs text-slate-300">
+              {updateStatusText || 'Downloading update package...'}
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-1.5">
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+              <div 
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all duration-300 shadow-md shadow-cyan-500/50"
+                style={{ width: `${Math.max(5, downloadProgress)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+              <span className="text-cyan-400 font-bold">{downloadProgress}%</span>
+              <span>In-App Auto Install</span>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+            Please wait. Your settings, stores, and OTP history will be preserved.
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-950 text-white">
@@ -1429,6 +1483,7 @@ export default function App() {
             </p>
           </div>
         </div>
+        {renderUpdateProgressModal()}
       </div>
     );
   }
@@ -3387,6 +3442,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* In-App Downloading & Auto-Install Modal */}
+      {renderUpdateProgressModal()}
     </div>
   );
 }

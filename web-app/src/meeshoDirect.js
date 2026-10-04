@@ -112,3 +112,40 @@ export async function openAppSettings() {
   }
 }
 
+/**
+ * In-App APK Downloader & Installer (Zero Browser, Direct Android Package Installer)
+ */
+export async function downloadAndInstallApk(url, onProgress) {
+  if (!isNativeMobile()) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Meesho_OTP.apk';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return { success: true, isNative: false };
+  }
+
+  let listenerHandle = null;
+  try {
+    if (typeof onProgress === 'function') {
+      listenerHandle = await NativeMeesho.addListener('downloadProgress', (data) => {
+        onProgress(data);
+      });
+    }
+
+    const res = await NativeMeesho.downloadAndInstallUpdate({ url });
+    return res;
+  } catch (err) {
+    console.error('[Native In-App Update] Error:', err);
+    throw err;
+  } finally {
+    if (listenerHandle && typeof listenerHandle.remove === 'function') {
+      try {
+        await listenerHandle.remove();
+      } catch {}
+    }
+  }
+}
+
