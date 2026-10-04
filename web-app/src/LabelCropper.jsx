@@ -286,20 +286,45 @@ export default function LabelCropper({ showToast }) {
         const storeMatch = rawText.match(/Sold\s*By\s*:?\s*([A-Za-z0-9\s,\.\-]+?)(?:,|\n|UG-|GSTIN)/i);
         if (storeMatch) storeName = storeMatch[1].trim().replace(/\s+/g, ' ');
 
-        // 5. Detect SKU & Quantity from Flipkart SKU table
+        // 5. Detect SKU, Size & Quantity from Flipkart SKU table
         let sku = 'Flipkart-Item';
+        let size = '';
         let quantity = 1;
-        const skuTableMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description.*?\n(?:\s*\d+\s*\|\s*)?([A-Za-z0-9_\-\.\/\(\)\s]{3,45}?)\s*\|/is);
-        if (skuTableMatch && skuTableMatch[1].trim().length > 1) {
-          sku = skuTableMatch[1].trim().replace(/\s+/g, ' ');
-        } else {
-          const fallbackMatch = rawText.match(/(?:1\s*\|\s*)?([A-Za-z0-9_\-\.\/\(\)\s]{4,45}?)\s*\|\s*([^\|\n\r]+?)\s+(\d+)\b/i);
-          if (fallbackMatch && fallbackMatch[1].trim().length > 1) {
-            sku = fallbackMatch[1].trim().replace(/\s+/g, ' ');
+
+        const strs = content.items.map(it => it.str);
+        const skuStartIdx = strs.findIndex(s => /SKU\s*ID/i.test(s));
+        if (skuStartIdx !== -1) {
+          const skuEndIdx = strs.findIndex((s, idx) => idx > skuStartIdx && (
+            /Tax\s*Invoice/i.test(s) || 
+            /Order\s*Id/i.test(s) ||
+            /FMP[CP]\d/i.test(s) ||
+            /Use\s*Transparent/i.test(s)
+          ));
+          const section = strs.slice(skuStartIdx, skuEndIdx !== -1 ? skuEndIdx : skuStartIdx + 30);
+          for (let i = 0; i < section.length; i++) {
+            const m = section[i].match(/^\s*(\d+)\s+([A-Za-z0-9_\-\.\/\(\)\s]+?)\s*\|/);
+            if (m) {
+              sku = m[2].trim().replace(/\s+/g, ' ');
+              for (let j = i + 1; j < section.length; j++) {
+                if (/^\s*\d+\s+[A-Za-z0-9_\-\.\/\(\)\s]+?\s*\|/.test(section[j])) break;
+                const qm = section[j].trim().match(/^(\d+)$/);
+                if (qm) {
+                  quantity = parseInt(qm[1], 10) || 1;
+                  break;
+                }
+              }
+              break;
+            }
           }
+        } else {
+          // Fallback if text stream varies
+          const skuTableMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description[\s\S]*?(?:1\s+)?([A-Za-z0-9_\-\.\/\(\)\s]{3,50}?)\s*\|/i);
+          if (skuTableMatch && skuTableMatch[1].trim().length > 1) {
+            sku = skuTableMatch[1].trim().replace(/\s+/g, ' ');
+          }
+          const qtyMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description[\s\S]*?\b(\d+)\s*(?:\n|$|FMP[CP]|Use\s+Transparent)/i);
+          if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
         }
-        const qtyMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description.*?\n.*?\s+(\d+)\s*(?:\n|$|FMPC|Use\s+Transparent)/is);
-        if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
 
         // 6. Dynamic Crop Bounds Calculation from text coordinates
         const viewport = page.getViewport({ scale: 1.0 });
@@ -807,54 +832,328 @@ export default function LabelCropper({ showToast }) {
           }
         }
 
-        // Add Packing Slip Page In Last if enabled
+        // ================= PACKING LIST (100% Matching Image 2) =================
         if (addPackingSlip) {
-          const slipW = 595.28;
-          const slipH = 345.6;
-          const slipPage = outDoc.addPage([slipW, slipH]);
-          slipPage.drawRectangle({
-            x: 0, y: 0, width: slipW, height: slipH,
-            color: rgb(0.98, 0.98, 0.99)
-          });
+          const pageW = 595.28;
+          const pageH = 841.89;
+          const leftX = 30;
+          const rightX = pageW - 30;
+          const tableW = rightX - leftX;
 
-          // Header
-          slipPage.drawText('WAREHOUSE PACKING SLIP', {
-            x: 15, y: slipH - 24, size: 12, font: helveticaBold, color: rgb(0.05, 0.1, 0.2)
-          });
-          slipPage.drawText(`Total Orders: ${totalItems} | Date: ${new Date().toLocaleDateString('en-IN')}`, {
-            x: 15, y: slipH - 38, size: 8, font: helveticaFont, color: rgb(0.4, 0.4, 0.4)
-          });
+          // Aggregate SKU summary & Courier summary from the items in this PDF
+          const skuSummaryMap = {};
+          const courierSummaryMap = {};
+          let totalPackingQty = 0;
+          let totalParcels = items.length;
 
-          slipPage.drawLine({
-            start: { x: 15, y: slipH - 45 },
-            end: { x: slipW - 15, y: slipH - 45 },
-            thickness: 1, color: rgb(0.8, 0.8, 0.85)
-          });
+          items.forEach(it => {
+            const sName = it.sku || 'Unknown Item';
+            const sSize = it.size || '';
+            const q = it.quantity || 1;
+            totalPackingQty += q;
 
-          // SKU Table
-          slipPage.drawText('SKU / Product Description', {
-            x: 15, y: slipH - 58, size: 8.5, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
-          });
-          slipPage.drawText('Qty', {
-            x: slipW - 40, y: slipH - 58, size: 8.5, font: helveticaBold, color: rgb(0.2, 0.2, 0.2)
-          });
-
-          let rowY = slipH - 74;
-          const sortedSkus = Object.entries(skuMap).sort((a, b) => b[1] - a[1]);
-
-          for (const [skuName, qty] of sortedSkus) {
-            if (rowY < 30) {
-              slipPage.drawText('... (more items on next sheet)', { x: 15, y: 15, size: 7.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5) });
-              break;
+            if (!skuSummaryMap[sName]) {
+              skuSummaryMap[sName] = { size: sSize, qty: 0 };
             }
-            slipPage.drawText(skuName.slice(0, 45), {
-              x: 15, y: rowY, size: 8, font: helveticaFont, color: rgb(0.1, 0.1, 0.1)
+            skuSummaryMap[sName].qty += q;
+            if (!skuSummaryMap[sName].size && sSize) {
+              skuSummaryMap[sName].size = sSize;
+            }
+
+            const cName = it.courier || (selectedMarketplace === 'flipcart' ? 'E-Kart Logistics' : 'Valmo');
+            if (!courierSummaryMap[cName]) {
+              courierSummaryMap[cName] = { parcels: 0, qty: 0 };
+            }
+            courierSummaryMap[cName].parcels += 1;
+            courierSummaryMap[cName].qty += q;
+          });
+
+          const sortedPackingSkus = Object.keys(skuSummaryMap).sort();
+          const sortedPackingCouriers = Object.keys(courierSummaryMap).sort();
+
+          let curSlipPage = outDoc.addPage([pageW, pageH]);
+          let curY = pageH - 45;
+
+          // 1. Title: "Packing List" (Large bold, centered)
+          const titleText = 'Packing List';
+          const titleSize = 22;
+          const titleW = helveticaBold.widthOfTextAtSize(titleText, titleSize);
+          curSlipPage.drawText(titleText, {
+            x: (pageW - titleW) / 2,
+            y: curY,
+            size: titleSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 20;
+
+          // 2. Subtitle: Date/Time (e.g. 04/10/2026 02:12:54 pm, centered)
+          const dateSize = 9.5;
+          const dateW = helveticaFont.widthOfTextAtSize(batchDateTimeStr, dateSize);
+          curSlipPage.drawText(batchDateTimeStr, {
+            x: (pageW - dateW) / 2,
+            y: curY,
+            size: dateSize,
+            font: helveticaFont,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 35;
+
+          // 3. Section 1: "SKU Summary"
+          curSlipPage.drawText('SKU Summary', {
+            x: leftX,
+            y: curY,
+            size: 13,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 20;
+
+          // Table 1 Header: SKU Name, Size, Qty
+          const headerFontSize = 10;
+          const sizeColX = leftX + tableW * 0.72;
+
+          curSlipPage.drawText('SKU Name', {
+            x: leftX,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curSlipPage.drawText('Size', {
+            x: sizeColX,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          const qtyHdrW = helveticaBold.widthOfTextAtSize('Qty', headerFontSize);
+          curSlipPage.drawText('Qty', {
+            x: rightX - qtyHdrW,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 6;
+
+          // Horizontal line below SKU header
+          curSlipPage.drawLine({
+            start: { x: leftX, y: curY },
+            end: { x: rightX, y: curY },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 14;
+
+          // Table 1 Rows
+          const rowFontSize = 9.5;
+          for (const sName of sortedPackingSkus) {
+            if (curY < 80) {
+              curSlipPage = outDoc.addPage([pageW, pageH]);
+              curY = pageH - 45;
+            }
+            const sData = skuSummaryMap[sName];
+            curSlipPage.drawText(sName.slice(0, 65), {
+              x: leftX,
+              y: curY,
+              size: rowFontSize,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
             });
-            slipPage.drawText(String(qty), {
-              x: slipW - 35, y: rowY, size: 8.5, font: helveticaBold, color: rgb(0.05, 0.4, 0.2)
+
+            if (sData.size) {
+              curSlipPage.drawText(String(sData.size), {
+                x: sizeColX,
+                y: curY,
+                size: rowFontSize,
+                font: helveticaFont,
+                color: rgb(0, 0, 0),
+              });
+            }
+
+            const qStr = String(sData.qty);
+            const qW = helveticaFont.widthOfTextAtSize(qStr, rowFontSize);
+            curSlipPage.drawText(qStr, {
+              x: rightX - qW,
+              y: curY,
+              size: rowFontSize,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
             });
-            rowY -= 15;
+
+            curY -= 15;
           }
+
+          curY += 5;
+
+          // Horizontal line above SKU Total
+          curSlipPage.drawLine({
+            start: { x: leftX, y: curY },
+            end: { x: rightX, y: curY },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 14;
+
+          // SKU Total Row
+          const totalFontSize = 10.5;
+          curSlipPage.drawText('Total', {
+            x: leftX,
+            y: curY,
+            size: totalFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          const totQtyStr = String(totalPackingQty);
+          const totQtyW = helveticaBold.widthOfTextAtSize(totQtyStr, totalFontSize);
+          curSlipPage.drawText(totQtyStr, {
+            x: rightX - totQtyW,
+            y: curY,
+            size: totalFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 35;
+
+          // 4. Section 2: "Courier Summary"
+          if (curY < 120) {
+            curSlipPage = outDoc.addPage([pageW, pageH]);
+            curY = pageH - 45;
+          }
+
+          curSlipPage.drawText('Courier Summary', {
+            x: leftX,
+            y: curY,
+            size: 13,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 20;
+
+          // Table 2 Header: Courier Name, Parcel Count, Total Qty
+          const parcelColX = leftX + tableW * 0.50;
+
+          curSlipPage.drawText('Courier Name', {
+            x: leftX,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curSlipPage.drawText('Parcel Count', {
+            x: parcelColX - 25,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          const totQtyHdrW = helveticaBold.widthOfTextAtSize('Total Qty', headerFontSize);
+          curSlipPage.drawText('Total Qty', {
+            x: rightX - totQtyHdrW,
+            y: curY,
+            size: headerFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 6;
+
+          // Horizontal line below Courier header
+          curSlipPage.drawLine({
+            start: { x: leftX, y: curY },
+            end: { x: rightX, y: curY },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 14;
+
+          // Table 2 Rows
+          for (const cName of sortedPackingCouriers) {
+            const cData = courierSummaryMap[cName];
+            curSlipPage.drawText(cName, {
+              x: leftX,
+              y: curY,
+              size: rowFontSize,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
+            });
+
+            const pStr = String(cData.parcels);
+            const pW = helveticaFont.widthOfTextAtSize(pStr, rowFontSize);
+            curSlipPage.drawText(pStr, {
+              x: parcelColX + (10 - pW) / 2,
+              y: curY,
+              size: rowFontSize,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
+            });
+
+            const qStr = String(cData.qty);
+            const qW = helveticaFont.widthOfTextAtSize(qStr, rowFontSize);
+            curSlipPage.drawText(qStr, {
+              x: rightX - qW,
+              y: curY,
+              size: rowFontSize,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
+            });
+
+            curY -= 15;
+          }
+
+          curY += 5;
+
+          // Horizontal line above Courier Total
+          curSlipPage.drawLine({
+            start: { x: leftX, y: curY },
+            end: { x: rightX, y: curY },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+          });
+
+          curY -= 14;
+
+          // Courier Total Row
+          curSlipPage.drawText('Total', {
+            x: leftX,
+            y: curY,
+            size: totalFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          const totParStr = String(totalParcels);
+          const totParW = helveticaBold.widthOfTextAtSize(totParStr, totalFontSize);
+          curSlipPage.drawText(totParStr, {
+            x: parcelColX + (10 - totParW) / 2,
+            y: curY,
+            size: totalFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
+
+          curSlipPage.drawText(totQtyStr, {
+            x: rightX - totQtyW,
+            y: curY,
+            size: totalFontSize,
+            font: helveticaBold,
+            color: rgb(0, 0, 0),
+          });
         }
 
         return await outDoc.save();
