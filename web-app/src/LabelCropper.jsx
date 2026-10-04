@@ -68,7 +68,7 @@ export const MARKETPLACES = [
     badgeStyle: 'bg-[#2874F0] text-[#FFE500] border border-blue-400 shadow-blue-500/20',
     iconLetter: 'F',
     description: 'Thermal 4x6 shipping label extraction, invoice separation, and SKU sorting for Flipcart orders.',
-    ready: false
+    ready: true
   },
   {
     id: 'meesho',
@@ -143,6 +143,52 @@ export default function LabelCropper({ showToast }) {
   const [printPageNumber, setPrintPageNumber] = useState(false);
   const [addPackingSlip, setAddPackingSlip] = useState(false);
 
+  // Thanks Line Customization (Footer White Line, max 10 words, persisted in localStorage)
+  const [printThanksLine, setPrintThanksLine] = useState(() => {
+    try {
+      const saved = localStorage.getItem('label_thanks_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [thanksLineText, setThanksLineText] = useState(() => {
+    try {
+      const saved = localStorage.getItem('label_thanks_line');
+      if (saved) {
+        const words = saved.trim().split(/\s+/).filter(Boolean);
+        return words.slice(0, 10).join(' ');
+      }
+      return 'Thanks For Your Order';
+    } catch {
+      return 'Thanks For Your Order';
+    }
+  });
+  const [isThanksSaved, setIsThanksSaved] = useState(false);
+
+  const handleThanksLineChange = (e) => {
+    const val = e.target.value;
+    const words = val.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= 10 || val.length < thanksLineText.length) {
+      setThanksLineText(val);
+      setIsThanksSaved(false);
+    } else {
+      if (showToast) showToast('Thanks Line is limited to 10 words maximum', 'warning');
+    }
+  };
+
+  const handleSaveThanksLine = () => {
+    try {
+      localStorage.setItem('label_thanks_line', thanksLineText.trim());
+      localStorage.setItem('label_thanks_enabled', String(printThanksLine));
+      setIsThanksSaved(true);
+      if (showToast) showToast('Thanks Line saved successfully!', 'success');
+      setTimeout(() => setIsThanksSaved(false), 2500);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Sort By options (matching user screenshot: Courier wise ON)
   const [sortSku, setSortSku] = useState(false);
   const [sortCourier, setSortCourier] = useState(true);
@@ -187,11 +233,133 @@ export default function LabelCropper({ showToast }) {
       // Join with newline to preserve multi-line structure for regex matching
       const rawText = content.items.map(it => it.str).join('\n');
 
+      // Helper for quick regex match
       const n = (rx, src = rawText) => {
         const m = src.match(rx);
         return m ? (m[1] || m[0]).trim() : '';
       };
 
+      // ================= FLIPCART PARSING & BOUNDS =================
+      if (selectedMarketplace === 'flipcart') {
+        // 1. Detect Flipkart Courier
+        let courier = 'Ekart Logistics';
+        if (/e-?kart/i.test(rawText)) courier = 'Ekart Logistics';
+        else if (/delhivery/i.test(rawText)) courier = 'Delhivery';
+        else if (/shadowfax/i.test(rawText)) courier = 'Shadowfax';
+        else if (/xpressbees/i.test(rawText) || /xpress\s*bees/i.test(rawText)) courier = 'XpressBees';
+        else if (/blue\s*dart/i.test(rawText) || /bluedart/i.test(rawText)) courier = 'Blue Dart';
+        else if (/smartr/i.test(rawText)) courier = 'Smartr';
+        else if (/dtdc/i.test(rawText)) courier = 'DTDC';
+        else {
+          const cMatch = rawText.match(/(?:Courier|Logistics|Carrier)[\s:#-]*([A-Za-z0-9\s\-]{3,25})/i);
+          if (cMatch) courier = cMatch[1].trim();
+        }
+
+        // 2. Detect Flipkart Order ID (e.g. OD338754545230023100)
+        let orderNumber = '';
+        const odMatch = rawText.match(/\b(OD\d{16,22})\b/i);
+        if (odMatch) orderNumber = odMatch[1];
+
+        // 3. Detect AWB / Tracking number
+        let awb = '';
+        const awbMatch = rawText.match(/(?:AWB\s*No\.?|Tracking\s*No\.?)[\s:]*([A-Za-z0-9]+)/i) ||
+                         rawText.match(/\b(FMPC\d{10,14})\b/i);
+        if (awbMatch) awb = awbMatch[1];
+        if (!awb) awb = orderNumber || `FLIP-${pageNum}`;
+
+        // 4. Detect Store / Seller Name
+        let storeName = 'Flipkart Seller';
+        const storeMatch = rawText.match(/Sold\s*By\s*:?\s*([A-Za-z0-9\s,\.\-]+?)(?:,|\n|UG-|GSTIN)/i);
+        if (storeMatch) storeName = storeMatch[1].trim().replace(/\s+/g, ' ');
+
+        // 5. Detect SKU & Quantity from Flipkart SKU table
+        let sku = 'Flipkart-Item';
+        let quantity = 1;
+        const skuTableMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description.*?\n(?:\s*\d+\s*\|\s*)?([A-Za-z0-9_\-\.\/\(\)\s]{3,45}?)\s*\|/is);
+        if (skuTableMatch && skuTableMatch[1].trim().length > 1) {
+          sku = skuTableMatch[1].trim().replace(/\s+/g, ' ');
+        } else {
+          const fallbackMatch = rawText.match(/(?:1\s*\|\s*)?([A-Za-z0-9_\-\.\/\(\)\s]{4,45}?)\s*\|\s*([^\|\n\r]+?)\s+(\d+)\b/i);
+          if (fallbackMatch && fallbackMatch[1].trim().length > 1) {
+            sku = fallbackMatch[1].trim().replace(/\s+/g, ' ');
+          }
+        }
+        const qtyMatch = rawText.match(/SKU\s*ID\s*\|?\s*Description.*?\n.*?\s+(\d+)\s*(?:\n|$|FMPC|Use\s+Transparent)/is);
+        if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
+
+        // 6. Dynamic Crop Bounds Calculation from text coordinates
+        const viewport = page.getViewport({ scale: 1.0 });
+        const pageW = viewport.width;
+        const pageH = viewport.height;
+
+        let cropBox = null;
+        // CRITICAL: Filter only visible text items with actual content to exclude empty space chunks with huge artificial widths
+        const visibleItems = content.items.filter(it => it.str && it.str.trim().length > 0 && it.transform);
+        const topHalfItems = visibleItems.filter(it => it.transform[5] >= pageH * 0.40);
+        let footerY = pageH * 0.490;
+        const footerItems = topHalfItems.filter(it => /Not for resale|Printed at|Transparent Packaging/i.test(it.str));
+        if (footerItems.length > 0) {
+          footerY = Math.min(...footerItems.map(it => it.transform[5]));
+        }
+
+        // Find left anchor for the Flipkart shipping label
+        const leftAnchors = topHalfItems.filter(it => 
+          it.transform[5] >= footerY &&
+          /^(?:STD|EXP|COD|Ordered through|Flipkart|AWB No|\(N\))/i.test(it.str)
+        );
+        const labelLeftX = leftAnchors.length > 0 
+          ? Math.min(...leftAnchors.map(it => it.transform[4]))
+          : 192;
+
+        // Flipkart shipping label width is standard ~214-216 pt
+        // Filter strictly items within the label column so invoice text on the right is never included
+        const labelItems = topHalfItems.filter(it => 
+          it.transform[5] >= footerY - 4 &&
+          it.transform[5] <= pageH * 0.98 &&
+          it.transform[4] >= labelLeftX - 5 &&
+          it.transform[4] <= labelLeftX + 218
+        );
+
+        if (labelItems.length >= 4) {
+          const minX = Math.min(...labelItems.map(it => it.transform[4]));
+          const maxX = Math.max(...labelItems.map(it => it.transform[4] + (it.width || 0)));
+          const maxY = Math.max(...labelItems.map(it => it.transform[5] + (it.height || 0)));
+          const minY = footerY;
+
+          // Tight crop bounds: wrap outer black borders tightly with minimal border margin (~2.5-3.5 pt)
+          cropBox = {
+            left: Math.max(0, minX - 2.5),
+            right: Math.min(pageW, maxX + 3.5),
+            bottom: Math.max(0, minY - 4.5),
+            top: Math.min(pageH, maxY + 3.0),
+          };
+        } else {
+          // Standard Flipkart A4 layout fallback with tight borders
+          cropBox = {
+            left: 189.5,
+            right: 406.2,
+            bottom: 464.0,
+            top: 813.5,
+          };
+        }
+
+        return {
+          success: true,
+          awb,
+          courier,
+          sku,
+          size: '',
+          color: '',
+          quantity,
+          orderNumber,
+          storeName,
+          cropBox,
+          isTop: true,
+          rawText
+        };
+      }
+
+      // ================= MEESHO PARSING (ORIGINAL) =================
       // 1. Detect Courier Name
       let courier = n(/([A-Za-z0-9\-]+(?:\s+[A-Za-z0-9\-]+)?)\s+Pickup/i);
       courier = courier.replace(/^(?:app|via|by|return|cash|cod|prepaid|amount|rs)\s+/i, '').trim();
@@ -393,6 +561,19 @@ export default function LabelCropper({ showToast }) {
         const helveticaFont = await outDoc.embedFont(StandardFonts.Helvetica);
         const helveticaBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
 
+        const pad = (n) => String(n).padStart(2, '0');
+        const now = new Date();
+        const dDay = pad(now.getDate());
+        const dMonth = pad(now.getMonth() + 1);
+        const dYear = now.getFullYear();
+        let dHours = now.getHours();
+        const dAmpm = dHours >= 12 ? 'pm' : 'am';
+        dHours = dHours % 12 || 12;
+        const dStrHours = pad(dHours);
+        const dMinutes = pad(now.getMinutes());
+        const dSeconds = pad(now.getSeconds());
+        const batchDateTimeStr = `${dDay}/${dMonth}/${dYear} ${dStrHours}:${dMinutes}:${dSeconds} ${dAmpm}`;
+
         // Pre-load source PDFDocuments as an array matching files
         const srcDocs = [];
         for (let fi = 0; fi < files.length; fi++) {
@@ -411,68 +592,164 @@ export default function LabelCropper({ showToast }) {
           const pageSize = srcPage.getSize();
 
           if (labelAction === 'crop') {
-            // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
-            // Form XObject strictly clips everything below origH - labelH (TAX INVOICE completely eliminated).
-            const labelH = Math.min(pageSize.height, 345.6 + cropNudge);
-            const extraH = 24; // 1-line white space at bottom
-            const targetH = labelH + extraH;
+            if (selectedMarketplace === 'flipcart') {
+              // ================= FLIPCART TIGHT CROPPING (VERY LITTLE WHITE SPACE) =================
+              // Page size wraps strictly around the label border with minimal 4pt quiet padding (matches Image 2)
+              let cLeft = item.cropBox?.left ?? 189.5;
+              let cRight = item.cropBox?.right ?? 406.2;
+              let cTop = item.cropBox?.top ?? 813.5;
+              let cBottom = item.cropBox?.bottom ?? 464.0;
 
-            const embeddedPage = await outDoc.embedPage(srcPage, {
-              left: 0,
-              bottom: pageSize.height - labelH,
-              right: pageSize.width,
-              top: pageSize.height,
-            });
+              // Apply crop nudge fine-tuning
+              cTop = Math.min(pageSize.height, cTop + cropNudge);
+              cBottom = Math.max(0, cBottom - cropNudge);
 
-            const targetPage = outDoc.addPage([pageSize.width, targetH]);
-            const pW = pageSize.width;
+              const srcW = Math.max(10, cRight - cLeft);
+              const srcH = Math.max(10, cTop - cBottom);
 
-            // Draw pristine shipping label above the 24pt bottom white space
-            targetPage.drawPage(embeddedPage, {
-              x: 0,
-              y: extraH,
-              width: pageSize.width,
-              height: labelH,
-            });
-
-            // Centered Bold text: "Thank you for your order"
-            const thankText = "Thank you for your order";
-            const fontSize = 11;
-            const textW = helveticaBold.widthOfTextAtSize(thankText, fontSize);
-            targetPage.drawText(thankText, {
-              x: (pW - textW) / 2,
-              y: (extraH - fontSize) / 2 + 1,
-              size: fontSize,
-              font: helveticaBold,
-              color: rgb(0, 0, 0),
-            });
-
-            // Optional Date/Time footer (placed on left edge of the bottom line)
-            if (printDateTime) {
-              const timeStr = new Date().toLocaleString('en-IN', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', hour12: true
+              const embeddedPage = await outDoc.embedPage(srcPage, {
+                left: cLeft,
+                bottom: cBottom,
+                right: cRight,
+                top: cTop,
               });
-              targetPage.drawText(timeStr, {
-                x: 12,
-                y: (extraH - 8) / 2 + 1,
-                size: 7.5,
-                font: helveticaFont,
-                color: rgb(0.35, 0.35, 0.35)
-              });
-            }
 
-            // Optional Page Number (placed on right edge of the bottom line)
-            if (printPageNumber) {
-              const pageStr = `${i + 1}`;
-              const textW = helveticaBold.widthOfTextAtSize(pageStr, 8);
-              targetPage.drawText(pageStr, {
-                x: pW - textW - 14,
-                y: (extraH - 8) / 2 + 1,
-                size: 8,
-                font: helveticaBold,
-                color: rgb(0.2, 0.2, 0.2)
+              // Determine footer height dynamically based on Thanks Line and Date/Page number settings
+              const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
+              const hasDateOrPage = Boolean(printDateTime || printPageNumber);
+              const footerH = (hasThanks && hasDateOrPage) ? 30 : (hasThanks ? 22 : (hasDateOrPage ? 14 : 0));
+              const padding = 4;
+              const targetW = srcW + (padding * 2);
+              const targetH = srcH + (padding * 2) + footerH;
+
+              const targetPage = outDoc.addPage([targetW, targetH]);
+
+              targetPage.drawPage(embeddedPage, {
+                x: padding,
+                y: padding + footerH,
+                width: srcW,
+                height: srcH,
               });
+
+              // Bottom margin for Date & Page number: 4.5 pt from bottom edge
+              const metaY = 4.5;
+
+              // Optional Date/Time footer (bold font, solid black, with seconds, matching Image 1)
+              if (printDateTime) {
+                targetPage.drawText(batchDateTimeStr, {
+                  x: padding + 2,
+                  y: metaY,
+                  size: 6.5,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // Optional Page Number (bold font, solid black)
+              if (printPageNumber) {
+                const pageStr = `${i + 1}`;
+                const textW = helveticaBold.widthOfTextAtSize(pageStr, 7);
+                targetPage.drawText(pageStr, {
+                  x: targetW - textW - padding - 2,
+                  y: metaY,
+                  size: 7,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // Thanks Line (placed cleanly above date line without disturbing, font size 9.5pt)
+              if (hasThanks) {
+                const thankStr = thanksLineText.trim();
+                const fontSize = hasDateOrPage ? 9.5 : 10;
+                let drawFontSize = fontSize;
+                let textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
+                if (textW > targetW - 12) {
+                  drawFontSize = Math.max(6, Math.floor(fontSize * (targetW - 12) / textW));
+                  textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
+                }
+                const thanksY = hasDateOrPage ? 16.5 : (footerH - drawFontSize) / 2 + 1;
+                targetPage.drawText(thankStr, {
+                  x: (targetW - textW) / 2,
+                  y: thanksY,
+                  size: drawFontSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+            } else {
+              // ================= MEESHO ORIGINAL CROPPING =================
+              // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
+              // Form XObject strictly clips everything below origH - labelH (TAX INVOICE completely eliminated).
+              const labelH = Math.min(pageSize.height, 345.6 + cropNudge);
+              const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
+              const hasDateOrPage = Boolean(printDateTime || printPageNumber);
+              const extraH = (hasThanks && hasDateOrPage) ? 32 : (hasThanks ? 24 : (hasDateOrPage ? 16 : 0));
+              const targetH = labelH + extraH;
+
+              const embeddedPage = await outDoc.embedPage(srcPage, {
+                left: 0,
+                bottom: pageSize.height - labelH,
+                right: pageSize.width,
+                top: pageSize.height,
+              });
+
+              const targetPage = outDoc.addPage([pageSize.width, targetH]);
+              const pW = pageSize.width;
+
+              // Draw pristine shipping label above the bottom white space
+              targetPage.drawPage(embeddedPage, {
+                x: 0,
+                y: extraH,
+                width: pageSize.width,
+                height: labelH,
+              });
+
+              const metaY = 4.5;
+
+              // Optional Date/Time footer (bold font, solid black, with seconds)
+              if (printDateTime) {
+                targetPage.drawText(batchDateTimeStr, {
+                  x: 12,
+                  y: metaY,
+                  size: 7,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // Optional Page Number (bold font, solid black)
+              if (printPageNumber) {
+                const pageStr = `${i + 1}`;
+                const textW = helveticaBold.widthOfTextAtSize(pageStr, 8);
+                targetPage.drawText(pageStr, {
+                  x: pW - textW - 14,
+                  y: metaY,
+                  size: 8,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // Centered Bold text from Thanks Line setting
+              if (hasThanks) {
+                const thankText = thanksLineText.trim();
+                const fontSize = hasDateOrPage ? 10 : 11;
+                let drawFontSize = fontSize;
+                let textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
+                if (textW > pW - 16) {
+                  drawFontSize = Math.max(7, Math.floor(fontSize * (pW - 16) / textW));
+                  textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
+                }
+                const thanksY = hasDateOrPage ? 17.5 : (extraH - drawFontSize) / 2 + 1;
+                targetPage.drawText(thankText, {
+                  x: (pW - textW) / 2,
+                  y: thanksY,
+                  size: drawFontSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
             }
           } else {
             // Keep full page / invoice mode
@@ -573,15 +850,16 @@ export default function LabelCropper({ showToast }) {
 
       // STEP 3: Handle Output File Type
       const dateTag = new Date().toISOString().slice(0, 10);
+      const mpPrefix = selectedMarketplace === 'flipcart' ? 'Flipkart' : 'Meesho';
 
       if (outputType === 'single') {
-        const finalPdfBytes = await buildPdf(sortedLabels, 'Meesho Shipping Labels');
+        const finalPdfBytes = await buildPdf(sortedLabels, `${mpPrefix} Shipping Labels`);
         const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         setDownloadReady({
           type: 'single',
           url,
-          filename: `Meesho_Cropped_Labels_${dateTag}.pdf`,
+          filename: `${mpPrefix}_Cropped_Labels_${dateTag}.pdf`,
           blob
         });
       } else if (outputType === 'courier') {
@@ -595,7 +873,7 @@ export default function LabelCropper({ showToast }) {
         const zip = new JSZip();
         for (const [cName, items] of Object.entries(groups)) {
           const cBytes = await buildPdf(items, `${cName} Shipping Labels`);
-          zip.file(`Meesho_${cName}_${items.length}_Labels.pdf`, cBytes);
+          zip.file(`${mpPrefix}_${cName}_${items.length}_Labels.pdf`, cBytes);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -603,7 +881,7 @@ export default function LabelCropper({ showToast }) {
         setDownloadReady({
           type: 'zip',
           url: zipUrl,
-          filename: `Meesho_Labels_By_Courier_${dateTag}.zip`,
+          filename: `${mpPrefix}_Labels_By_Courier_${dateTag}.zip`,
           blob: zipBlob
         });
       } else if (outputType === 'quantity') {
@@ -613,11 +891,11 @@ export default function LabelCropper({ showToast }) {
         const zip = new JSZip();
         if (singleQty.length > 0) {
           const sBytes = await buildPdf(singleQty, 'Single Quantity Orders');
-          zip.file(`Single_Item_Orders_${singleQty.length}.pdf`, sBytes);
+          zip.file(`${mpPrefix}_Single_Item_Orders_${singleQty.length}.pdf`, sBytes);
         }
         if (multiQty.length > 0) {
           const mBytes = await buildPdf(multiQty, 'Multi Quantity Orders');
-          zip.file(`Multi_Item_Orders_${multiQty.length}.pdf`, mBytes);
+          zip.file(`${mpPrefix}_Multi_Item_Orders_${multiQty.length}.pdf`, mBytes);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -625,7 +903,7 @@ export default function LabelCropper({ showToast }) {
         setDownloadReady({
           type: 'zip',
           url: zipUrl,
-          filename: `Meesho_Labels_By_Quantity_${dateTag}.zip`,
+          filename: `${mpPrefix}_Labels_By_Quantity_${dateTag}.zip`,
           blob: zipBlob
         });
       } else if (outputType === 'store') {
@@ -639,7 +917,7 @@ export default function LabelCropper({ showToast }) {
         const zip = new JSZip();
         for (const [sName, items] of Object.entries(groups)) {
           const sBytes = await buildPdf(items, `${sName} Labels`);
-          zip.file(`Store_${sName}_${items.length}_Labels.pdf`, sBytes);
+          zip.file(`${mpPrefix}_Store_${sName}_${items.length}_Labels.pdf`, sBytes);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -647,7 +925,7 @@ export default function LabelCropper({ showToast }) {
         setDownloadReady({
           type: 'zip',
           url: zipUrl,
-          filename: `Meesho_Labels_By_Store_${dateTag}.zip`,
+          filename: `${mpPrefix}_Labels_By_Store_${dateTag}.zip`,
           blob: zipBlob
         });
       }
@@ -683,7 +961,7 @@ export default function LabelCropper({ showToast }) {
               (Choose platform to crop labels)
             </span>
           </div>
-          {selectedMarketplace !== 'meesho' && (
+          {!activeMarketplace?.ready && (
             <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
               In Development
             </span>
@@ -723,27 +1001,27 @@ export default function LabelCropper({ showToast }) {
         </div>
       </div>
 
-      {selectedMarketplace === 'meesho' ? (
+      {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart') ? (
         <>
           {/* ================= HEADER SECTION ================= */}
-      <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-            Meesho Label Cropping and sorting tools
-          </h1>
-          <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
-            Crop, sort, and process your Meesho shipping labels automatically. Save time and reduce errors with powerful PDF tools.
-          </p>
-        </div>
+          <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+                {activeMarketplace?.name} Label Cropping and sorting tools
+              </h1>
+              <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
+                {activeMarketplace?.description}
+              </p>
+            </div>
 
-        {/* Meesho Logo Badge matching image */}
-        <div className="flex items-center gap-2">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-900 to-pink-900 flex flex-col items-center justify-center text-white shadow-md shadow-pink-950/20">
-            <span className="font-extrabold text-base leading-none">m</span>
-            <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">meesho</span>
+            {/* Active Marketplace Logo Badge */}
+            <div className="flex items-center gap-2">
+              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-md`}>
+                <span className="font-extrabold text-base leading-none">{activeMarketplace?.iconLetter}</span>
+                <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">{activeMarketplace?.badgeText}</span>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
       {/* ================= TOP PROCESSING REPORT CARD ================= */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm mb-6 overflow-hidden transition-all">
@@ -1097,9 +1375,70 @@ export default function LabelCropper({ showToast }) {
                   </div>
                 </div>
 
+                {/* 2. Thanks Line Footer Setting */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Thanks Line
+                    </label>
+                    <span className={`text-[10px] font-semibold ${
+                      thanksLineText.trim().split(/\s+/).filter(Boolean).length >= 10 ? 'text-amber-600' : 'text-slate-400'
+                    }`}>
+                      {thanksLineText.trim().split(/\s+/).filter(Boolean).length}/10 words
+                    </span>
+                  </div>
 
+                  <div className="flex items-center gap-1.5 w-full">
+                    {/* Tick mark checkbox (if tick mark then only print) */}
+                    <label 
+                      className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border cursor-pointer transition-all select-none ${
+                        printThanksLine ? 'bg-emerald-50 border-emerald-300 text-emerald-600 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                      }`}
+                      title="If checked (tick mark), prints this line on label footer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={printThanksLine}
+                        onChange={(e) => {
+                          setPrintThanksLine(e.target.checked);
+                          localStorage.setItem('label_thanks_enabled', String(e.target.checked));
+                          if (showToast) showToast(e.target.checked ? 'Thanks line enabled' : 'Thanks line disabled', 'info');
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                      />
+                    </label>
 
-                {/* 2. Print Options */}
+                    {/* Edit box (up to 10 words max) */}
+                    <input
+                      type="text"
+                      value={thanksLineText}
+                      onChange={handleThanksLineChange}
+                      placeholder="e.g. Thanks For Your Order"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm"
+                    />
+
+                    {/* Beside Save button with tick mark */}
+                    <button
+                      type="button"
+                      onClick={handleSaveThanksLine}
+                      className={`shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-sm cursor-pointer whitespace-nowrap ${
+                        isThanksSaved 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      }`}
+                      title="Save text and settings"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{isThanksSaved ? 'Saved' : 'Save'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1.5 pl-0.5">
+                    Prints on clean white footer line at bottom of label until changed.
+                  </p>
+                </div>
+
+                {/* 3. Print Options */}
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
                     Print Options
@@ -1488,7 +1827,7 @@ export default function LabelCropper({ showToast }) {
               <div className="flex items-center gap-2">
                 <Scissors className="w-5 h-5 text-emerald-600" />
                 <h3 className="font-bold text-sm text-slate-900">
-                  Cropped Thermal Label Preview (4x6" Landscape)
+                  Cropped Thermal Label Preview ({selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : '4x6" Landscape'})
                 </h3>
               </div>
               <div className="flex items-center gap-2">
@@ -1520,7 +1859,7 @@ export default function LabelCropper({ showToast }) {
 
             <div className="border-t pt-3 flex items-center justify-between">
               <span className="text-xs text-slate-400">
-                Meesho Pure Shipping Label • 100% Tax Invoice Eliminated (LabelMantra Format)
+                {activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated ({selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : 'LabelMantra Format'})
               </span>
               <div className="flex items-center gap-2">
                 <button
