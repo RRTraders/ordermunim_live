@@ -35,7 +35,78 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 // Configure pdfjs worker locally
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+// Supported Marketplaces list (Horizontal scrollview)
+export const MARKETPLACES = [
+  {
+    id: 'ajio',
+    name: 'Ajio',
+    shortName: 'Ajio',
+    tagline: 'Reliance Retail Fashion & Lifestyle',
+    badgeText: 'ajio',
+    badgeStyle: 'bg-slate-950 text-amber-400 border border-slate-700 shadow-amber-500/10',
+    iconLetter: 'A',
+    description: 'Crop and organize Ajio standard & dropship courier manifests with automated barcode cropping.',
+    ready: false
+  },
+  {
+    id: 'amazon',
+    name: 'Amazon',
+    shortName: 'Amazon',
+    tagline: 'Amazon Easy Ship & Seller Flex',
+    badgeText: 'amazon',
+    badgeStyle: 'bg-[#131921] text-[#FF9900] border border-amber-500/30 shadow-orange-500/10',
+    iconLetter: 'a',
+    description: 'Crop and organize Amazon Easy Ship 4x6 thermal shipping labels, FBA barcodes, and multi-package manifests.',
+    ready: false
+  },
+  {
+    id: 'flipcart',
+    name: 'Flipcart',
+    shortName: 'Flipcart',
+    tagline: 'Flipkart Smart & Non-Smart Fulfillment',
+    badgeText: 'flipkart',
+    badgeStyle: 'bg-[#2874F0] text-[#FFE500] border border-blue-400 shadow-blue-500/20',
+    iconLetter: 'F',
+    description: 'Thermal 4x6 shipping label extraction, invoice separation, and SKU sorting for Flipcart orders.',
+    ready: false
+  },
+  {
+    id: 'meesho',
+    name: 'Meesho',
+    shortName: 'Meesho',
+    tagline: 'Meesho Reseller & Supplier Hub',
+    badgeText: 'meesho',
+    badgeStyle: 'bg-gradient-to-tr from-fuchsia-900 to-pink-900 text-white shadow-pink-950/20',
+    iconLetter: 'm',
+    description: 'Crop, sort, and process your Meesho shipping labels automatically. Save time and reduce errors with powerful PDF tools.',
+    ready: true
+  },
+  {
+    id: 'myntra',
+    name: 'Myntra',
+    shortName: 'Myntra',
+    tagline: 'Myntra Partner Portal (PPX)',
+    badgeText: 'myntra',
+    badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
+    iconLetter: 'M',
+    description: 'Multi-item packing slips & 4x6 thermal barcode cropper for Myntra PPX labels and logistics.',
+    ready: false
+  },
+];
+
 export default function LabelCropper({ showToast }) {
+  // Selected marketplace state (default Meesho as developed)
+  const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
+    return localStorage.getItem('om_selected_marketplace') || 'meesho';
+  });
+
+  const handleSelectMarketplace = (id) => {
+    setSelectedMarketplace(id);
+    localStorage.setItem('om_selected_marketplace', id);
+  };
+
+  const activeMarketplace = MARKETPLACES.find(m => m.id === selectedMarketplace) || MARKETPLACES.find(m => m.id === 'meesho');
+
   // Collapsible cards state
   const [reportOpen, setReportOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(true);
@@ -601,7 +672,60 @@ export default function LabelCropper({ showToast }) {
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl">
-      {/* ================= HEADER SECTION ================= */}
+      {/* ================= MARKETPLACE HORIZONTAL SCROLLVIEW ================= */}
+      <div className="mb-6 pb-3 border-b border-slate-200">
+        <div className="flex items-center justify-between mb-2.5 px-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Marketplace
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+              (Choose platform to crop labels)
+            </span>
+          </div>
+          {selectedMarketplace !== 'meesho' && (
+            <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+              In Development
+            </span>
+          )}
+        </div>
+
+        {/* Horizontal Scroll Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 scroll-smooth -mx-1 px-1">
+          {MARKETPLACES.map((mp) => {
+            const isSelected = selectedMarketplace === mp.id;
+            return (
+              <button
+                key={mp.id}
+                type="button"
+                onClick={() => handleSelectMarketplace(mp.id)}
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl whitespace-nowrap text-xs md:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer shadow-sm ${
+                  isSelected
+                    ? 'bg-slate-900 text-white shadow-md shadow-slate-900/25 ring-2 ring-slate-900 ring-offset-2 ring-offset-slate-50 scale-[1.02]'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/90 border border-slate-200'
+                }`}
+              >
+                {/* Marketplace Mini Badge */}
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-black leading-none ${mp.badgeStyle}`}>
+                  {mp.iconLetter}
+                </div>
+                <span>{mp.name}</span>
+                {mp.ready ? (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 ml-0.5" title="Active & Ready" />
+                ) : (
+                  <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200 ml-0.5">
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedMarketplace === 'meesho' ? (
+        <>
+          {/* ================= HEADER SECTION ================= */}
       <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
@@ -1183,6 +1307,82 @@ export default function LabelCropper({ showToast }) {
         </div>
 
       </div>
+        </>
+      ) : (
+        <>
+          {/* ================= MARKETPLACE HEADER ================= */}
+          <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+                {activeMarketplace?.name} Label Cropping and sorting tools
+              </h1>
+              <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
+                {activeMarketplace?.description}
+              </p>
+            </div>
+
+            {/* Active Marketplace Logo Badge */}
+            <div className="flex items-center gap-2">
+              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-md`}>
+                <span className="font-extrabold text-base leading-none">{activeMarketplace?.iconLetter}</span>
+                <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">{activeMarketplace?.badgeText}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ================= UNDER DEVELOPMENT CARD ================= */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm text-center max-w-2xl mx-auto my-6">
+            <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center mb-4 bg-slate-100 text-slate-800 shadow-inner">
+              <Scissors className="w-8 h-8 text-slate-700" />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>In Active Development</span>
+            </div>
+
+            <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">
+              {activeMarketplace?.name} Label Cropper
+            </h2>
+
+            <p className="text-xs md:text-sm text-slate-500 max-w-lg mx-auto mb-6 leading-relaxed">
+              We are fine-tuning the 4x6 thermal cropping layout and barcode parsing algorithms for <strong className="text-slate-800">{activeMarketplace?.name}</strong>. This module will be released in an upcoming update!
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-md mx-auto mb-8">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  4x6 Thermal Cropping
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Precision auto-crop for {activeMarketplace?.name} shipping labels without quality loss.
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  SKU & Order Summary
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Extract product details, quantities, and sort orders automatically.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleSelectMarketplace('meesho')}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-fuchsia-900 to-pink-900 hover:from-fuchsia-800 hover:to-pink-800 text-white font-bold text-xs shadow-lg shadow-pink-950/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>👉 Switch to Meesho Label Cropper</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ================= SKU SUMMARY MODAL ================= */}
       {showSkuModal && (

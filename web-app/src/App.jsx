@@ -2050,10 +2050,6 @@ export default function App() {
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                 </strong>
               </div>
-              <div className="flex items-center justify-between text-slate-400">
-                <span>Account UID</span>
-                <strong className="text-slate-300 font-mono text-[11px] truncate max-w-[180px]">{user?.uid}</strong>
-              </div>
             </div>
 
             {/* Background Sync & Battery Optimization Card */}
