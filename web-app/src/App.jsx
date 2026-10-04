@@ -169,7 +169,7 @@ export default function App() {
   const [broadcastVersionName, setBroadcastVersionName] = useState('1.1');
   const [broadcastTitle, setBroadcastTitle] = useState('New Update Available!');
   const [broadcastMessage, setBroadcastMessage] = useState('We redesigned the app with bottom navigation, mobile toolbar, and faster OTP syncing. Please update your app.');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/meesho-otp/raw/main/meesho_otp.apk');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('grace_period'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
@@ -1133,7 +1133,7 @@ export default function App() {
         versionName: broadcastVersionName.trim() || '1.1',
         title: broadcastTitle.trim() || 'New Update Available!',
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://github.com/RRTraders/meesho-otp/raw/main/meesho_otp.apk',
+        downloadUrl: broadcastUrl.trim() || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk',
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -1170,7 +1170,7 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'grace_period';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://github.com/RRTraders/meesho-otp/raw/main/meesho_otp.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
     const versionName = appUpdateConfig.versionName || `v${targetVersion}`;
 
     if (mode === 'force_immediate') {
@@ -1238,7 +1238,7 @@ export default function App() {
 
   // Trigger APK Download
   const handleInstallAppUpdate = (url) => {
-    const targetUrl = url || 'https://github.com/RRTraders/meesho-otp/raw/main/meesho_otp.apk';
+    const targetUrl = url || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
     showToast('Starting update download...', 'info');
     try {
       const link = document.createElement('a');
@@ -2605,7 +2605,7 @@ export default function App() {
                             value={broadcastUrl}
                             onChange={(e) => setBroadcastUrl(e.target.value)}
                             className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-500"
-                            placeholder="https://github.com/RRTraders/meesho-otp/raw/main/meesho_otp.apk"
+                            placeholder="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
                           />
                           <span className="text-[11px] text-slate-500 mt-1 block">Default: Your Firebase CDN URL. Tapping "Install" downloads directly from here.</span>
                         </div>
