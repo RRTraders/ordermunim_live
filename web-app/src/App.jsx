@@ -66,14 +66,15 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   DownloadCloud,
   Rocket,
   AlertTriangle
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 8;
-const CURRENT_APP_VERSION_NAME = "1.8";
+const CURRENT_APP_VERSION_CODE = 9;
+const CURRENT_APP_VERSION_NAME = "1.9";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -149,6 +150,14 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'admin' | 'staff'
   const [staffShareKey, setStaffShareKey] = useState('');
+  const [expandedStoreIds, setExpandedStoreIds] = useState({});
+
+  const toggleStoreExpand = (storeId) => {
+    setExpandedStoreIds((prev) => ({
+      ...prev,
+      [storeId]: !prev[storeId]
+    }));
+  };
 
   // Native Multi-Device Sessions & Reconnect State
   const [localSessions, setLocalSessions] = useState(() => {
@@ -1901,89 +1910,117 @@ export default function App() {
                       ? [{ courier: acc.courier || 'Courier', otp: acc.currentOtp, handoverCount: acc.handoverCount || 0, dateTime: acc.dateTime }]
                       : []);
 
+                const isExpanded = Boolean(expandedStoreIds[acc.id]);
                 return (
-                  <div key={acc.id} className={`bg-slate-900/90 border-2 ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : 'border-slate-700/80'} rounded-2xl p-5 shadow-xl relative overflow-hidden`}>
+                  <div key={acc.id} className={`bg-slate-900 border ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-cyan-500/40 shadow-lg shadow-cyan-950/20' : 'border-slate-800 hover:border-slate-700/80'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
                     <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-30 select-none pointer-events-none' : ''}`}>
-                      <div className="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-3">
-                        <span className="text-lg font-bold text-white flex items-center gap-2">
-                          📦 {acc.storeName}
-                        </span>
-                        <span className="text-xs text-slate-500 font-mono">
-                          Key: {acc.syncKey}
-                        </span>
-                      </div>
+                      {/* Clickable Header Bar (Tap to Expand/Collapse) */}
+                      <div 
+                        onClick={() => toggleStoreExpand(acc.id)}
+                        className="flex items-center justify-between gap-3 cursor-pointer select-none"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            activeOtps.length > 0 
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' 
+                              : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            <Package className="w-4 h-4" />
+                          </div>
 
-                      {activeOtps.length > 0 ? (
-                        <div className="space-y-3 my-3">
-                          {activeOtps.map((item, idx) => (
-                            <div key={idx} className="bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col gap-2">
-                              {/* Courier Name & Handover Numbers */}
-                              <div className="flex items-center justify-between">
-                                <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-cyan-950 text-cyan-300 border border-cyan-800">
-                                  🚚 {item.courier || 'Courier'}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-base text-white truncate hover:text-cyan-300 transition-colors">
+                                {acc.storeName}
+                              </span>
+                              {activeOtps.length > 0 ? (
+                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
                                 </span>
-                                <span className="text-xs font-bold text-slate-300 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
-                                  📦 {item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-medium">
+                                  No Return
                                 </span>
-                              </div>
-
-                              {/* OTP and Copy button */}
-                              <div className="flex items-center justify-between pt-1">
-                                <div>
-                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                                    Return Handover OTP
-                                  </span>
-                                  <span className="text-3xl md:text-4xl font-black text-amber-400 tracking-wider font-mono">
-                                    {item.otp || '----'}
-                                  </span>
-                                </div>
-                                {item.otp && item.otp !== '----' && (
-                                  <button 
-                                    onClick={() => handleCopy(item.otp, `${acc.id}-${idx}`)}
-                                    className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
-                                  >
-                                    {copiedId === `${acc.id}-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                    {copiedId === `${acc.id}-${idx}` ? 'Copied' : 'Copy'}
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bg-slate-950 rounded-xl p-4 flex items-center justify-between border border-slate-800 my-3">
-                          <div>
-                            <span className="text-xs text-slate-400 block font-medium">RETURN HANDOVER OTP</span>
-                            <span className="text-4xl md:text-5xl font-black text-amber-400 tracking-wider font-mono">
-                              {acc.currentOtp || '----'}
+                            <span className="text-[11px] text-slate-500 font-mono block">
+                              Key: {acc.syncKey}
                             </span>
                           </div>
-                          {acc.currentOtp && acc.currentOtp !== '----' && (
-                            <button 
-                              onClick={() => handleCopy(acc.currentOtp, acc.id)}
-                              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-4 py-2 rounded-xl flex items-center gap-1.5 font-bold text-sm"
-                            >
-                              {copiedId === acc.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                              {copiedId === acc.id ? 'Copied' : 'Copy'}
-                            </button>
-                          )}
                         </div>
-                      )}
 
-                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 mt-2">
-                        <div className="bg-slate-800/40 p-2.5 rounded-lg">
-                          <span className="text-slate-500 block">Total Handover Count</span>
-                          <span className="text-slate-200 font-bold text-sm">
-                            {acc.handoverCount || 0} {acc.handoverCount === 1 ? 'Parcel' : 'Parcels'}
-                          </span>
-                        </div>
-                        <div className="bg-slate-800/40 p-2.5 rounded-lg">
-                          <span className="text-slate-500 block">Time</span>
-                          <span className="text-slate-200 font-bold text-sm">
-                            {acc.dateTime || 'Just now'}
-                          </span>
+                        <div className="p-1 text-slate-400">
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-cyan-400' : ''}`} />
                         </div>
                       </div>
+
+                      {/* Expanded Section: Single Row OTPs */}
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 animate-in fade-in duration-150">
+                          {activeOtps.length > 0 ? (
+                            activeOtps.map((item, idx) => (
+                              <div 
+                                key={idx} 
+                                className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-xl"
+                              >
+                                {/* 1. Courier Name */}
+                                <div className="flex items-center gap-1.5 min-w-[90px] shrink-0">
+                                  <Truck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                  <span className="font-bold text-xs text-white truncate max-w-[120px]">
+                                    {item.courier || 'Courier'}
+                                  </span>
+                                </div>
+
+                                {/* 2. Parcel Count */}
+                                <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
+                                  <Package className="w-3 h-3 text-slate-500" />
+                                  <span>{item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}</span>
+                                </div>
+
+                                {/* 3. OTP Code */}
+                                <div className="font-mono font-black text-base md:text-lg text-amber-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
+                                  {item.otp || '----'}
+                                </div>
+
+                                {/* 4. Copy Icon Button */}
+                                {item.otp && item.otp !== '----' ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopy(item.otp, `${acc.id}-${idx}`);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-300 border border-amber-500/30 transition-all shrink-0 cursor-pointer"
+                                    title="Copy OTP"
+                                  >
+                                    {copiedId === `${acc.id}-${idx}` ? (
+                                      <Check className="w-4 h-4 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <div className="w-7 h-7" />
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/50 rounded-xl text-xs text-slate-500">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                                No active return courier right now
+                              </span>
+                              <span className="font-mono text-slate-500 font-bold">----</span>
+                            </div>
+                          )}
+
+                          {/* Footer Details */}
+                          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                            <span>Checked: {acc.dateTime || 'Just now'}</span>
+                            <span>Total: {acc.handoverCount || 0} parcels</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {isOnHold && (
@@ -3077,6 +3114,7 @@ export default function App() {
                 {accounts.map((acc) => {
                   const isLive = acc.status === 'live';
                   const isOnHold = profile.status === 'on_hold';
+                  const isExpanded = Boolean(expandedStoreIds[acc.id]);
                   const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
                     ? acc.otpList
                     : (acc.currentOtp && acc.currentOtp !== '----'
@@ -3086,145 +3124,176 @@ export default function App() {
                   return (
                     <div 
                       key={acc.id} 
-                      className={`bg-slate-900 border ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : 'border-slate-800 hover:border-slate-700/80'} rounded-2xl p-5 shadow-xl transition-all relative overflow-hidden flex flex-col justify-between`}
+                      className={`bg-slate-900 border ${
+                        isOnHold 
+                          ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' 
+                          : isExpanded 
+                          ? 'border-cyan-500/40 shadow-lg shadow-cyan-950/20' 
+                          : 'border-slate-800 hover:border-slate-700/80'
+                      } rounded-2xl p-4 transition-all shadow-md`}
                     >
                       {/* Inner Card Content (Blurred when on hold) */}
-                      <div className={`flex flex-col justify-between h-full transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-25 select-none pointer-events-none' : ''}`}>
-                        {/* Top Bar: Account Holder Name & Actions */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-3">
-                            <div>
-                              <span className="font-bold text-lg text-white block">
-                                {acc.storeName}
-                              </span>
-                              <span className="text-[11px] text-slate-500 font-mono">
+                      <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-25 select-none pointer-events-none' : ''}`}>
+                        {/* Clickable Header Bar (Tap Holder Name to Show/Hide OTP) */}
+                        <div 
+                          onClick={() => toggleStoreExpand(acc.id)}
+                          className="flex items-center justify-between gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                              activeOtps.length > 0 
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' 
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              <Package className="w-4 h-4" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-base text-white truncate hover:text-cyan-300 transition-colors">
+                                  {acc.storeName}
+                                </span>
+                                {activeOtps.length > 0 ? (
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                    {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-medium">
+                                    No Return
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 font-mono block">
                                 Sync Key: {acc.syncKey}
                               </span>
                             </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleManualRefresh(acc.syncKey, acc.storeName)}
-                                disabled={refreshingId === acc.syncKey}
-                                className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors disabled:opacity-50"
-                                title="Check for live OTP now"
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-cyan-400' : ''}`} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAccount(acc.id, acc.storeName)}
-                                className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
-                                title="Remove store"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
                           </div>
 
-                          {/* Couriers & OTPs List (Courier Name, OTP, Handover Numbers) */}
-                          {activeOtps.length > 0 ? (
-                            <div className="space-y-3 my-2">
-                              {activeOtps.map((item, idx) => (
-                                <div key={idx} className="bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col gap-2">
-                                  {/* Courier Name & Handover Numbers */}
-                                  <div className="flex items-center justify-between">
-                                    <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-cyan-950 text-cyan-300 border border-cyan-800">
-                                      🚚 {item.courier || 'Courier'}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-300 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
-                                      📦 {item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}
-                                    </span>
-                                  </div>
-
-                                  {/* OTP and Copy button */}
-                                  <div className="flex items-center justify-between pt-1">
-                                    <div>
-                                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                                        Return Handover OTP
-                                      </span>
-                                      <span className="text-3xl md:text-4xl font-black font-mono text-amber-400 tracking-wider">
-                                        {item.otp || '----'}
-                                      </span>
-                                    </div>
-
-                                    {item.otp && item.otp !== '----' && (
-                                      <button
-                                        onClick={() => handleCopy(item.otp, `${acc.id}-${idx}`)}
-                                        className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
-                                      >
-                                        {copiedId === `${acc.id}-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                        {copiedId === `${acc.id}-${idx}` ? 'Copied' : 'Copy'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
+                          {/* Actions & Chevron */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManualRefresh(acc.syncKey, acc.storeName);
+                              }}
+                              disabled={refreshingId === acc.syncKey}
+                              className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors disabled:opacity-50"
+                              title="Check for live OTP now"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-cyan-400' : ''}`} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAccount(acc.id, acc.storeName);
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+                              title="Remove store"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="p-1 text-slate-400">
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-cyan-400' : ''}`} />
                             </div>
-                          ) : (
-                            <div className="bg-slate-950 rounded-2xl p-4 my-2 border border-slate-800 flex items-center justify-between">
-                              <div>
-                                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                                  Return Handover OTP
-                                </span>
-                                <div className="flex items-baseline gap-2 mt-0.5">
-                                  <span className="text-3xl md:text-4xl font-black font-mono text-slate-500 tracking-wider">
-                                    ----
-                                  </span>
+                          </div>
+                        </div>
+
+                        {/* Expanded Section: Single Row OTPs */}
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 animate-in fade-in duration-150">
+                            {activeOtps.length > 0 ? (
+                              activeOtps.map((item, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-xl"
+                                >
+                                  {/* 1. Courier Name */}
+                                  <div className="flex items-center gap-1.5 min-w-[90px] shrink-0">
+                                    <Truck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                    <span className="font-bold text-xs text-white truncate max-w-[120px]">
+                                      {item.courier || 'Courier'}
+                                    </span>
+                                  </div>
+
+                                  {/* 2. Parcel Count */}
+                                  <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
+                                    <Package className="w-3 h-3 text-slate-500" />
+                                    <span>{item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}</span>
+                                  </div>
+
+                                  {/* 3. OTP Code */}
+                                  <div className="font-mono font-black text-base md:text-lg text-amber-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
+                                    {item.otp || '----'}
+                                  </div>
+
+                                  {/* 4. Copy Icon Button */}
+                                  {item.otp && item.otp !== '----' ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopy(item.otp, `${acc.id}-${idx}`);
+                                      }}
+                                      className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-300 border border-amber-500/30 transition-all shrink-0 cursor-pointer"
+                                      title="Copy OTP"
+                                    >
+                                      {copiedId === `${acc.id}-${idx}` ? (
+                                        <Check className="w-4 h-4 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <div className="w-7 h-7" />
+                                  )}
                                 </div>
+                              ))
+                            ) : (
+                              <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/50 rounded-xl text-xs text-slate-500">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                                  No active return courier right now
+                                </span>
+                                <span className="font-mono text-slate-500 font-bold">----</span>
                               </div>
-                              <span className="text-xs text-slate-500">No Return</span>
+                            )}
+
+                            {/* Footer Details */}
+                            <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                              <span>Checked: {acc.dateTime || 'Just now'}</span>
+                              {(() => {
+                                const hasSess = Boolean(
+                                  localSessions[acc.syncKey] || localSessions[acc.id] || acc.cookies
+                                );
+                                if (hasSess) {
+                                  return (
+                                    <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      Auto-Sync Active
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReconnectAccount(acc);
+                                      setReconnectPass('');
+                                      setReconnectError('');
+                                      setShowReconnectModal(true);
+                                    }}
+                                    className="text-amber-400 hover:text-amber-300 font-medium cursor-pointer"
+                                  >
+                                    Tap to Connect
+                                  </button>
+                                );
+                              })()}
                             </div>
-                          )}
-                        </div>
-
-                        {/* Card Details Footer */}
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-800/80 text-xs">
-                          <div className="bg-slate-950/60 p-2 rounded-xl">
-                            <span className="text-slate-500 text-[10px] block">Total Handover</span>
-                            <span className="font-bold text-slate-200">
-                              {acc.handoverCount || 0} {acc.handoverCount === 1 ? 'Parcel' : 'Parcels'}
-                            </span>
                           </div>
-                          <div className="bg-slate-950/60 p-2 rounded-xl">
-                            <span className="text-slate-500 text-[10px] block">Time</span>
-                            <span className="font-bold text-slate-200">
-                              {acc.dateTime || 'N/A'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Sync Status Banner */}
-                        <div className="mt-2 text-[10px] flex items-center justify-between text-slate-500">
-                          {(() => {
-                            const hasSess = Boolean(
-                              localSessions[acc.syncKey] || localSessions[acc.id] || acc.cookies
-                            );
-                            if (hasSess) {
-                              return (
-                                <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                  Active Auto-Sync
-                                </span>
-                              );
-                            }
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReconnectAccount(acc);
-                                  setReconnectPass('');
-                                  setReconnectError('');
-                                  setShowReconnectModal(true);
-                                }}
-                                className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 transition-all cursor-pointer"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                                Tap to Connect Session
-                              </button>
-                            );
-                          })()}
-                          <span className="font-mono text-slate-500">Key: {acc.syncKey}</span>
-                        </div>
+                        )}
                       </div>
 
                       {/* On Hold Overlay Badge */}
