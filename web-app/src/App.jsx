@@ -72,8 +72,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 4;
-const CURRENT_APP_VERSION_NAME = "1.4";
+const CURRENT_APP_VERSION_CODE = 5;
+const CURRENT_APP_VERSION_NAME = "1.5";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -197,6 +197,24 @@ export default function App() {
 
   const [appUpdateConfig, setAppUpdateConfig] = useState(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [dismissedUpdateCode, setDismissedUpdateCode] = useState(() => {
+    try {
+      const v = localStorage.getItem('om_dismissed_update_code');
+      return v ? Number(v) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleDismissUpdate = (targetCode) => {
+    setUpdateDismissed(true);
+    if (targetCode) {
+      setDismissedUpdateCode(Number(targetCode));
+      try {
+        localStorage.setItem('om_dismissed_update_code', String(targetCode));
+      } catch {}
+    }
+  };
   const [updateDownloading, setUpdateDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0); // 0 to 100
   const [updateStatusText, setUpdateStatusText] = useState('');
@@ -1406,6 +1424,12 @@ export default function App() {
 
   // Compute In-App Update Status for Current User
   const getAppUpdateStatus = () => {
+    // Only prompt for APK update on native Android mobile app!
+    // On web / desktop browsers, the app is already live from Firebase Hosting.
+    if (!isNativeMobile()) {
+      return { shouldPrompt: false };
+    }
+
     if (!appUpdateConfig || !appUpdateConfig.active) {
       return { shouldPrompt: false };
     }
@@ -1432,6 +1456,9 @@ export default function App() {
     }
 
     if (mode === 'optional') {
+      if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetVersion)) {
+        return { shouldPrompt: false };
+      }
       return {
         shouldPrompt: true,
         isForce: false,
@@ -1457,6 +1484,10 @@ export default function App() {
         message: appUpdateConfig.message || `Your ${appUpdateConfig.graceDays || 2}-day grace period has expired. You must update to version ${versionName} to continue using Meesho OTP.`,
         versionName
       };
+    }
+
+    if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetVersion)) {
+      return { shouldPrompt: false };
     }
 
     const diffMs = Math.max(0, deadline - now);
@@ -1504,7 +1535,7 @@ export default function App() {
           localStorage.setItem('om_installed_version_name', String(newName));
           setInstalledVersionCode(newCode);
           setInstalledVersionName(newName);
-          setUpdateDismissed(true);
+          handleDismissUpdate(newCode);
         } else if (progress.status === 'connecting') {
           setUpdateStatusText('Connecting to update server...');
         }
@@ -3551,7 +3582,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => setUpdateDismissed(true)}
+                onClick={() => handleDismissUpdate(Number(appUpdateConfig?.versionCode))}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
                 title="Dismiss for now"
               >
@@ -3562,7 +3593,7 @@ export default function App() {
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80">
               <button
                 type="button"
-                onClick={() => setUpdateDismissed(true)}
+                onClick={() => handleDismissUpdate(Number(appUpdateConfig?.versionCode))}
                 className="px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 Remind Me Later

@@ -159,7 +159,7 @@ export async function getAppVersionInfo() {
       if (info && info.versionCode) {
         return {
           versionCode: Number(info.versionCode),
-          versionName: String(info.versionName || '1.4')
+          versionName: String(info.versionName || '1.5')
         };
       }
     } catch (err) {

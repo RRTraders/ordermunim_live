@@ -542,6 +542,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().t
 // Automatic Cloudflare Tunnel Manager
 const { spawn } = require('child_process');
 let cloudflareProcess = null;
+let activeTunnelUrl = null;
 
 function ensureCloudflareTunnel() {
   if (process.env.RENDER_EXTERNAL_URL) return;
@@ -550,9 +551,15 @@ function ensureCloudflareTunnel() {
 
   log('[Tunnel] Starting fresh Cloudflare HTTPS tunnel...');
   try {
-    cloudflareProcess = spawn(cfBinary, ['tunnel', '--url', `http://localhost:${PORT}`], {
-      stdio: 'ignore',
-      detached: false
+    cloudflareProcess = spawn(cfBinary, ['tunnel', '--url', `http://localhost:${PORT}`]);
+    cloudflareProcess.stderr.on('data', (data) => {
+      const text = data.toString();
+      const match = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+      if (match && match[0] !== activeTunnelUrl) {
+        activeTunnelUrl = match[0];
+        log(`[Tunnel] Live Cloudflare URL: ${activeTunnelUrl}`);
+        updateServerHeartbeat(activeTunnelUrl);
+      }
     });
     cloudflareProcess.on('error', (err) => log(`[Tunnel] Error: ${err.message}`));
   } catch (e) {
@@ -563,24 +570,9 @@ function ensureCloudflareTunnel() {
 process.on('exit', () => { if (cloudflareProcess) try { cloudflareProcess.kill(); } catch (e) {} });
 process.on('SIGINT', () => { if (cloudflareProcess) try { cloudflareProcess.kill(); } catch (e) {} process.exit(); });
 
-async function checkLocalTunnel() {
-  if (process.env.RENDER_EXTERNAL_URL) return null;
-  try {
-    const res = await fetch('http://127.0.0.1:20241/quicktunnel');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.hostname) {
-        return `https://${data.hostname}`;
-      }
-    }
-  } catch (e) {}
-  return null;
-}
-
 async function updateServerHeartbeat(explicitUrl) {
   try {
-    const autoTunnel = await checkLocalTunnel();
-    const apiUrl = explicitUrl || autoTunnel || process.env.RENDER_EXTERNAL_URL || process.env.TUNNEL_URL || null;
+    const apiUrl = explicitUrl || activeTunnelUrl || process.env.RENDER_EXTERNAL_URL || process.env.TUNNEL_URL || null;
     const maskParam = apiUrl ? '&updateMask.fieldPaths=apiUrl&updateMask.fieldPaths=tunnelUrl' : '';
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/config/server?updateMask.fieldPaths=lastOnline${maskParam}`;
     const fields = { lastOnline: { stringValue: new Date().toISOString() } };
