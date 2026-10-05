@@ -72,8 +72,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 7;
-const CURRENT_APP_VERSION_NAME = "1.7";
+const CURRENT_APP_VERSION_CODE = 8;
+const CURRENT_APP_VERSION_NAME = "1.8";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -3025,27 +3025,31 @@ export default function App() {
             )}
 
             {/* Account Quota & Controls Bar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base md:text-lg font-bold text-white">Connected Stores</h2>
-                  <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                    {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base md:text-lg font-bold text-white">Connected Stores</h2>
+                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                  {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
+                </span>
+                {accounts.length >= (profile.maxAccounts ?? 0) && (
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                    Limit Reached
                   </span>
-                </div>
+                )}
               </div>
 
-              <div className="flex items-center gap-2.5 w-full md:w-auto">
+              {/* Desktop Web Only: Add Store Button (On Mobile, replaced with Floating Action Button) */}
+              <div className="hidden md:flex items-center gap-2.5">
                 {accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
-                    className="flex-1 md:flex-initial px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all"
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Plus className="w-4 h-4" />
-                    + Add Store
+                    Add Store
                   </button>
                 ) : (
-                  <span className="text-xs text-slate-400 bg-slate-800/80 border border-slate-700 px-3 py-2 rounded-xl">
+                  <span className="text-xs text-slate-400 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
                     {profile.status === 'on_hold' ? 'Account On Hold' : 'Store Limit Reached'}
                   </span>
                 )}
@@ -3606,6 +3610,30 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      {/* ================= MOBILE APP FLOATING ACTION BUTTON (FAB) ================= */}
+      {/* Positioned at right bottom above navigation bar, showing only + icon in rounded circular shape */}
+      {activeTab === 'dashboard' && (
+        <button
+          type="button"
+          onClick={() => {
+            if (profile?.status === 'on_hold') {
+              showToast('Account is on hold. Please clear payment to add stores.', 'error');
+              return;
+            }
+            if (accounts.length >= (profile.maxAccounts ?? 0)) {
+              showToast(`Store limit reached (${accounts.length}/${profile.maxAccounts ?? 0} slots used). Contact admin to add slots.`, 'info');
+              return;
+            }
+            handleOpenAddModal();
+          }}
+          aria-label="Add Meesho Store"
+          title="Add Meesho Store"
+          className="fixed bottom-20 right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-90 text-white shadow-2xl shadow-cyan-500/50 flex items-center justify-center border-2 border-cyan-300/40 transition-transform duration-200 md:hidden cursor-pointer"
+        >
+          <Plus className="w-7 h-7 stroke-[2.5]" />
+        </button>
+      )}
 
       {/* ================= FANCY CONFIRMATION DIALOG ================= */}
       {confirmDialog && (
