@@ -1317,14 +1317,11 @@ export default function LabelCropper({ showToast }) {
       {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart') ? (
         <>
           {/* ================= HEADER SECTION ================= */}
-          <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
                 {activeMarketplace?.name} Label Cropping and sorting tools
               </h1>
-              <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
-                {activeMarketplace?.description}
-              </p>
             </div>
 
             {/* Active Marketplace Logo Badge */}
@@ -1969,14 +1966,11 @@ export default function LabelCropper({ showToast }) {
       ) : (
         <>
           {/* ================= MARKETPLACE HEADER ================= */}
-          <div className="flex items-start justify-between pb-6 border-b border-slate-200 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
                 {activeMarketplace?.name} Label Cropping and sorting tools
               </h1>
-              <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
-                {activeMarketplace?.description}
-              </p>
             </div>
 
             {/* Active Marketplace Logo Badge */}

@@ -73,8 +73,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 10;
-const CURRENT_APP_VERSION_NAME = "2.0";
+const CURRENT_APP_VERSION_CODE = 11;
+const CURRENT_APP_VERSION_NAME = "2.1";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
