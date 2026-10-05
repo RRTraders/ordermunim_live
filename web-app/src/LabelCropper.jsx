@@ -399,25 +399,40 @@ export default function LabelCropper({ showToast }) {
       }
 
       // ================= MEESHO PARSING (ORIGINAL) =================
-      // 1. Detect Courier Name
-      let courier = n(/([A-Za-z0-9\-]+(?:\s+[A-Za-z0-9\-]+)?)\s+Pickup/i);
-      courier = courier.replace(/^(?:app|via|by|return|cash|cod|prepaid|amount|rs)\s+/i, '').trim();
-      if (courier.toLowerCase() === 'valmoplus') courier = 'Valmo';
-
-      // Comprehensive fallback courier patterns
-      if (!courier || courier.length < 2 || /^(?:the|on|app)$/i.test(courier)) {
-        if (/\bvalmo\b/i.test(rawText) || /\bVL\d{8,}/i.test(rawText)) courier = 'Valmo';
-        else if (/\bshadowfax\b/i.test(rawText) || /\bSF\d{8,}/i.test(rawText)) courier = 'Shadowfax';
-        else if (/\bdelhivery\b/i.test(rawText)) courier = 'Delhivery';
-        else if (/\bxpress\s*bees\b/i.test(rawText) || /\bxpressbees\b/i.test(rawText)) courier = 'XpressBees';
-        else if (/\becom\s*express\b/i.test(rawText)) courier = 'Ecom Express';
-        else if (/\bdtdc\b/i.test(rawText)) courier = 'DTDC';
-        else if (/\bblue\s*dart\b/i.test(rawText)) courier = 'Blue Dart';
-        else if (/\bsmartr\b/i.test(rawText)) courier = 'Smartr';
-        else if (/\bamazon\b/i.test(rawText) || /\bats\b/i.test(rawText)) courier = 'Amazon Shipping';
-        else if (/\bekart\b/i.test(rawText)) courier = 'Ekart';
-        else courier = 'Unknown Courier';
+      // 1. Detect Courier Name with priority on known logistics networks
+      let courier = '';
+      if (/\bvalmo\b/i.test(rawText) || /\bVL\d{8,}/i.test(rawText) || /\bvalmoplus\b/i.test(rawText)) {
+        courier = 'Valmo';
+      } else if (/\bshadowfax\b/i.test(rawText) || /\bSF\d{8,}/i.test(rawText)) {
+        courier = 'Shadowfax';
+      } else if (/\bdelhivery\b/i.test(rawText)) {
+        courier = 'Delhivery';
+      } else if (/\bxpress\s*bees\b/i.test(rawText) || /\bxpressbees\b/i.test(rawText)) {
+        courier = 'Xpress Bees';
+      } else if (/\becom\s*express\b/i.test(rawText)) {
+        courier = 'Ecom Express';
+      } else if (/\bdtdc\b/i.test(rawText)) {
+        courier = 'DTDC';
+      } else if (/\bblue\s*dart\b/i.test(rawText) || /\bbluedart\b/i.test(rawText)) {
+        courier = 'Blue Dart';
+      } else if (/\bsmartr\b/i.test(rawText)) {
+        courier = 'Smartr';
+      } else if (/\bamazon\b/i.test(rawText) || /\bats\b/i.test(rawText)) {
+        courier = 'Amazon Shipping';
+      } else if (/\bekart\b/i.test(rawText)) {
+        courier = 'Ekart';
+      } else {
+        // Fallback courier regex before "Pickup"
+        const m = rawText.match(/([A-Za-z0-9\-]+(?:\s+[A-Za-z0-9\-]+)?)\s+Pickup/i);
+        if (m) {
+          courier = (m[1] || m[0]).replace(/[\r\n]+/g, ' ').trim();
+          courier = courier.replace(/^(?:exchange|return|forward|pickup|app|via|by|cash|cod|prepaid|amount|rs)\s+/i, '').trim();
+        }
+        if (!courier || courier.length < 2 || /^(?:the|on|app)$/i.test(courier)) {
+          courier = 'Unknown Courier';
+        }
       }
+      courier = String(courier).replace(/[\r\n]+/g, ' ').trim();
 
       // 2. Detect SKU / Size / Quantity / Color / Order Number
       let sku = 'General-Item';
@@ -860,7 +875,10 @@ export default function LabelCropper({ showToast }) {
               skuSummaryMap[sName].size = sSize;
             }
 
-            const cName = it.courier || (selectedMarketplace === 'flipcart' ? 'E-Kart Logistics' : 'Valmo');
+            let rawCourier = it.courier || (selectedMarketplace === 'flipcart' ? 'E-Kart Logistics' : 'Valmo');
+            rawCourier = String(rawCourier).replace(/[\r\n]+/g, ' ').trim();
+            rawCourier = rawCourier.replace(/^(?:exchange|return|forward|pickup)\s+/i, '').trim() || 'Valmo';
+            const cName = rawCourier;
             if (!courierSummaryMap[cName]) {
               courierSummaryMap[cName] = { parcels: 0, qty: 0 };
             }
@@ -1027,7 +1045,7 @@ export default function LabelCropper({ showToast }) {
           curY -= 35;
 
           // 4. Section 2: "Courier Summary"
-          if (curY < 120) {
+          if (curY < 160) {
             curSlipPage = outDoc.addPage([pageW, pageH]);
             curY = pageH - 45;
           }
@@ -1084,8 +1102,13 @@ export default function LabelCropper({ showToast }) {
 
           // Table 2 Rows
           for (const cName of sortedPackingCouriers) {
+            if (curY < 60) {
+              curSlipPage = outDoc.addPage([pageW, pageH]);
+              curY = pageH - 45;
+            }
             const cData = courierSummaryMap[cName];
-            curSlipPage.drawText(cName, {
+            const cleanCName = String(cName).replace(/[\r\n]+/g, ' ').trim().slice(0, 35);
+            curSlipPage.drawText(cleanCName, {
               x: leftX,
               y: curY,
               size: rowFontSize,
