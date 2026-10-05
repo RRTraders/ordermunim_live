@@ -128,7 +128,7 @@ async function fetchOTPWithCookies(identifier, cookies) {
       if (rawList.length > 0) {
         // Map ALL couriers — not just the first one
         const otpList = rawList.map(item => ({
-          otp: item.otp || '----',
+          otp: item.otp || item.otp_details?.find(d => d.active !== false)?.otp || item.otp_details?.[0]?.otp || '----',
           courier: item.carrier_details?.name || item.carrier_name || 'Courier',
           // Meesho uses total_handover_count; fallback chain covers API variations
           handoverCount:
@@ -137,8 +137,8 @@ async function fetchOTPWithCookies(identifier, cookies) {
             item.delivery_shipment_details?.total_shipment_count ??
             item.count ??
             0,
-          dateTime: item.otp_expiry_timestamp
-            ? new Date(item.otp_expiry_timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+          dateTime: (item.otp_expiry_timestamp || item.otp_details?.[0]?.expiry_timestamp)
+            ? new Date(item.otp_expiry_timestamp || item.otp_details?.[0]?.expiry_timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
             : new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
         }));
         log(`[OTP API] All couriers: ${JSON.stringify(otpList)}`);

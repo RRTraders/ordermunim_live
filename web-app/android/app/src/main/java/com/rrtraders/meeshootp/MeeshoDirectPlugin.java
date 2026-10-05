@@ -379,6 +379,24 @@ public class MeeshoDirectPlugin extends Plugin {
                         JSONObject otpObj = new JSONObject();
 
                         String otpStr = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "----")));
+                        String exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
+
+                        // Support Meesho nested otp_details array
+                        JSONArray details = item.optJSONArray("otp_details");
+                        if (details != null && details.length() > 0) {
+                            for (int j = 0; j < details.length(); j++) {
+                                JSONObject d = details.optJSONObject(j);
+                                if (d != null && d.optBoolean("active", true)) {
+                                    String candidate = d.optString("otp", "");
+                                    if (!candidate.isEmpty() && !candidate.equals("----")) {
+                                        otpStr = candidate;
+                                        String dExp = d.optString("expiry_timestamp", "");
+                                        if (!dExp.isEmpty()) exp = dExp;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         otpObj.put("otp", otpStr);
 
                         JSONObject carrier = item.optJSONObject("carrier_details");
@@ -397,9 +415,10 @@ public class MeeshoDirectPlugin extends Plugin {
                         otpObj.put("handoverCount", count);
                         totalCount += count;
 
-                        // Parse formatted time
                         String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                        String exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
+                        if (exp.isEmpty()) {
+                            exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
+                        }
                         if (!exp.isEmpty()) {
                             try {
                                 if (exp.matches("\\d+")) {

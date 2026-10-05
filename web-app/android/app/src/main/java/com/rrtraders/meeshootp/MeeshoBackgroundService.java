@@ -233,6 +233,19 @@ public class MeeshoBackgroundService extends Service {
                     for (int i = 0; i < otps.length(); i++) {
                         JSONObject item = otps.getJSONObject(i);
                         String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "")));
+                        JSONArray details = item.optJSONArray("otp_details");
+                        if (details != null && details.length() > 0) {
+                            for (int j = 0; j < details.length(); j++) {
+                                JSONObject d = details.optJSONObject(j);
+                                if (d != null && d.optBoolean("active", true)) {
+                                    String candidate = d.optString("otp", "");
+                                    if (!candidate.isEmpty() && !candidate.equals("----")) {
+                                        otp = candidate;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         if (otp.isEmpty() || otp.equals("----")) continue;
 
                         JSONObject carrier = item.optJSONObject("carrier_details");
