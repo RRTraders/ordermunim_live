@@ -219,21 +219,33 @@ public class MeeshoBackgroundService extends Service {
                 JSONObject json = new JSONObject(resp.isEmpty() ? "{}" : resp);
                 JSONArray otps = json.optJSONArray("supplier_delivery_otp");
 
+                // Fallback if wrapped in data object
+                if (otps == null && json.has("data")) {
+                    Object d = json.get("data");
+                    if (d instanceof JSONObject) {
+                        otps = ((JSONObject) d).optJSONArray("supplier_delivery_otp");
+                    } else if (d instanceof JSONArray) {
+                        otps = (JSONArray) d;
+                    }
+                }
+
                 if (otps != null && otps.length() > 0) {
                     for (int i = 0; i < otps.length(); i++) {
                         JSONObject item = otps.getJSONObject(i);
-                        String otp = item.optString("otp", "");
+                        String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "")));
                         if (otp.isEmpty() || otp.equals("----")) continue;
 
                         JSONObject carrier = item.optJSONObject("carrier_details");
-                        String courier = carrier != null ? carrier.optString("name", "Courier") : item.optString("carrier_name", "Courier");
+                        String courier = carrier != null ? carrier.optString("name", carrier.optString("carrier_name", "Courier")) : item.optString("carrier_name", item.optString("name", "Courier"));
                         if (courier.equalsIgnoreCase("delhivery")) courier = "Delhivery";
                         else if (courier.equalsIgnoreCase("shadowfax")) courier = "Shadowfax";
                         else if (courier.equalsIgnoreCase("xpressbees")) courier = "Xpressbees";
 
-                        int count = item.optInt("count", item.optInt("total_handover_count", 0));
+                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", 0)));
                         JSONObject dsd = item.optJSONObject("delivery_shipment_details");
-                        if (count == 0 && dsd != null) count = dsd.optInt("total_shipment_count", 0);
+                        if (count == 0 && dsd != null) {
+                            count = dsd.optInt("total_handover_count", dsd.optInt("total_shipment_count", dsd.optInt("count", 0)));
+                        }
 
                         String lastNotifiedKey = "last_notified_" + syncKey + "_" + courier;
                         String lastNotified = prefs.getString(lastNotifiedKey, "");

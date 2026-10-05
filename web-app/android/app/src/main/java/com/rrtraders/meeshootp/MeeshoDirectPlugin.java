@@ -352,10 +352,22 @@ public class MeeshoDirectPlugin extends Plugin {
             }
 
             int code = conn.getResponseCode();
+            android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs response code: " + code + " for identifier: " + identifier);
             if (code == 200) {
                 String resp = readStream(conn.getInputStream());
+                android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs body: " + (resp.length() > 500 ? resp.substring(0, 500) : resp));
                 JSONObject json = new JSONObject(resp.isEmpty() ? "{}" : resp);
                 JSONArray otps = json.optJSONArray("supplier_delivery_otp");
+
+                // Fallback if wrapped in data object
+                if (otps == null && json.has("data")) {
+                    Object d = json.get("data");
+                    if (d instanceof JSONObject) {
+                        otps = ((JSONObject) d).optJSONArray("supplier_delivery_otp");
+                    } else if (d instanceof JSONArray) {
+                        otps = (JSONArray) d;
+                    }
+                }
 
                 if (otps != null && otps.length() > 0) {
                     JSONArray resultList = new JSONArray();
@@ -366,28 +378,28 @@ public class MeeshoDirectPlugin extends Plugin {
                         JSONObject item = otps.getJSONObject(i);
                         JSONObject otpObj = new JSONObject();
 
-                        String otpStr = item.optString("otp", "----");
+                        String otpStr = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "----")));
                         otpObj.put("otp", otpStr);
 
                         JSONObject carrier = item.optJSONObject("carrier_details");
-                        String carrierName = carrier != null ? carrier.optString("name", "Courier") : item.optString("carrier_name", "Courier");
+                        String carrierName = carrier != null ? carrier.optString("name", carrier.optString("carrier_name", "Courier")) : item.optString("carrier_name", item.optString("name", "Courier"));
                         if (carrierName.equalsIgnoreCase("delhivery")) carrierName = "Delhivery";
                         else if (carrierName.equalsIgnoreCase("shadowfax")) carrierName = "Shadowfax";
                         else if (carrierName.equalsIgnoreCase("xpressbees")) carrierName = "Xpressbees";
                         else if (carrierName.equalsIgnoreCase("ecom_express")) carrierName = "Ecom Express";
                         otpObj.put("courier", carrierName);
 
-                        int count = item.optInt("count", item.optInt("total_handover_count", 0));
+                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", 0)));
                         JSONObject dsd = item.optJSONObject("delivery_shipment_details");
                         if (count == 0 && dsd != null) {
-                            count = dsd.optInt("total_shipment_count", 0);
+                            count = dsd.optInt("total_handover_count", dsd.optInt("total_shipment_count", dsd.optInt("count", 0)));
                         }
                         otpObj.put("handoverCount", count);
                         totalCount += count;
 
                         // Parse formatted time
                         String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                        String exp = item.optString("otp_expiry_timestamp", "");
+                        String exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
                         if (!exp.isEmpty()) {
                             try {
                                 if (exp.matches("\\d+")) {
@@ -418,11 +430,20 @@ public class MeeshoDirectPlugin extends Plugin {
                     JSONObject first = resultList.getJSONObject(0);
                     def.put("otp", first.optString("otp", "----"));
                     def.put("dateTime", first.optString("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date())));
+                    android.util.Log.d("MeeshoDirect", "Found " + resultList.length() + " active OTPs for " + identifier + ". First OTP: " + def.optString("otp", "----"));
                 }
             } else if (code == 401 || code == 403) {
+                android.util.Log.w("MeeshoDirect", "Session expired (HTTP " + code + ") for identifier: " + identifier);
                 def.put("expired", true);
+            } else {
+                String errResp = readStream(conn.getErrorStream());
+                android.util.Log.w("MeeshoDirect", "fetchDeliveryOTPs error HTTP " + code + ": " + errResp);
+                def.put("error", "HTTP " + code);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            android.util.Log.e("MeeshoDirect", "fetchDeliveryOTPs exception: " + e.getMessage(), e);
+            def.put("error", e.getMessage());
+        }
 
         return def;
     }
