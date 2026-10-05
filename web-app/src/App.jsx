@@ -150,6 +150,21 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'admin' | 'staff'
   const [staffShareKey, setStaffShareKey] = useState('');
 
+  // Native Multi-Device Sessions & Reconnect State
+  const [localSessions, setLocalSessions] = useState(() => {
+    try {
+      const raw = localStorage.getItem('native_meesho_sessions');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [showReconnectModal, setShowReconnectModal] = useState(false);
+  const [reconnectAccount, setReconnectAccount] = useState(null);
+  const [reconnectPass, setReconnectPass] = useState('');
+  const [reconnectLoading, setReconnectLoading] = useState(false);
+  const [reconnectError, setReconnectError] = useState('');
+
   // Admin Panel State
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminInputPass, setAdminInputPass] = useState('');
@@ -450,6 +465,64 @@ export default function App() {
     }
   }, [accounts.map(a => a.currentOtp).join(',')]);
 
+  // 1. Multi-Device Session Hydration (Firestore -> Phone localStorage & Background Service)
+  useEffect(() => {
+    if (!isNativeMobile() || accounts.length === 0) return;
+    try {
+      const rawSessions = localStorage.getItem('native_meesho_sessions');
+      const cur = rawSessions ? JSON.parse(rawSessions) : {};
+      let changed = false;
+
+      for (const acc of accounts) {
+        const key = acc.syncKey || acc.id;
+        const existing = cur[key] || cur[acc.id];
+        if (!existing && (acc.cookies || (acc.email && acc.password))) {
+          cur[key] = {
+            email: acc.email || '',
+            password: acc.password || '',
+            identifier: acc.identifier || '',
+            supplierId: acc.supplierId || 0,
+            storeName: acc.storeName || '',
+            cookies: acc.cookies || ''
+          };
+          changed = true;
+        } else if (existing && acc.cookies && existing.cookies !== acc.cookies) {
+          existing.cookies = acc.cookies;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
+        setLocalSessions(cur);
+        syncBackgroundSessions(cur);
+      }
+    } catch (e) {}
+  }, [accounts]);
+
+  // 2. Multi-Device Cloud Backup (Phone localStorage -> Firestore for other devices)
+  useEffect(() => {
+    if (!user || accounts.length === 0) return;
+    try {
+      const rawSessions = localStorage.getItem('native_meesho_sessions');
+      if (!rawSessions) return;
+      const cur = JSON.parse(rawSessions);
+
+      for (const acc of accounts) {
+        const sess = cur[acc.syncKey] || cur[acc.id];
+        if (sess && (!acc.cookies || !acc.password)) {
+          updateDoc(doc(db, 'accounts', acc.id), {
+            cookies: sess.cookies || '',
+            password: sess.password || '',
+            identifier: sess.identifier || acc.identifier || '',
+            supplierId: sess.supplierId || acc.supplierId || 0,
+            email: sess.email || acc.email || ''
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  }, [accounts, user]);
+
   // On Native Mobile App: Poll Meesho OTP API directly on phone & keep 24/7 background service synced
   useEffect(() => {
     if (!isNativeMobile()) return;
@@ -475,9 +548,30 @@ export default function App() {
         }
 
         for (const [key, sess] of Object.entries(sessions)) {
-          if (!sess.identifier || !sess.cookies) continue;
+          if (!sess.identifier && !sess.email) continue;
 
-          const otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
+          // If cookies missing but credentials exist, attempt initial login
+          if (!sess.cookies && sess.email && sess.password) {
+            const fresh = await directMeeshoLogin(sess.email, sess.password);
+            if (fresh.success) {
+              sessions[key].cookies = fresh.cookies;
+              sessions[key].identifier = fresh.identifier;
+              sessions[key].supplierId = fresh.supplierId;
+              sessions[key].storeName = fresh.storeName;
+              localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+              setLocalSessions(sessions);
+              await updateDoc(doc(db, 'accounts', key), {
+                cookies: fresh.cookies,
+                identifier: fresh.identifier,
+                supplierId: fresh.supplierId,
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+            }
+          }
+
+          if (!sess.cookies) continue;
+
+          let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
           if (otpRes.expired && sess.email && sess.password) {
             // Auto re-login on session expire directly from phone
             const fresh = await directMeeshoLogin(sess.email, sess.password);
@@ -487,18 +581,24 @@ export default function App() {
               sessions[key].supplierId = fresh.supplierId;
               sessions[key].storeName = fresh.storeName;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+              setLocalSessions(sessions);
+              await updateDoc(doc(db, 'accounts', key), {
+                cookies: fresh.cookies,
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+              otpRes = await directFetchDeliveryOTPs(sessions[key].identifier, fresh.cookies, sessions[key].supplierId);
             }
-          } else {
-            // Update Firestore so UI and other devices reflect current OTP & all active OTPs
-            await updateDoc(doc(db, 'accounts', key), {
-              currentOtp: otpRes.otp || '----',
-              courier: otpRes.courier || 'No Return',
-              handoverCount: otpRes.handoverCount || 0,
-              dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              otpList: otpRes.otpList || [],
-              lastUpdated: new Date().toISOString()
-            }).catch(() => {});
           }
+
+          // Update Firestore so UI and other devices reflect current OTP & all active OTPs
+          await updateDoc(doc(db, 'accounts', key), {
+            currentOtp: otpRes.otp || '----',
+            courier: otpRes.courier || 'No Return',
+            handoverCount: otpRes.handoverCount || 0,
+            dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            otpList: otpRes.otpList || [],
+            lastUpdated: new Date().toISOString()
+          }).catch(() => {});
         }
       } catch (err) {
         console.warn('Native OTP poll error:', err);
@@ -824,35 +924,99 @@ export default function App() {
   const handleManualRefresh = async (syncKey, storeName) => {
     setRefreshingId(syncKey);
     try {
+      const targetAcc = accounts.find(a => a.syncKey === syncKey || a.id === syncKey);
       if (isNativeMobile()) {
         const raw = localStorage.getItem('native_meesho_sessions');
         let sessions = {};
         try {
           sessions = raw ? JSON.parse(raw) : {};
         } catch {}
-        const sess = sessions[syncKey];
-        if (sess && sess.identifier && sess.cookies) {
-          let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
-          if (otpRes.expired && sess.email && sess.password) {
+        let sess = sessions[syncKey] || (targetAcc ? sessions[targetAcc.id] : null);
+
+        // 1. If session not local, try hydrating from Firestore doc
+        if (!sess && targetAcc && (targetAcc.cookies || (targetAcc.email && targetAcc.password))) {
+          sess = {
+            email: targetAcc.email || '',
+            password: targetAcc.password || '',
+            identifier: targetAcc.identifier || '',
+            supplierId: targetAcc.supplierId || 0,
+            storeName: targetAcc.storeName || storeName,
+            cookies: targetAcc.cookies || ''
+          };
+          sessions[syncKey] = sess;
+          try {
+            localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+            setLocalSessions(sessions);
+            syncBackgroundSessions(sessions);
+          } catch {}
+        }
+
+        // 2. If we have session / credentials, fetch directly
+        if (sess) {
+          if (!sess.cookies && sess.email && sess.password) {
             const fresh = await directMeeshoLogin(sess.email, sess.password);
             if (fresh.success) {
-              sessions[syncKey].cookies = fresh.cookies;
-              sessions[syncKey].identifier = fresh.identifier;
-              sessions[syncKey].supplierId = fresh.supplierId;
-              sessions[syncKey].storeName = fresh.storeName;
-              try { localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions)); } catch {}
-              otpRes = await directFetchDeliveryOTPs(sess.identifier, fresh.cookies, fresh.supplierId);
+              sess.cookies = fresh.cookies;
+              sess.identifier = fresh.identifier || sess.identifier;
+              sess.supplierId = fresh.supplierId || sess.supplierId;
+              sessions[syncKey] = sess;
+              try {
+                localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                setLocalSessions(sessions);
+              } catch {}
+              await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                cookies: fresh.cookies,
+                identifier: sess.identifier,
+                supplierId: sess.supplierId,
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
             }
           }
-          await updateDoc(doc(db, 'accounts', syncKey), {
-            currentOtp: otpRes.otp || '----',
-            courier: otpRes.courier || 'No Return',
-            handoverCount: otpRes.handoverCount || 0,
-            dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            otpList: otpRes.otpList || [],
-            lastUpdated: new Date().toISOString()
-          }).catch(() => {});
-          showToast(`Checked latest returns for ${storeName}`, 'success');
+
+          if (sess.cookies) {
+            let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
+            if (otpRes.expired && sess.email && sess.password) {
+              const fresh = await directMeeshoLogin(sess.email, sess.password);
+              if (fresh.success) {
+                sessions[syncKey].cookies = fresh.cookies;
+                sessions[syncKey].identifier = fresh.identifier;
+                sessions[syncKey].supplierId = fresh.supplierId;
+                sessions[syncKey].storeName = fresh.storeName;
+                try {
+                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                  setLocalSessions(sessions);
+                } catch {}
+                otpRes = await directFetchDeliveryOTPs(sess.identifier, fresh.cookies, fresh.supplierId);
+                await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                  cookies: fresh.cookies,
+                  lastUpdated: new Date().toISOString()
+                }).catch(() => {});
+              }
+            }
+            await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+              currentOtp: otpRes.otp || '----',
+              courier: otpRes.courier || 'No Return',
+              handoverCount: otpRes.handoverCount || 0,
+              dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              otpList: otpRes.otpList || [],
+              lastUpdated: new Date().toISOString()
+            }).catch(() => {});
+
+            if (otpRes.otp && otpRes.otp !== '----') {
+              showToast(`Return OTP for ${storeName}: ${otpRes.otp} (${otpRes.courier || 'Courier'})`, 'success');
+            } else {
+              showToast(`Checked ${storeName}: No return courier right now.`, 'info');
+            }
+            return;
+          }
+        }
+
+        // 3. If session is completely missing on this phone and no password saved:
+        if (targetAcc) {
+          setReconnectAccount(targetAcc);
+          setReconnectPass('');
+          setReconnectError('');
+          setShowReconnectModal(true);
           return;
         }
       }
@@ -873,6 +1037,63 @@ export default function App() {
       showToast(`Auto-sync active for ${storeName}`, 'info');
     } finally {
       setRefreshingId(null);
+    }
+  };
+
+  // Re-authenticate / Connect account on this mobile device
+  const handleReconnectSubmit = async (e) => {
+    e.preventDefault();
+    if (!reconnectAccount || !reconnectPass) return;
+    setReconnectLoading(true);
+    setReconnectError('');
+
+    try {
+      const email = reconnectAccount.email;
+      const res = await directMeeshoLogin(email, reconnectPass);
+      if (!res.success) {
+        setReconnectError(res.error || 'Login failed. Please check your Meesho password.');
+        return;
+      }
+
+      // 1. Update local sessions
+      const raw = localStorage.getItem('native_meesho_sessions');
+      const curSessions = raw ? JSON.parse(raw) : {};
+      const key = reconnectAccount.syncKey || reconnectAccount.id;
+      curSessions[key] = {
+        email: email.trim(),
+        password: reconnectPass,
+        identifier: res.identifier || reconnectAccount.identifier || '',
+        supplierId: res.supplierId || reconnectAccount.supplierId || 0,
+        storeName: res.storeName || reconnectAccount.storeName,
+        cookies: res.cookies
+      };
+      localStorage.setItem('native_meesho_sessions', JSON.stringify(curSessions));
+      setLocalSessions(curSessions);
+      syncBackgroundSessions(curSessions);
+
+      // 2. Update Firestore so all devices get access
+      await updateDoc(doc(db, 'accounts', reconnectAccount.id), {
+        cookies: res.cookies,
+        password: reconnectPass,
+        identifier: res.identifier || reconnectAccount.identifier || '',
+        supplierId: res.supplierId || reconnectAccount.supplierId || 0,
+        currentOtp: res.otp || '----',
+        courier: res.courier || 'No Return',
+        handoverCount: res.handoverCount || 0,
+        dateTime: res.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        otpList: res.otpList || [],
+        status: 'live',
+        lastUpdated: new Date().toISOString()
+      });
+
+      setShowReconnectModal(false);
+      setReconnectAccount(null);
+      setReconnectPass('');
+      showToast(`Store "${reconnectAccount.storeName}" connected & synced live OTP!`, 'success');
+    } catch (err) {
+      setReconnectError(err.message || 'Connection failed.');
+    } finally {
+      setReconnectLoading(false);
     }
   };
 
@@ -917,6 +1138,7 @@ export default function App() {
           storeName: directRes.storeName,
           identifier: directRes.identifier,
           supplierId: directRes.supplierId,
+          cookies: directRes.cookies,
           otp: directRes.otp,
           courier: directRes.courier,
           handoverCount: directRes.handoverCount,
@@ -1014,6 +1236,8 @@ export default function App() {
         dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         otpList: data.otpList || [],
         status: 'live',
+        cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),
+        password: meeshoPass ? meeshoPass : (existingStore?.password || ''),
         lastUpdated: new Date().toISOString()
       }, { merge: true });
 
@@ -2839,10 +3063,35 @@ export default function App() {
 
                         {/* Sync Status Banner */}
                         <div className="mt-2 text-[10px] flex items-center justify-between text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-                            {isLive ? 'Active Auto-Sync' : 'Connecting'}
-                          </span>
+                          {(() => {
+                            const hasSess = Boolean(
+                              localSessions[acc.syncKey] || localSessions[acc.id] ||
+                              acc.cookies || (acc.email && acc.password)
+                            );
+                            if (hasSess) {
+                              return (
+                                <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  Active Auto-Sync
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReconnectAccount(acc);
+                                  setReconnectPass('');
+                                  setReconnectError('');
+                                  setShowReconnectModal(true);
+                                }}
+                                className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 transition-all cursor-pointer"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                Tap to Connect Session
+                              </button>
+                            );
+                          })()}
                           <span className="font-mono text-slate-500">Key: {acc.syncKey}</span>
                         </div>
                       </div>
@@ -3031,6 +3280,103 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= RECONNECT STORE MODAL (MULTI-DEVICE) ================= */}
+      {showReconnectModal && reconnectAccount && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-cyan-400" />
+                Connect Store on this Phone
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowReconnectModal(false); setReconnectAccount(null); }}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {reconnectError && (
+              <div className="bg-rose-500/15 border border-rose-500/40 text-rose-200 p-3.5 rounded-2xl text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span className="font-medium leading-relaxed">{reconnectError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleReconnectSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Store Name
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={reconnectAccount.storeName || 'Meesho Store'}
+                  className="w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-300 text-sm font-semibold opacity-80"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Meesho Registered Email or Mobile
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={reconnectAccount.email || ''}
+                  className="w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-300 text-sm opacity-80 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Enter Meesho Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={reconnectPass}
+                  onChange={(e) => { setReconnectPass(e.target.value); setReconnectError(''); }}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Enter once to activate direct live OTP monitoring & 24/7 background alerts on this phone.
+                </p>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowReconnectModal(false); setReconnectAccount(null); }}
+                  className="w-1/2 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reconnectLoading || !reconnectPass}
+                  className="w-1/2 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  {reconnectLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect & Fetch OTP'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

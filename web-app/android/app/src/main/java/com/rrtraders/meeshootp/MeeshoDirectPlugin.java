@@ -337,13 +337,14 @@ public class MeeshoDirectPlugin extends Plugin {
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
             JSONObject payload = new JSONObject();
+            if (!identifier.isEmpty()) {
+                payload.put("identifier", identifier);
+            }
             if (supplierId > 0) {
                 payload.put("supplier_id", supplierId);
-            } else {
-                payload.put("identifier", identifier);
-                payload.put("child_supplier_identifier", JSONObject.NULL);
-                payload.put("child_supplier_id", JSONObject.NULL);
             }
+            payload.put("child_supplier_identifier", JSONObject.NULL);
+            payload.put("child_supplier_id", JSONObject.NULL);
 
             byte[] b = payload.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = conn.getOutputStream()) {
