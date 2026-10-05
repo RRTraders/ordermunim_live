@@ -72,8 +72,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 6;
-const CURRENT_APP_VERSION_NAME = "1.6";
+const CURRENT_APP_VERSION_CODE = 7;
+const CURRENT_APP_VERSION_NAME = "1.7";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -431,22 +431,9 @@ export default function App() {
       try { localStorage.setItem('cached_user_accounts', JSON.stringify(accList)); } catch {}
     });
 
-    // 3. ONLY load all users if Super Admin (Prevents huge data download on regular seller devices!)
-    let unsubUsers = () => {};
-    if (isSuper) {
-      unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-        const uList = [];
-        snapshot.forEach((d) => {
-          uList.push({ id: d.id, ...d.data() });
-        });
-        setAllUsersList(uList);
-      });
-    }
-
     return () => {
       unsubUser();
       unsubAcc();
-      unsubUsers();
     };
   };
 
@@ -468,6 +455,12 @@ export default function App() {
   // Play audio chime ONLY when a genuine new OTP arrives (never on blank, error, initial load, or same OTP)
   const lastChimedOtpsRef = useRef({});
   const initialLoadDoneRef = useRef(false);
+  const accountsRef = useRef(accounts);
+  const lastSyncedDocRef = useRef({});
+
+  useEffect(() => {
+    accountsRef.current = accounts;
+  }, [accounts]);
 
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
@@ -644,11 +637,55 @@ export default function App() {
             continue;
           }
 
+          const newOtp = otpRes.otp || '----';
+          const newCourier = otpRes.courier || 'No Return';
+          const newCount = otpRes.handoverCount || 0;
+          const newOtpListJson = JSON.stringify(otpRes.otpList || []);
+
+          // Check if data is already identical in Firestore or in our last synced cache
+          const existingAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key);
+          const prevSynced = lastSyncedDocRef.current[key];
+
+          const isSameAsExisting = existingAcc && (
+            (existingAcc.currentOtp || '----') === newOtp &&
+            (existingAcc.courier || 'No Return') === newCourier &&
+            (existingAcc.handoverCount || 0) === newCount &&
+            JSON.stringify(existingAcc.otpList || []) === newOtpListJson
+          );
+
+          const isSameAsPrev = prevSynced && (
+            prevSynced.currentOtp === newOtp &&
+            prevSynced.courier === newCourier &&
+            prevSynced.handoverCount === newCount &&
+            prevSynced.otpListJson === newOtpListJson
+          );
+
+          if (isSameAsExisting || isSameAsPrev) {
+            // ZERO CHANGE in OTP or Return counts.
+            // SKIP FIRESTORE WRITE COMPLETELY!
+            // This prevents hundreds of unnecessary writes & reads!
+            lastSyncedDocRef.current[key] = {
+              currentOtp: newOtp,
+              courier: newCourier,
+              handoverCount: newCount,
+              otpListJson: newOtpListJson
+            };
+            continue;
+          }
+
+          // Data has ACTUALLY changed (new OTP arrived or delivery completed)
+          lastSyncedDocRef.current[key] = {
+            currentOtp: newOtp,
+            courier: newCourier,
+            handoverCount: newCount,
+            otpListJson: newOtpListJson
+          };
+
           // Update Firestore so UI and other devices reflect current OTP & all active OTPs
           await updateDoc(doc(db, 'accounts', key), {
-            currentOtp: otpRes.otp || '----',
-            courier: otpRes.courier || 'No Return',
-            handoverCount: otpRes.handoverCount || 0,
+            currentOtp: newOtp,
+            courier: newCourier,
+            handoverCount: newCount,
             dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             otpList: otpRes.otpList || [],
             lastUpdated: new Date().toISOString()
@@ -1053,14 +1090,29 @@ export default function App() {
               return;
             }
 
-            await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
-              currentOtp: otpRes.otp || '----',
-              courier: otpRes.courier || 'No Return',
-              handoverCount: otpRes.handoverCount || 0,
-              dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              otpList: otpRes.otpList || [],
-              lastUpdated: new Date().toISOString()
-            }).catch(() => {});
+            const newOtp = otpRes.otp || '----';
+            const newCourier = otpRes.courier || 'No Return';
+            const newCount = otpRes.handoverCount || 0;
+            const newOtpListJson = JSON.stringify(otpRes.otpList || []);
+
+            const currentAcc = accountsRef.current?.find(a => a.id === (targetAcc?.id || syncKey) || a.syncKey === syncKey);
+            const isSame = currentAcc && (
+              (currentAcc.currentOtp || '----') === newOtp &&
+              (currentAcc.courier || 'No Return') === newCourier &&
+              (currentAcc.handoverCount || 0) === newCount &&
+              JSON.stringify(currentAcc.otpList || []) === newOtpListJson
+            );
+
+            if (!isSame) {
+              await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                currentOtp: newOtp,
+                courier: newCourier,
+                handoverCount: newCount,
+                dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                otpList: otpRes.otpList || [],
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+            }
 
             if (otpRes.otp && otpRes.otp !== '----') {
               showToast(`Return OTP for ${storeName}: ${otpRes.otp} (${otpRes.courier || 'Courier'})`, 'success');
@@ -1633,19 +1685,24 @@ export default function App() {
     }
   };
 
-  // Admin: load all users
+  // Admin: load all users only when Admin tab is active & unlocked
+  useEffect(() => {
+    if (activeTab !== 'admin' || !adminAuthenticated) return;
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const uList = [];
+      snapshot.forEach((d) => {
+        uList.push({ id: d.id, ...d.data() });
+      });
+      setAllUsersList(uList);
+    });
+    return () => unsubUsers();
+  }, [activeTab, adminAuthenticated]);
+
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     if (adminInputPass === ADMIN_PASS || adminInputPass === '@rrt123') {
       setAdminAuthenticated(true);
       showToast('Admin Console Unlocked', 'success');
-      const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-        const uList = [];
-        snapshot.forEach((d) => {
-          uList.push({ id: d.id, ...d.data() });
-        });
-        setAllUsersList(uList);
-      });
     } else {
       showToast('Incorrect admin secret password', 'error');
     }
