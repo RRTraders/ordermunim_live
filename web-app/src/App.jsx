@@ -494,10 +494,10 @@ export default function App() {
       for (const acc of accounts) {
         const key = acc.syncKey || acc.id;
         const existing = cur[key] || cur[acc.id];
-        if (!existing && (acc.cookies || (acc.email && acc.password))) {
+        if (!existing && acc.cookies) {
           cur[key] = {
             email: acc.email || '',
-            password: acc.password || '',
+            password: '',
             identifier: acc.identifier || '',
             supplierId: acc.supplierId || 0,
             storeName: acc.storeName || '',
@@ -518,7 +518,7 @@ export default function App() {
     } catch (e) {}
   }, [accounts]);
 
-  // 2. Multi-Device Cloud Backup (Phone localStorage -> Firestore for other devices)
+  // 2. Multi-Device Cloud Backup: Only sync identifiers & cookies, NEVER passwords to ensure 100% privacy
   useEffect(() => {
     if (!user || accounts.length === 0) return;
     try {
@@ -528,10 +528,9 @@ export default function App() {
 
       for (const acc of accounts) {
         const sess = cur[acc.syncKey] || cur[acc.id];
-        if (sess && (!acc.cookies || !acc.password)) {
+        if (sess && !acc.cookies) {
           updateDoc(doc(db, 'accounts', acc.id), {
             cookies: sess.cookies || '',
-            password: sess.password || '',
             identifier: sess.identifier || acc.identifier || '',
             supplierId: sess.supplierId || acc.supplierId || 0,
             email: sess.email || acc.email || ''
@@ -951,11 +950,11 @@ export default function App() {
         } catch {}
         let sess = sessions[syncKey] || (targetAcc ? sessions[targetAcc.id] : null);
 
-        // 1. If session not local, try hydrating from Firestore doc
-        if (!sess && targetAcc && (targetAcc.cookies || (targetAcc.email && targetAcc.password))) {
+        // 1. If session not local, try hydrating cookies from Firestore doc
+        if (!sess && targetAcc && targetAcc.cookies) {
           sess = {
             email: targetAcc.email || '',
-            password: targetAcc.password || '',
+            password: '',
             identifier: targetAcc.identifier || '',
             supplierId: targetAcc.supplierId || 0,
             storeName: targetAcc.storeName || storeName,
@@ -1089,10 +1088,9 @@ export default function App() {
       setLocalSessions(curSessions);
       syncBackgroundSessions(curSessions);
 
-      // 2. Update Firestore so all devices get access
+      // 2. Update Firestore so all devices get live status & cookies (NEVER password)
       await updateDoc(doc(db, 'accounts', reconnectAccount.id), {
         cookies: res.cookies,
-        password: reconnectPass,
         identifier: res.identifier || reconnectAccount.identifier || '',
         supplierId: res.supplierId || reconnectAccount.supplierId || 0,
         currentOtp: res.otp || '----',
@@ -1255,7 +1253,6 @@ export default function App() {
         otpList: data.otpList || [],
         status: 'live',
         cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),
-        password: meeshoPass ? meeshoPass : (existingStore?.password || ''),
         lastUpdated: new Date().toISOString()
       }, { merge: true });
 
@@ -3096,8 +3093,7 @@ export default function App() {
                         <div className="mt-2 text-[10px] flex items-center justify-between text-slate-500">
                           {(() => {
                             const hasSess = Boolean(
-                              localSessions[acc.syncKey] || localSessions[acc.id] ||
-                              acc.cookies || (acc.email && acc.password)
+                              localSessions[acc.syncKey] || localSessions[acc.id] || acc.cookies
                             );
                             if (hasSess) {
                               return (
