@@ -73,8 +73,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 9;
-const CURRENT_APP_VERSION_NAME = "1.9";
+const CURRENT_APP_VERSION_CODE = 10;
+const CURRENT_APP_VERSION_NAME = "2.0";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1943,9 +1943,6 @@ export default function App() {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-slate-500 font-mono block">
-                              Key: {acc.syncKey}
-                            </span>
                           </div>
                         </div>
 
@@ -2451,6 +2448,24 @@ export default function App() {
                     </span>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Connected Stores Quota Box */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-cyan-400" />
+                <span className="font-bold text-sm text-white">Connected Stores</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                  {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
+                </span>
+                {accounts.length >= (profile.maxAccounts ?? 0) && (
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                    Limit Reached
+                  </span>
+                )}
               </div>
             </div>
 
@@ -3061,8 +3076,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Account Quota & Controls Bar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-lg">
+            {/* Account Quota & Controls Bar (Desktop Only; on mobile/app it is shifted to Profile) */}
+            <div className="hidden md:flex bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 items-center justify-between shadow-lg">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base md:text-lg font-bold text-white">Connected Stores</h2>
                 <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
@@ -3076,7 +3091,7 @@ export default function App() {
               </div>
 
               {/* Desktop Web Only: Add Store Button (On Mobile, replaced with Floating Action Button) */}
-              <div className="hidden md:flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5">
                 {accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
@@ -3163,9 +3178,6 @@ export default function App() {
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[11px] text-slate-500 font-mono block">
-                                Sync Key: {acc.syncKey}
-                              </span>
                             </div>
                           </div>
 
