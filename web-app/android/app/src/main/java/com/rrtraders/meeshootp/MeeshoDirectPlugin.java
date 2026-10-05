@@ -294,6 +294,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 fallback.put("handoverCount", 0);
                 fallback.put("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date()));
                 fallback.put("otpList", new JSONArray());
+                fallback.put("error", e.getMessage() != null ? e.getMessage() : "Fetch exception");
                 call.resolve(fallback);
             }
         });
@@ -454,6 +455,7 @@ public class MeeshoDirectPlugin extends Plugin {
             } else if (code == 401 || code == 403) {
                 android.util.Log.w("MeeshoDirect", "Session expired (HTTP " + code + ") for identifier: " + identifier);
                 def.put("expired", true);
+                def.put("error", "HTTP " + code);
             } else {
                 String errResp = readStream(conn.getErrorStream());
                 android.util.Log.w("MeeshoDirect", "fetchDeliveryOTPs error HTTP " + code + ": " + errResp);
@@ -461,7 +463,7 @@ public class MeeshoDirectPlugin extends Plugin {
             }
         } catch (Exception e) {
             android.util.Log.e("MeeshoDirect", "fetchDeliveryOTPs exception: " + e.getMessage(), e);
-            def.put("error", e.getMessage());
+            def.put("error", e.getMessage() != null ? e.getMessage() : "Network error");
         }
 
         return def;

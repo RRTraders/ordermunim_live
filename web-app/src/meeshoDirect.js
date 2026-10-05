@@ -55,7 +55,8 @@ export async function directFetchDeliveryOTPs(identifier, cookies, supplierId) {
       courier: 'No Return',
       handoverCount: 0,
       dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      otpList: []
+      otpList: [],
+      error: err?.message || 'Fetch error'
     };
   }
 }

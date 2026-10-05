@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
@@ -72,8 +72,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 5;
-const CURRENT_APP_VERSION_NAME = "1.5";
+const CURRENT_APP_VERSION_CODE = 6;
+const CURRENT_APP_VERSION_NAME = "1.6";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -465,23 +465,54 @@ export default function App() {
     }
   }, [activeTab, staffShareKey]);
 
-  // Play audio chime when OTP changes
+  // Play audio chime ONLY when a genuine new OTP arrives (never on blank, error, initial load, or same OTP)
+  const lastChimedOtpsRef = useRef({});
+  const initialLoadDoneRef = useRef(false);
+
   useEffect(() => {
-    if (soundEnabled && accounts.length > 0) {
-      // Audio chime
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
-      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
+    if (!accounts || accounts.length === 0) return;
+
+    if (!initialLoadDoneRef.current) {
+      // First load: seed all current OTPs so app startup never beeps
+      for (const acc of accounts) {
+        if (acc.currentOtp && acc.currentOtp !== '----') {
+          lastChimedOtpsRef.current[acc.id] = acc.currentOtp;
+        }
+      }
+      initialLoadDoneRef.current = true;
+      return;
     }
-  }, [accounts.map(a => a.currentOtp).join(',')]);
+
+    let hasNewOtp = false;
+
+    for (const acc of accounts) {
+      const otp = acc.currentOtp;
+      if (otp && otp !== '----') {
+        const lastChimed = lastChimedOtpsRef.current[acc.id];
+        if (lastChimed !== otp) {
+          // Brand new OTP received that has never been chimed for this account
+          hasNewOtp = true;
+          lastChimedOtpsRef.current[acc.id] = otp;
+        }
+      }
+    }
+
+    if (hasNewOtp && soundEnabled) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+      } catch (e) {}
+    }
+  }, [accounts, soundEnabled]);
 
   // 1. Multi-Device Session Hydration (Firestore -> Phone localStorage & Background Service)
   useEffect(() => {
@@ -607,6 +638,12 @@ export default function App() {
             }
           }
 
+          // Guard: Never overwrite Firestore if fetch encountered an error or expired session!
+          if (otpRes.error || otpRes.expired) {
+            console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
+            continue;
+          }
+
           // Update Firestore so UI and other devices reflect current OTP & all active OTPs
           await updateDoc(doc(db, 'accounts', key), {
             currentOtp: otpRes.otp || '----',
@@ -620,7 +657,7 @@ export default function App() {
       } catch (err) {
         console.warn('Native OTP poll error:', err);
       }
-    }, 15000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
@@ -1010,6 +1047,12 @@ export default function App() {
                 }).catch(() => {});
               }
             }
+
+            if (otpRes.error || otpRes.expired) {
+              showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
+              return;
+            }
+
             await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
               currentOtp: otpRes.otp || '----',
               courier: otpRes.courier || 'No Return',
