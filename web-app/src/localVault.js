@@ -44,13 +44,14 @@ export const decryptSecret = (cipherText) => {
 /**
  * Store encrypted Meesho credentials into local database (localStorage)
  */
-export const saveEncryptedStoreCredentials = (storeKey, creds) => {
+export const saveEncryptedStoreCredentials = (storeKey, creds, userId = '') => {
   if (!storeKey || !creds) return;
   try {
     const raw = localStorage.getItem(VAULT_STORAGE_KEY);
     const vault = raw ? JSON.parse(raw) : {};
 
     const encData = {
+      userId: userId || creds.userId || '',
       email: creds.email ? encryptSecret(creds.email.trim()) : '',
       password: creds.password ? encryptSecret(creds.password) : '',
       identifier: creds.identifier ? encryptSecret(creds.identifier) : '',
@@ -85,6 +86,7 @@ export const getDecryptedStoreCredentials = (storeKey) => {
     if (!encData) return null;
 
     return {
+      userId: encData.userId || '',
       email: encData.email ? decryptSecret(encData.email) : '',
       password: encData.password ? decryptSecret(encData.password) : '',
       identifier: encData.identifier ? decryptSecret(encData.identifier) : '',
@@ -99,10 +101,11 @@ export const getDecryptedStoreCredentials = (storeKey) => {
 };
 
 /**
- * Find credentials by searching all possible identifiers of an account
+ * Find credentials by searching all possible identifiers of an account, isolated by user
  */
-export const findCredentialsForAccount = (acc) => {
+export const findCredentialsForAccount = (acc, expectedUserId = '') => {
   if (!acc) return null;
+  const targetUserId = expectedUserId || acc.userId || '';
   const candidates = [
     acc.syncKey,
     acc.id,
@@ -114,6 +117,10 @@ export const findCredentialsForAccount = (acc) => {
   for (const k of candidates) {
     const cred = getDecryptedStoreCredentials(k);
     if (cred && cred.password) {
+      // Ensure credentials belong strictly to this user
+      if (targetUserId && cred.userId && cred.userId !== targetUserId) {
+        continue;
+      }
       return cred;
     }
   }

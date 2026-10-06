@@ -148,6 +148,19 @@ public class MeeshoBackgroundService extends Service {
         try {
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
+
+            if (allSessions.length() == 0) {
+                try {
+                    NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (nm != null) {
+                        for (int id = 3000; id <= 4500; id++) {
+                            nm.cancel(id);
+                        }
+                    }
+                } catch (Exception ignored) {}
+                return;
+            }
+
             java.util.Set<String> polledSet = new java.util.HashSet<>();
 
             for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
