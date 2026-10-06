@@ -446,7 +446,7 @@ export default function LabelCropper({ showToast }) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Ajio Interleaved PDF Merger State
+  // Ajio Customer-Matched PDF Merger State
   const [ajioState, setAjioState] = useState({
     labelFile: null,
     labelPageCount: 0,
@@ -457,9 +457,145 @@ export default function LabelCropper({ showToast }) {
     excelData: null,
     isMerging: false,
     mergeProgress: 0,
+    mergeStatusText: '',
     mergedDownload: null,
+    matchStats: null,
     error: null,
   });
+
+  const [showAjioBreakdown, setShowAjioBreakdown] = useState(false);
+
+  // Normalize customer name for accurate comparison
+  const normalizeCustomerName = (str) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .replace(/^(mr\.|mrs\.|ms\.|shri|smt\.|m\/s\.?)\s+/i, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  // Extract recipient / customer name under "Ship To :" from PDF page text
+  const extractShipToFromPage = (content) => {
+    const items = content?.items || [];
+    if (items.length === 0) return { shipToName: '', orderId: '' };
+
+    // Sort items top-to-bottom (Y descending), left-to-right (X ascending)
+    const sorted = [...items].filter(it => it.str && it.str.trim()).sort((a, b) => {
+      const yA = a.transform ? a.transform[5] : 0;
+      const yB = b.transform ? b.transform[5] : 0;
+      const yDiff = yB - yA;
+      if (Math.abs(yDiff) > 3) return yDiff;
+      const xA = a.transform ? a.transform[4] : 0;
+      const xB = b.transform ? b.transform[4] : 0;
+      return xA - xB;
+    });
+
+    const lines = [];
+    let curLine = [];
+    let curY = sorted[0]?.transform ? sorted[0].transform[5] : 0;
+
+    for (const it of sorted) {
+      const y = it.transform ? it.transform[5] : 0;
+      if (Math.abs(y - curY) > 3) {
+        if (curLine.length > 0) {
+          lines.push(curLine.map(t => t.str).join(' ').trim());
+        }
+        curLine = [it];
+        curY = y;
+      } else {
+        curLine.push(it);
+      }
+    }
+    if (curLine.length > 0) {
+      lines.push(curLine.map(t => t.str).join(' ').trim());
+    }
+
+    const rawText = lines.join('\n');
+
+    // Clean name candidate
+    const cleanCandidate = (raw) => {
+      if (!raw) return '';
+      let c = raw.trim();
+      c = c.replace(/^(?:name|customer|buyer|consignee|m\/s|mr\.|mrs\.|ms\.)[\s:\.\-]+/i, '').trim();
+      if (c.includes(',')) {
+        c = c.split(',')[0].trim();
+      }
+      c = c.replace(/[0-9]{4,}/g, '').trim();
+      if (/^(?:address|pincode|pin|gstin|phone|mobile|tel|city|state|street|near|opp|landmark|floor|flat)/i.test(c)) {
+        return '';
+      }
+      return c;
+    };
+
+    let shipToName = '';
+
+    // 1. Same line match: "Ship To : Rahul Sharma"
+    for (const line of lines) {
+      const m = line.match(/(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]+([A-Za-z0-9\s\.\&\-]{2,50})/i);
+      if (m) {
+        const candidate = cleanCandidate(m[1]);
+        if (candidate.length >= 2) {
+          shipToName = candidate;
+          break;
+        }
+      }
+    }
+
+    // 2. Next line match: Line has "Ship To :" and next line has customer name
+    if (!shipToName) {
+      for (let i = 0; i < lines.length - 1; i++) {
+        const line = lines[i].trim();
+        if (/^(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]*$/i.test(line)) {
+          const candidate = cleanCandidate(lines[i + 1]);
+          if (candidate.length >= 2) {
+            shipToName = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    // 3. Multi-line regex fallback
+    if (!shipToName) {
+      const rawM = rawText.match(/(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to)[\s:\-]+(?:\n|\r\n)?\s*([A-Za-z\s]{2,40})/i);
+      if (rawM) {
+        const candidate = cleanCandidate(rawM[1]);
+        if (candidate.length >= 2) {
+          shipToName = candidate;
+        }
+      }
+    }
+
+    // Order ID if present
+    let orderId = '';
+    const ordMatch = rawText.match(/(?:Cust(?:omer)?\s*Order\s*(?:No|ID|#)|Order\s*(?:No|ID|Number|#))[\s:#\-]*([A-Za-z0-9\-_]{6,30})/i);
+    if (ordMatch) {
+      orderId = ordMatch[1].trim();
+    }
+
+    return { shipToName, orderId };
+  };
+
+  // Determine if a label page matches an invoice page
+  const isAjioPageMatch = (labelPage, invoicePage) => {
+    const normLbl = normalizeCustomerName(labelPage.shipToName);
+    const normInv = normalizeCustomerName(invoicePage.shipToName);
+
+    if (normLbl && normInv) {
+      if (normLbl === normInv) return true;
+      if (normLbl.length >= 6 && normInv.length >= 6) {
+        if (normLbl.includes(normInv) || normInv.includes(normLbl)) return true;
+      }
+    }
+
+    if (labelPage.orderId && invoicePage.orderId && labelPage.orderId.toLowerCase() === invoicePage.orderId.toLowerCase()) {
+      return true;
+    }
+
+    return false;
+  };
 
   const ajioLabelInputRef = useRef(null);
   const ajioInvoiceInputRef = useRef(null);
@@ -593,67 +729,212 @@ export default function LabelCropper({ showToast }) {
       return;
     }
 
-    setAjioState(prev => ({ ...prev, isMerging: true, mergeProgress: 5, error: null }));
+    setAjioState(prev => ({
+      ...prev,
+      isMerging: true,
+      mergeProgress: 5,
+      mergeStatusText: 'Reading Label PDF...',
+      error: null,
+    }));
 
     try {
-      const mergedDoc = await PDFDocument.create();
-
       const labelBytes = await ajioState.labelFile.arrayBuffer();
       const invoiceBytes = await ajioState.invoiceFile.arrayBuffer();
 
+      // Load with pdfjsLib to parse text content
+      const labelPdfJs = await pdfjsLib.getDocument({ data: labelBytes.slice(0) }).promise;
+      const invoicePdfJs = await pdfjsLib.getDocument({ data: invoiceBytes.slice(0) }).promise;
+
+      const labelTotalPages = labelPdfJs.numPages;
+      const invoiceTotalPages = invoicePdfJs.numPages;
+
+      // 1. Extract text and "Ship To" name from each label page
+      const labelPagesInfo = [];
+      for (let p = 1; p <= labelTotalPages; p++) {
+        setAjioState(prev => ({
+          ...prev,
+          mergeProgress: Math.min(25, Math.round((p / labelTotalPages) * 25)),
+          mergeStatusText: `Reading Label page ${p} of ${labelTotalPages} (extracting Ship To name)...`,
+        }));
+        const page = await labelPdfJs.getPage(p);
+        const textContent = await page.getTextContent();
+        const extracted = extractShipToFromPage(textContent);
+        labelPagesInfo.push({
+          pageIndex: p - 1, // 0-based index for pdf-lib
+          pageNum: p,
+          shipToName: extracted.shipToName,
+          orderId: extracted.orderId,
+        });
+      }
+
+      // 2. Extract text and "Ship To" name from each invoice page
+      const invoicePagesInfo = [];
+      for (let p = 1; p <= invoiceTotalPages; p++) {
+        setAjioState(prev => ({
+          ...prev,
+          mergeProgress: 25 + Math.min(30, Math.round((p / invoiceTotalPages) * 30)),
+          mergeStatusText: `Reading Invoice page ${p} of ${invoiceTotalPages} (extracting Ship To name)...`,
+        }));
+        const page = await invoicePdfJs.getPage(p);
+        const textContent = await page.getTextContent();
+        const extracted = extractShipToFromPage(textContent);
+        invoicePagesInfo.push({
+          pageIndex: p - 1, // 0-based index for pdf-lib
+          pageNum: p,
+          shipToName: extracted.shipToName,
+          orderId: extracted.orderId,
+        });
+      }
+
+      // 3. Propagate Ship To name to continuation invoice pages
+      // (If invoice page p has no Ship To, but follows an invoice page that does, it belongs to that invoice)
+      for (let j = 0; j < invoicePagesInfo.length; j++) {
+        if (!invoicePagesInfo[j].shipToName && j > 0 && invoicePagesInfo[j - 1].shipToName) {
+          invoicePagesInfo[j].shipToName = invoicePagesInfo[j - 1].shipToName;
+          if (!invoicePagesInfo[j].orderId && invoicePagesInfo[j - 1].orderId) {
+            invoicePagesInfo[j].orderId = invoicePagesInfo[j - 1].orderId;
+          }
+          invoicePagesInfo[j].isContinuation = true;
+        }
+      }
+
+      setAjioState(prev => ({
+        ...prev,
+        mergeProgress: 60,
+        mergeStatusText: 'Matching labels to invoices by customer name...',
+      }));
+
+      // 4. Build target page sequence:
+      // For each 1-page label:
+      //   Add label page
+      //   Find all matching unused invoice pages (1, 2, or more) and add them next to this label!
+      const usedInvoicePageIndices = new Set();
+      const matchedPairs = [];
+      const mergeSequence = [];
+
+      for (let i = 0; i < labelPagesInfo.length; i++) {
+        const lbl = labelPagesInfo[i];
+        mergeSequence.push({
+          type: 'label',
+          pageIndex: lbl.pageIndex,
+          name: lbl.shipToName,
+          labelNum: i + 1,
+        });
+
+        // Find all unused invoice pages matching this label
+        const matchedInvoicesForThisLabel = [];
+        for (let j = 0; j < invoicePagesInfo.length; j++) {
+          if (!usedInvoicePageIndices.has(j)) {
+            const inv = invoicePagesInfo[j];
+            if (isAjioPageMatch(lbl, inv)) {
+              usedInvoicePageIndices.add(j);
+              matchedInvoicesForThisLabel.push(inv);
+              mergeSequence.push({
+                type: 'invoice',
+                pageIndex: inv.pageIndex,
+                name: inv.shipToName,
+                labelNum: i + 1,
+              });
+            }
+          }
+        }
+
+        matchedPairs.push({
+          labelNum: i + 1,
+          labelPageIndex: lbl.pageIndex,
+          customerName: lbl.shipToName || 'Customer Name Not Detected',
+          orderId: lbl.orderId,
+          matchedInvoices: matchedInvoicesForThisLabel.map(m => ({
+            pageNum: m.pageNum,
+            pageIndex: m.pageIndex,
+          })),
+        });
+      }
+
+      // Any remaining unmatched invoices are appended at the end
+      const unmatchedInvoices = [];
+      for (let j = 0; j < invoicePagesInfo.length; j++) {
+        if (!usedInvoicePageIndices.has(j)) {
+          const inv = invoicePagesInfo[j];
+          unmatchedInvoices.push(inv);
+          mergeSequence.push({
+            type: 'invoice',
+            pageIndex: inv.pageIndex,
+            name: inv.shipToName,
+            unmatched: true,
+          });
+        }
+      }
+
+      setAjioState(prev => ({
+        ...prev,
+        mergeProgress: 75,
+        mergeStatusText: `Building merged PDF (${mergeSequence.length} total pages)...`,
+      }));
+
+      // 5. Build merged PDF using pdf-lib
+      const mergedDoc = await PDFDocument.create();
       const labelDoc = await PDFDocument.load(labelBytes, { ignoreEncryption: true });
       const invoiceDoc = await PDFDocument.load(invoiceBytes, { ignoreEncryption: true });
 
-      const labelCount = labelDoc.getPageCount();
-      const invoiceCount = invoiceDoc.getPageCount();
-      const maxPages = Math.max(labelCount, invoiceCount);
-      const totalOutputPages = labelCount + invoiceCount;
-      let pagesCopied = 0;
-
-      for (let i = 0; i < maxPages; i++) {
-        // Condition: Take page i from Label PDF into merged PDF as page 1, 3, 5...
-        if (i < labelCount) {
-          const [labelPage] = await mergedDoc.copyPages(labelDoc, [i]);
-          mergedDoc.addPage(labelPage);
-          pagesCopied++;
-        }
-        // Condition: Take page i from Invoice PDF into merged PDF as page 2, 4, 6...
-        if (i < invoiceCount) {
-          const [invoicePage] = await mergedDoc.copyPages(invoiceDoc, [i]);
-          mergedDoc.addPage(invoicePage);
-          pagesCopied++;
+      for (let idx = 0; idx < mergeSequence.length; idx++) {
+        const item = mergeSequence[idx];
+        if (item.type === 'label') {
+          const [copiedPage] = await mergedDoc.copyPages(labelDoc, [item.pageIndex]);
+          mergedDoc.addPage(copiedPage);
+        } else {
+          const [copiedPage] = await mergedDoc.copyPages(invoiceDoc, [item.pageIndex]);
+          mergedDoc.addPage(copiedPage);
         }
 
-        // Progress update every few pages
-        if (i % 3 === 0 || i === maxPages - 1) {
-          const pct = Math.min(95, Math.round((pagesCopied / totalOutputPages) * 100));
+        if (idx % 5 === 0 || idx === mergeSequence.length - 1) {
+          const pct = 75 + Math.round((idx / mergeSequence.length) * 20);
           setAjioState(prev => ({ ...prev, mergeProgress: pct }));
           await new Promise(r => setTimeout(r, 0));
         }
       }
 
-      setAjioState(prev => ({ ...prev, mergeProgress: 98 }));
+      setAjioState(prev => ({
+        ...prev,
+        mergeProgress: 98,
+        mergeStatusText: 'Finalizing PDF download...',
+      }));
+
       const mergedBytes = await mergedDoc.save();
       const blob = new Blob([mergedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const dateTag = new Date().toISOString().slice(0, 10);
-      const filename = `Ajio_Merged_${labelCount}_Labels_Invoices_${dateTag}.pdf`;
+      const filename = `Ajio_Matched_Labels_Invoices_${dateTag}.pdf`;
+
+      const matchStats = {
+        totalLabels: labelTotalPages,
+        totalInvoices: invoiceTotalPages,
+        totalPages: mergeSequence.length,
+        fullyMatchedCount: matchedPairs.filter(p => p.matchedInvoices.length > 0).length,
+        unmatchedLabelsCount: matchedPairs.filter(p => p.matchedInvoices.length === 0).length,
+        unmatchedInvoicesCount: unmatchedInvoices.length,
+        matchedPairs,
+        unmatchedInvoices,
+      };
 
       const downloadInfo = {
         type: 'single',
         url,
         filename,
         blob,
-        totalPages: pagesCopied,
-        labelCount,
-        invoiceCount,
+        totalPages: mergeSequence.length,
+        labelCount: labelTotalPages,
+        invoiceCount: invoiceTotalPages,
+        matchStats,
       };
 
       setAjioState(prev => ({
         ...prev,
         isMerging: false,
         mergeProgress: 100,
+        mergeStatusText: 'Completed!',
         mergedDownload: downloadInfo,
+        matchStats,
       }));
 
       updateMarketplaceState('ajio', {
@@ -661,7 +942,7 @@ export default function LabelCropper({ showToast }) {
         isProcessing: false,
       });
 
-      // Auto trigger browser download
+      // Auto trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
@@ -669,10 +950,15 @@ export default function LabelCropper({ showToast }) {
       link.click();
       document.body.removeChild(link);
 
-      showToast?.(`Merged successfully! ${pagesCopied} pages downloaded.`, 'success');
+      showToast?.(`Success! Merged ${mergeSequence.length} pages matched by customer name.`, 'success');
     } catch (err) {
       console.error('Error during Ajio PDF merge:', err);
-      setAjioState(prev => ({ ...prev, isMerging: false, error: err.message }));
+      setAjioState(prev => ({
+        ...prev,
+        isMerging: false,
+        error: err.message,
+        mergeStatusText: 'Error occurred',
+      }));
       showToast?.('Failed to merge PDFs: ' + err.message, 'error');
     }
   };
@@ -3002,10 +3288,10 @@ export default function LabelCropper({ showToast }) {
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-amber-500" />
-                Ajio Label & Invoice PDF Merger
+                Ajio Customer-Matched PDF Merger
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Upload your Label PDF and Invoice PDF to merge in alternating order (Page 1 Label &rarr; Page 1 Invoice &rarr; Page 2 Label &rarr; Page 2 Invoice...).
+                Automatically reads the customer name after <strong className="text-slate-700">"Ship To :"</strong> on each 1-page label and attaches all matching invoice pages (1, 2, or more) next to that label.
               </p>
             </div>
             {(ajioState.labelFile || ajioState.invoiceFile || ajioState.excelFile) && (
@@ -3178,38 +3464,27 @@ export default function LabelCropper({ showToast }) {
             </div>
           </div>
 
-          {/* Merge Preview & Sequence Indicator */}
+          {/* Merge Logic & Status Preview */}
           {ajioState.labelFile && ajioState.invoiceFile && (
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
               <div className="flex items-center justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                  Merge Sequence Preview
+                  Smart "Ship To :" Customer Name Matching
                 </span>
                 <span className="font-mono text-indigo-600">
-                  Total: {ajioState.labelPageCount + ajioState.invoicePageCount} Pages
+                  Label: {ajioState.labelPageCount} Pages • Invoice: {ajioState.invoicePageCount} Pages
                 </span>
               </div>
 
-              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 font-mono text-[11px] leading-relaxed">
-                Page 1: Label #1 &rarr; Page 2: Invoice #1 &rarr; Page 3: Label #2 &rarr; Page 4: Invoice #2
-                {Math.max(ajioState.labelPageCount, ajioState.invoicePageCount) > 2 ? ' ...' : ''}
-                {ajioState.labelPageCount === ajioState.invoicePageCount && (
-                  <span> &rarr; Page {ajioState.labelPageCount * 2 - 1}: Label #{ajioState.labelPageCount} &rarr; Page {ajioState.labelPageCount * 2}: Invoice #{ajioState.invoicePageCount}</span>
-                )}
+              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 text-[11px] leading-relaxed space-y-1">
+                <p>
+                  <strong>How it works:</strong> Each label is 1 page. OrderMunim reads the recipient name after <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-semibold font-mono">Ship To :</code> and matches all invoice pages belonging to that customer (1 page, 2 pages, or more), placing them directly after their shipping label.
+                </p>
+                <p className="text-slate-400 text-[10px]">
+                  ✓ Even if invoices have multiple pages or different sort orders, every label receives its exact matching invoice(s).
+                </p>
               </div>
-
-              {ajioState.labelPageCount === ajioState.invoicePageCount ? (
-                <div className="flex items-center gap-1.5 text-emerald-700 font-semibold pt-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Page counts match: {ajioState.labelPageCount} Labels and {ajioState.invoicePageCount} Invoices will create an alternating {ajioState.labelPageCount * 2}-page PDF.</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-amber-700 font-semibold pt-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Notice: Label has {ajioState.labelPageCount} pages and Invoice has {ajioState.invoicePageCount} pages. Pages will interleave up to page {Math.min(ajioState.labelPageCount, ajioState.invoicePageCount)}, then append remaining pages.</span>
-                </div>
-              )}
             </div>
           )}
 
@@ -3254,7 +3529,7 @@ export default function LabelCropper({ showToast }) {
               <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
                 <span className="flex items-center gap-2">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                  Interleaving and merging PDF pages...
+                  {ajioState.mergeStatusText || 'Matching customer names and merging PDF...'}
                 </span>
                 <span className="font-mono text-indigo-600">{ajioState.mergeProgress}%</span>
               </div>
@@ -3283,31 +3558,79 @@ export default function LabelCropper({ showToast }) {
             <Layers className="w-4 h-4 text-amber-400" />
             <span>
               {ajioState.isMerging
-                ? 'Merging Pages...'
+                ? (ajioState.mergeStatusText || 'Matching & Merging Pages...')
                 : (!ajioState.labelFile || !ajioState.invoiceFile)
                 ? 'Please Upload Both Label PDF & Invoice PDF'
-                : 'Merge & Download Interleaved PDF'}
+                : 'Match by "Ship To" Name & Merge PDF'}
             </span>
           </button>
 
           {/* Download / Success Area (once merged) */}
           {ajioState.mergedDownload && (
             <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
                     <h4 className="font-bold text-xs sm:text-sm text-emerald-900">
-                      Interleaved PDF Ready!
+                      Customer-Matched PDF Ready!
                     </h4>
                     <p className="text-[11px] text-emerald-700">
-                      {ajioState.mergedDownload.totalPages} Pages Generated ({ajioState.mergedDownload.labelCount} Labels + {ajioState.mergedDownload.invoiceCount} Invoices)
+                      {ajioState.matchStats?.fullyMatchedCount || 0} of {ajioState.matchStats?.totalLabels || 0} Labels matched • {ajioState.mergedDownload.totalPages} Total Merged Pages
                     </p>
                   </div>
                 </div>
+
+                {ajioState.matchStats?.matchedPairs?.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAjioBreakdown(!showAjioBreakdown)}
+                    className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold hover:bg-emerald-100/50 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{showAjioBreakdown ? 'Hide Match Details' : 'View Matched Pairs'}</span>
+                    {showAjioBreakdown ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
+
+              {/* Expandable Match Details List */}
+              {showAjioBreakdown && ajioState.matchStats && (
+                <div className="p-3 bg-white rounded-xl border border-emerald-200 max-h-60 overflow-y-auto space-y-2 text-xs">
+                  <div className="font-bold text-slate-800 pb-1 border-b border-slate-100 text-[11px]">
+                    Label & Invoice Match Breakdown:
+                  </div>
+                  {ajioState.matchStats.matchedPairs.map((pair, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-slate-800">#{pair.labelNum} {pair.customerName}</span>
+                        {pair.orderId && <span className="text-slate-400 text-[10px] ml-1.5 font-mono">({pair.orderId})</span>}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]">
+                          Label P{pair.labelPageIndex + 1}
+                        </span>
+                        <span>&rarr;</span>
+                        {pair.matchedInvoices.length > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-mono text-[10px] font-semibold">
+                            Invoice P{pair.matchedInvoices.map(m => m.pageNum).join(', ')} ({pair.matchedInvoices.length} {pair.matchedInvoices.length === 1 ? 'page' : 'pages'})
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px]">
+                            No matching invoice
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {ajioState.matchStats.unmatchedInvoices?.length > 0 && (
+                    <div className="pt-1 text-[10px] text-amber-700 italic">
+                      + {ajioState.matchStats.unmatchedInvoices.length} invoice page(s) had no label match and were appended at the end.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
                 <button
