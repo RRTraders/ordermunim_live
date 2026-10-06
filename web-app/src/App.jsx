@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
   auth, 
   db 
@@ -21,6 +21,7 @@ import {
   doc, 
   setDoc, 
   getDoc, 
+  getDocs,
   onSnapshot, 
   query, 
   where, 
@@ -79,6 +80,19 @@ const CURRENT_APP_VERSION_NAME = "2.4";
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
 
+// Persistent Device Identifier to enforce strict Single Active Login restriction
+export const getDeviceId = () => {
+  try {
+    let dId = localStorage.getItem('om_unique_device_id');
+    if (!dId) {
+      dId = 'dev_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now();
+      localStorage.setItem('om_unique_device_id', dId);
+    }
+    return dId;
+  } catch {
+    return 'dev_' + Date.now();
+  }
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -404,6 +418,40 @@ export default function App() {
     const unsubUser = onSnapshot(userRef, (snap) => {
       if (snap.exists()) {
         const profData = snap.data();
+        const currentDeviceId = getDeviceId();
+
+        // SINGLE ACTIVE DEVICE RESTRICTION:
+        // Evict immediately if another device logged into this account
+        if (!isSuper && profData.activeDeviceId && profData.activeDeviceId !== currentDeviceId) {
+          console.warn('[Single Device] Evicted by active device:', profData.activeDeviceId);
+          if (isNativeMobile()) {
+            try {
+              stopBackgroundMonitoring();
+              syncBackgroundSessions({});
+            } catch {}
+          }
+          try {
+            localStorage.removeItem('native_meesho_sessions');
+            localStorage.removeItem('cached_user_profile');
+            localStorage.removeItem('cached_user_accounts');
+          } catch {}
+          setLocalSessions({});
+          signOut(auth).catch(() => {});
+          setUser(null);
+          setAccounts([]);
+          setProfile({ maxAccounts: 0, mobile: '', status: 'active' });
+          alert('⚠️ Session Terminated: This OrderMunim account was accessed on another device.\n\nOnly 1 active device login is allowed at a time. Meesho terminates sessions (HTTP 403) when multiple devices poll simultaneously.\n\nTo share access with your staff safely, please use Staff Mode.');
+          return;
+        }
+
+        // If no activeDeviceId set yet (legacy profile), adopt current device
+        if (!profData.activeDeviceId) {
+          updateDoc(userRef, {
+            activeDeviceId: currentDeviceId,
+            activeDeviceAt: new Date().toISOString()
+          }).catch(() => {});
+        }
+
         setProfile(profData);
         try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
         if (isSuper || profData.role === 'super_admin') {
@@ -411,12 +459,15 @@ export default function App() {
           setActiveTab('admin');
         }
       } else {
+        const currentDeviceId = getDeviceId();
         const initialProf = {
           mobile: userPhone || '',
           email: userEmail || '',
           maxAccounts: isSuper ? 999 : 0,
           role: isSuper ? 'super_admin' : 'seller',
           status: 'active',
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: new Date().toISOString(),
           createdAt: new Date().toISOString()
         };
         setDoc(userRef, initialProf).catch(() => {});
@@ -611,8 +662,12 @@ export default function App() {
           return;
         }
 
+        const polledIdentifiers = new Set();
         for (const [key, sess] of Object.entries(sessions)) {
           if (!sess.identifier && !sess.email) continue;
+          const dedupKey = sess.identifier || (sess.supplierId ? `sup_${sess.supplierId}` : (sess.email || key));
+          if (polledIdentifiers.has(dedupKey)) continue;
+          polledIdentifiers.add(dedupKey);
 
           // If cookies missing but credentials exist, attempt initial login
           if (!sess.cookies && sess.email && sess.password) {
@@ -801,7 +856,19 @@ export default function App() {
     setAuthError('');
     setAuthLoading(true);
     try {
-      await confirmationResult.confirm(verificationCode);
+      const cred = await confirmationResult.confirm(verificationCode);
+      if (cred && cred.user) {
+        const currentDeviceId = getDeviceId();
+        await updateDoc(doc(db, 'users', cred.user.uid), {
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: new Date().toISOString()
+        }).catch(async () => {
+          await setDoc(doc(db, 'users', cred.user.uid), {
+            activeDeviceId: currentDeviceId,
+            activeDeviceAt: new Date().toISOString()
+          }, { merge: true }).catch(() => {});
+        });
+      }
     } catch (err) {
       console.error(err);
       setAuthError('Invalid OTP code. Please enter the correct code.');
@@ -844,9 +911,24 @@ export default function App() {
           return;
         }
 
-        // If verified, update Firestore so admin console reflects it
+        // If verified, update Firestore so admin console reflects it and claim this device session
+        const currentDeviceId = getDeviceId();
         await updateDoc(doc(db, 'users', currentUser.uid), {
-          emailVerified: true
+          emailVerified: true,
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: new Date().toISOString()
+        }).catch(async () => {
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            emailVerified: true,
+            activeDeviceId: currentDeviceId,
+            activeDeviceAt: new Date().toISOString()
+          }, { merge: true }).catch(() => {});
+        });
+      } else {
+        const currentDeviceId = getDeviceId();
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: new Date().toISOString()
         }).catch(() => {});
       }
 
@@ -913,6 +995,8 @@ export default function App() {
         maxAccounts: 0, // 0 stores quota by default
         status: 'active',
         emailVerified: false,
+        activeDeviceId: getDeviceId(),
+        activeDeviceAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
       });
 
@@ -1038,10 +1122,18 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if (isNativeMobile()) {
+      try {
+        await stopBackgroundMonitoring();
+        await syncBackgroundSessions({});
+      } catch {}
+    }
     try {
+      localStorage.removeItem('native_meesho_sessions');
       localStorage.removeItem('cached_user_profile');
       localStorage.removeItem('cached_user_accounts');
     } catch {}
+    setLocalSessions({});
     await signOut(auth);
     setUser(null);
     setEmailNeedsVerification(false);
@@ -1307,6 +1399,7 @@ export default function App() {
     }
 
     const cleanEmail = meeshoEmail.trim().toLowerCase();
+    const isSuper = (user?.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || user?.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
     if (cleanEmail) {
       const existing = accounts.find(a =>
         a.email && a.email.trim().toLowerCase() === cleanEmail
@@ -1314,6 +1407,21 @@ export default function App() {
       if (existing) {
         setModalError(`Account already added! "${existing.storeName || meeshoEmail}" is already connected.`);
         return;
+      }
+
+      // Cross-Account Duplicate Check by Email
+      if (!isSuper) {
+        try {
+          const qEmail = query(collection(db, 'accounts'), where('email', '==', cleanEmail));
+          const snapEmail = await getDocs(qEmail);
+          for (const d of snapEmail.docs) {
+            const accData = d.data();
+            if (accData.userId && accData.userId !== user.uid) {
+              setModalError(`Access Restricted: This Meesho account (${cleanEmail}) is already connected to another OrderMunim user. Meesho enforces a strict 1-login policy and returns HTTP 403 Session Expired if multiple accounts access it. To share access across multiple devices, please use Staff Mode.`);
+              return;
+            }
+          }
+        } catch (e) {}
       }
     }
 
@@ -1344,22 +1452,6 @@ export default function App() {
           dateTime: directRes.dateTime,
           otpList: directRes.otpList || []
         };
-
-        // Save session locally on phone for background auto-refresh & background service
-        try {
-          const raw = localStorage.getItem('native_meesho_sessions');
-          const sessions = raw ? JSON.parse(raw) : {};
-          sessions[syncKey] = {
-            email: meeshoEmail.trim(),
-            password: meeshoPass,
-            identifier: directRes.identifier,
-            supplierId: directRes.supplierId,
-            storeName: directRes.storeName,
-            cookies: directRes.cookies
-          };
-          localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-          syncBackgroundSessions(sessions);
-        } catch (e) {}
       } else {
         // 2. On Web, fallback to backend automation server/tunnel
         let backendUrl = getBackendUrl();
@@ -1412,6 +1504,46 @@ export default function App() {
         }
       }
 
+      // Cross-Account Duplicate Check by supplierId & identifier
+      if (!isSuper) {
+        let conflictAcc = null;
+
+        if (data?.supplierId) {
+          try {
+            const qSup = query(collection(db, 'accounts'), where('supplierId', '==', Number(data.supplierId)));
+            const snapSup = await getDocs(qSup);
+            for (const d of snapSup.docs) {
+              const item = d.data();
+              if (item.userId && item.userId !== user.uid) {
+                conflictAcc = item;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (!conflictAcc && data?.identifier) {
+          try {
+            const qIdent = query(collection(db, 'accounts'), where('identifier', '==', data.identifier));
+            const snapIdent = await getDocs(qIdent);
+            for (const d of snapIdent.docs) {
+              const item = d.data();
+              if (item.userId && item.userId !== user.uid) {
+                conflictAcc = item;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (conflictAcc) {
+          setModalError(
+            `Access Restricted: This Meesho store ("${conflictAcc.storeName || cleanEmail}") is already connected to another OrderMunim account. Meesho permits only 1 active session at a time and revokes access (HTTP 403) on concurrent logins. To share live OTPs with your team across multiple phones, please use the owner's Staff Mode link.`
+          );
+          return;
+        }
+      }
+
       // Only merge if the EXACT SAME email is already added (re-authenticating an existing store)
       // Never merge by identifier alone so multi-store / multi-brand sellers can add all their stores!
       const existingStore = accounts.find(a =>
@@ -1452,8 +1584,10 @@ export default function App() {
             cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),
             expired: false
           };
-          sessions[syncKey] = sessObj;
-          if (targetSyncKey) sessions[targetSyncKey] = sessObj;
+          if (syncKey !== targetSyncKey && sessions[syncKey]) {
+            delete sessions[syncKey];
+          }
+          sessions[targetSyncKey] = sessObj;
           localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
           setLocalSessions({ ...sessions });
           syncBackgroundSessions(sessions);

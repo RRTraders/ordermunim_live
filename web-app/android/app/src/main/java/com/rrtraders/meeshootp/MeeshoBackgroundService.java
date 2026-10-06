@@ -148,10 +148,18 @@ public class MeeshoBackgroundService extends Service {
         try {
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
+            java.util.Set<String> polledSet = new java.util.HashSet<>();
 
             for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
                 String syncKey = it.next();
                 JSONObject sess = allSessions.getJSONObject(syncKey);
+                String ident = sess.optString("identifier", "");
+                long supId = sess.optLong("supplierId", 0);
+                String dedupKey = !ident.isEmpty() ? ident : (supId > 0 ? ("sup_" + supId) : syncKey);
+                if (polledSet.contains(dedupKey)) {
+                    continue;
+                }
+                polledSet.add(dedupKey);
                 pollSingleAccount(syncKey, sess);
             }
         } catch (Exception ignored) {}

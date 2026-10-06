@@ -86,6 +86,18 @@ export async function startBackgroundMonitoring() {
 }
 
 /**
+ * Stop native foreground monitoring service & wipe background sessions
+ */
+export async function stopBackgroundMonitoring() {
+  try {
+    if (!isNativeMobile()) return;
+    await NativeMeesho.stopBackgroundService();
+  } catch (err) {
+    console.warn('[Native Meesho] stopBackgroundService failed:', err);
+  }
+}
+
+/**
  * Re-trigger battery optimization prompt or check exemption
  */
 export async function requestBatteryOptimization() {

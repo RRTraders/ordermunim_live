@@ -509,6 +509,22 @@ public class MeeshoDirectPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void stopBackgroundService(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            SharedPreferences prefs = ctx.getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            prefs.edit().putString("sessions", "{}").apply();
+            Intent serviceIntent = new Intent(ctx, MeeshoBackgroundService.class);
+            ctx.stopService(serviceIntent);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to stop background service: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void requestBatteryOptimization(PluginCall call) {
         try {
             Context ctx = getContext();
