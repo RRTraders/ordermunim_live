@@ -200,6 +200,7 @@ export default function App() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminInputPass, setAdminInputPass] = useState('');
   const [allUsersList, setAllUsersList] = useState([]);
+  const [allPlatformAccounts, setAllPlatformAccounts] = useState([]);
   const [adminUserTab, setAdminUserTab] = useState('activated'); // 'activated' | 'pending'
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
@@ -357,8 +358,40 @@ export default function App() {
         setUser(null);
         setEmailNeedsVerification(false);
         setLoading(false);
+        setAccounts([]);
+        setLocalSessions({});
+        if (isNativeMobile()) {
+          try {
+            stopBackgroundMonitoring();
+            syncBackgroundSessions({});
+          } catch {}
+        }
+        try {
+          localStorage.removeItem('om_active_user_uid');
+          localStorage.removeItem('native_meesho_sessions');
+          localStorage.removeItem('cached_user_accounts');
+          localStorage.removeItem('cached_user_profile');
+          clearVault();
+        } catch {}
         return;
       }
+
+      // Detect if user switched on this device:
+      const prevActiveUid = localStorage.getItem('om_active_user_uid');
+      if (prevActiveUid && prevActiveUid !== currentUser.uid) {
+        try {
+          localStorage.removeItem('native_meesho_sessions');
+          localStorage.removeItem('cached_user_accounts');
+          localStorage.removeItem('cached_user_profile');
+          clearVault();
+          if (isNativeMobile()) {
+            syncBackgroundSessions({});
+          }
+        } catch {}
+        setLocalSessions({});
+        setAccounts([]);
+      }
+      try { localStorage.setItem('om_active_user_uid', currentUser.uid); } catch {}
 
       const isSuper = (currentUser.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || currentUser.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
       const isLocallyVerified = Boolean(
@@ -450,11 +483,9 @@ export default function App() {
     });
 
     // 2. Subscribe to accounts:
-    // If super admin, load ALL accounts across the platform!
-    // If regular seller, load ONLY this user's accounts!
-    const q = isSuper
-      ? collection(db, 'accounts')
-      : query(collection(db, 'accounts'), where('userId', '==', uid));
+    // STRICT CLIENT ISOLATION: Always load ONLY this user's accounts!
+    // Platform-wide management for super admin is handled separately in Admin console.
+    const q = query(collection(db, 'accounts'), where('userId', '==', uid));
 
     const unsubAcc = onSnapshot(q, (snapshot) => {
       const accList = [];
@@ -502,6 +533,7 @@ export default function App() {
     if (!initialLoadDoneRef.current) {
       // First load: seed all current OTPs so app startup never beeps
       for (const acc of accounts) {
+        if (acc.userId && user?.uid && acc.userId !== user.uid) continue;
         if (acc.currentOtp && acc.currentOtp !== '----') {
           lastChimedOtpsRef.current[acc.id] = acc.currentOtp;
         }
@@ -513,6 +545,7 @@ export default function App() {
     let hasNewOtp = false;
 
     for (const acc of accounts) {
+      if (acc.userId && user?.uid && acc.userId !== user.uid) continue;
       const otp = acc.currentOtp;
       if (otp && otp !== '----') {
         const lastChimed = lastChimedOtpsRef.current[acc.id];
@@ -543,16 +576,32 @@ export default function App() {
 
   // 1. Multi-Device Session Hydration (Firestore -> Phone localStorage & Background Service)
   useEffect(() => {
-    if (!isNativeMobile() || accounts.length === 0) return;
+    if (!isNativeMobile() || !user) return;
     try {
       const rawSessions = localStorage.getItem('native_meesho_sessions');
       const cur = rawSessions ? JSON.parse(rawSessions) : {};
       let changed = false;
 
-      for (const acc of accounts) {
+      // Filter accounts strictly by the current logged-in user's UID
+      const myAccounts = accounts.filter(acc => acc.userId === user.uid);
+      const validKeys = new Set();
+      myAccounts.forEach(acc => {
+        if (acc.id) validKeys.add(acc.id);
+        if (acc.syncKey) validKeys.add(acc.syncKey);
+      });
+
+      // STRICT PURGE: Remove any session keys that do NOT belong to this user's current stores
+      for (const k of Object.keys(cur)) {
+        if (!validKeys.has(k)) {
+          delete cur[k];
+          changed = true;
+        }
+      }
+
+      for (const acc of myAccounts) {
         const key = acc.syncKey || acc.id;
         const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null);
-        const vaultCred = findCredentialsForAccount(acc);
+        const vaultCred = findCredentialsForAccount(acc, user.uid);
         const restoredPassword = (existing && existing.password) ? existing.password : (vaultCred?.password || '');
         const restoredEmail = (existing && existing.email) ? existing.email : (acc.email || vaultCred?.email || '');
 
@@ -594,13 +643,13 @@ export default function App() {
         }
       }
 
-      if (changed) {
+      if (changed || myAccounts.length === 0) {
         localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
         setLocalSessions(cur);
         syncBackgroundSessions(cur);
       }
     } catch (e) {}
-  }, [accounts]);
+  }, [accounts, user]);
 
   // 2. Multi-Device Cloud Backup: Only sync identifiers & cookies, NEVER passwords to ensure 100% privacy
   useEffect(() => {
@@ -1503,8 +1552,8 @@ export default function App() {
       }
     }
 
-    const randomId = Math.floor(1000 + Math.random() * 9000);
-    const syncKey = `MSH-${randomId}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const syncKey = `MSH-${user.uid.slice(0, 4).toUpperCase()}-${randomSuffix}`;
     const autoStoreName = newStoreName.trim() || (meeshoEmail ? meeshoEmail.split('@')[0] : 'My Meesho Store');
 
     setSyncingAccount(true);
@@ -1622,10 +1671,9 @@ export default function App() {
         }
       }
 
-      // Only merge if the EXACT SAME email is already added (re-authenticating an existing store)
-      // Never merge by identifier alone so multi-store / multi-brand sellers can add all their stores!
+      // Only merge if the EXACT SAME email is already added by THIS user
       const existingStore = accounts.find(a =>
-        a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail
+        a.userId === user.uid && a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail
       );
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
@@ -1649,7 +1697,7 @@ export default function App() {
         lastUpdated: new Date().toISOString()
       }, { merge: true });
 
-      // Save credentials encrypted in local database on this device
+      // Save credentials encrypted in local database on this device (isolated to user.uid)
       try {
         saveEncryptedStoreCredentials(targetSyncKey, {
           email: cleanEmail,
@@ -1657,7 +1705,7 @@ export default function App() {
           identifier: data?.identifier || existingStore?.identifier || '',
           supplierId: data?.supplierId || existingStore?.supplierId || 0,
           storeName: finalStoreName
-        });
+        }, user.uid);
       } catch (e) {}
 
       if (isNativeMobile()) {
@@ -2022,7 +2070,7 @@ export default function App() {
     }
   };
 
-  // Admin: load all users only when Admin tab is active & unlocked
+  // Admin: load all users and all platform stores only when Admin tab is active & unlocked
   useEffect(() => {
     if (activeTab !== 'admin' || !adminAuthenticated) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -2032,7 +2080,19 @@ export default function App() {
       });
       setAllUsersList(uList);
     });
-    return () => unsubUsers();
+
+    const unsubAllAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      const accList = [];
+      snapshot.forEach((d) => {
+        accList.push({ id: d.id, ...d.data() });
+      });
+      setAllPlatformAccounts(accList);
+    });
+
+    return () => {
+      unsubUsers();
+      unsubAllAccounts();
+    };
   }, [activeTab, adminAuthenticated]);
 
   const handleAdminLogin = async (e) => {
@@ -2090,7 +2150,7 @@ export default function App() {
       confirmText: 'Delete Permanently',
       onConfirm: async () => {
         try {
-          const userStores = accounts.filter(a => a.userId === targetUid);
+          const userStores = allPlatformAccounts.filter(a => a.userId === targetUid);
           for (const s of userStores) {
             await deleteDoc(doc(db, 'accounts', s.id));
           }
@@ -2939,9 +2999,9 @@ export default function App() {
                 <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
                   <span>Clients: <strong className="text-white">{allUsersList.filter(u => u.role !== 'super_admin').length}</strong></span>
                   <span>•</span>
-                  <span>Total Stores: <strong className="text-cyan-400">{accounts.length}</strong></span>
+                  <span>Total Stores: <strong className="text-cyan-400">{allPlatformAccounts.length}</strong></span>
                   <span>•</span>
-                  <span>Monthly Revenue: <strong className="text-amber-400 font-mono">₹{(accounts.length * 249).toLocaleString('en-IN')}</strong></span>
+                  <span>Monthly Revenue: <strong className="text-amber-400 font-mono">₹{(allPlatformAccounts.length * 249).toLocaleString('en-IN')}</strong></span>
                 </div>
               </div>
             </div>
@@ -2962,7 +3022,7 @@ export default function App() {
                 const nameMatch = (u.name || '').toLowerCase().includes(q);
                 const mobileMatch = (u.mobile || '').toLowerCase().includes(q);
                 const idMatch = (u.id || '').toLowerCase().includes(q);
-                const userStores = accounts.filter(a => a.userId === u.id);
+                const userStores = allPlatformAccounts.filter(a => a.userId === u.id);
                 const storeMatch = userStores.some(s => 
                   (s.storeName || '').toLowerCase().includes(q) || 
                   (s.syncKey || '').toLowerCase().includes(q)
@@ -3063,7 +3123,7 @@ export default function App() {
                         )
                       ) : (
                         paginatedUsers.map((u, idx) => {
-                          const userStores = accounts.filter(a => a.userId === u.id);
+                          const userStores = allPlatformAccounts.filter(a => a.userId === u.id);
                           const quota = u.maxAccounts !== undefined ? u.maxAccounts : 0;
                           const sequenceNum = startIndex + idx + 1;
 
