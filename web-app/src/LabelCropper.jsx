@@ -718,6 +718,23 @@ export default function LabelCropper({ showToast }) {
           const arrayBuffer = await file.arrayBuffer();
           const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
           const count = pdfDoc.getPageCount();
+
+          // Validation: Check first page text to prevent accidental upload of Invoice PDF into Label box
+          try {
+            const pdfJsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+            const firstPage = await pdfJsDoc.getPage(1);
+            const textContent = await firstPage.getTextContent();
+            const pageText = textContent.items.map(it => it.str).join(' ');
+
+            const isInvoice = /tax\s*invoice/i.test(pageText) || (/taxable\s*value/i.test(pageText) && /hsn/i.test(pageText));
+            if (isInvoice) {
+              showToast?.(`⚠️ "${file.name}" is a Tax Invoice PDF! Please upload it under "Invoice PDF" instead.`, 'error');
+              continue; // Skip uploading invoice into label box
+            }
+          } catch (vErr) {
+            console.warn('PDF validation check warning:', vErr);
+          }
+
           newLabelFiles.push({
             file,
             name: file.name,
@@ -775,6 +792,25 @@ export default function LabelCropper({ showToast }) {
           const arrayBuffer = await file.arrayBuffer();
           const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
           const count = pdfDoc.getPageCount();
+
+          // Validation: Check first page text to prevent accidental upload of Label PDF into Invoice box
+          try {
+            const pdfJsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+            const firstPage = await pdfJsDoc.getPage(1);
+            const textContent = await firstPage.getTextContent();
+            const pageText = textContent.items.map(it => it.str).join(' ');
+
+            const hasTaxInvoice = /tax\s*invoice/i.test(pageText) || (/taxable\s*value/i.test(pageText) && /hsn/i.test(pageText));
+            const isShippingLabel = (/awb\s*no/i.test(pageText) || /\bawb\b/i.test(pageText) || /return\s*address/i.test(pageText) || /routing\s*code/i.test(pageText)) && !hasTaxInvoice;
+
+            if (isShippingLabel) {
+              showToast?.(`⚠️ "${file.name}" is a Shipping Label PDF! Please upload it under "Label PDF" instead.`, 'error');
+              continue; // Skip uploading label into invoice box
+            }
+          } catch (vErr) {
+            console.warn('PDF validation check warning:', vErr);
+          }
+
           newInvoiceFiles.push({
             file,
             name: file.name,
