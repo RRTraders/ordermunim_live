@@ -479,7 +479,7 @@ export default function LabelCropper({ showToast }) {
   // Extract recipient / customer name, order number, and pincode from Ajio PDF page text
   const extractShipToFromPage = (content) => {
     const items = content?.items || [];
-    if (items.length === 0) return { shipToName: '', orderId: '', pincode: '', lines: [] };
+    if (items.length === 0) return { shipToName: '', orderId: '', pincode: '', lines: [], isContinuation: false, invoiceNumber: '', pageCurrent: 1, pageTotal: 1 };
 
     // Sort items top-to-bottom (Y descending), left-to-right (X ascending)
     const sorted = [...items].filter(it => it.str && it.str.trim()).sort((a, b) => {
@@ -513,6 +513,30 @@ export default function LabelCropper({ showToast }) {
     }
 
     const rawText = lines.join('\n');
+
+    // Detect "Page X of Y" (footer in Ajio invoices: "Page 1 of 2", "Page 2 of 2")
+    let pageCurrent = 1;
+    let pageTotal = 1;
+    const pageMatch = rawText.match(/Page\s*(\d+)\s*of\s*(\d+)/i);
+    if (pageMatch) {
+      pageCurrent = parseInt(pageMatch[1], 10);
+      pageTotal = parseInt(pageMatch[2], 10);
+    } else {
+      for (let i = 0; i < items.length - 1; i++) {
+        const s = items[i].str.trim();
+        const m = s.match(/Page\s*(\d+)\s*of/i);
+        if (m) {
+          pageCurrent = parseInt(m[1], 10);
+          const nextNum = parseInt(items[i + 1].str.trim(), 10);
+          if (!isNaN(nextNum)) pageTotal = nextNum;
+          break;
+        }
+      }
+    }
+
+    // Detect Tax Invoice Number
+    const invNoMatch = rawText.match(/TAX\s*INVOICE\s*NO[\s:]*([A-Za-z0-9]+)/i);
+    const invoiceNumber = invNoMatch ? invNoMatch[1].trim() : '';
 
     // Clean name candidate: removes adjacent column noise like "SHIP FROM ADDRESS", "SELLER", etc.
     const cleanCandidate = (raw) => {
@@ -590,24 +614,27 @@ export default function LabelCropper({ showToast }) {
       pincode = pinMatch[1];
     }
 
-    return { shipToName, orderId, pincode, lines };
+    // 6. Continuation detection: Page 2 of N, or page lacking both Tax Invoice No and Order ID
+    const isContinuation = pageCurrent > 1 || (!invoiceNumber && !orderId);
+
+    return { shipToName, orderId, pincode, lines, isContinuation, invoiceNumber, pageCurrent, pageTotal };
   };
 
-  // Determine if a label page matches an invoice page
+  // Determine if a label page matches an invoice document (single or multi-page)
   // Priority 1: Exact Order ID match (as requested: "if you cant get invoice from name then take by matching order")
   // Priority 2: Customer Name match (Exact or Substring)
   // Priority 3: Short Name + Pincode match or Pincode + Address match
-  const isAjioPageMatch = (labelPage, invoicePage) => {
+  const isAjioPageMatch = (labelPage, invoiceDoc) => {
     // 1. Order Number Match (Highest priority)
-    if (labelPage.orderId && invoicePage.orderId && labelPage.orderId.length >= 6) {
-      if (labelPage.orderId.toLowerCase() === invoicePage.orderId.toLowerCase()) {
+    if (labelPage.orderId && invoiceDoc.orderId && labelPage.orderId.length >= 6) {
+      if (labelPage.orderId.toLowerCase() === invoiceDoc.orderId.toLowerCase()) {
         return { match: true, reason: `Order ID Match (#${labelPage.orderId})` };
       }
     }
 
-    // 2. Customer Name Match
+    // 2. Customer Name Match (Exact or Substring)
     const normLbl = normalizeCustomerName(labelPage.shipToName);
-    const normInv = normalizeCustomerName(invoicePage.shipToName);
+    const normInv = normalizeCustomerName(invoiceDoc.shipToName);
 
     if (normLbl && normInv) {
       if (normLbl === normInv) {
@@ -619,15 +646,20 @@ export default function LabelCropper({ showToast }) {
         }
       }
       // Short names (e.g. "S" or "S R") verified with Pincode
-      if ((normLbl.length < 3 || normInv.length < 3) && labelPage.pincode && invoicePage.pincode && labelPage.pincode === invoicePage.pincode) {
-        return { match: true, reason: `Name & Pincode Match ("${labelPage.shipToName}" + ${labelPage.pincode})` };
+      if ((normLbl.length < 3 || normInv.length < 3) && labelPage.pincode && invoiceDoc.pincode && labelPage.pincode === invoiceDoc.pincode) {
+        return { match: true, reason: `Short Name + Pincode Match ("${labelPage.shipToName}" + ${labelPage.pincode})` };
       }
     }
 
-    // 3. Fallback: Pincode + Address tokens match
-    if (labelPage.pincode && invoicePage.pincode && labelPage.pincode === invoicePage.pincode && labelPage.pincode.length === 6) {
+    // 3. Fallback: Delivery Pincode match
+    if (labelPage.pincode && invoiceDoc.pincode && labelPage.pincode === invoiceDoc.pincode && labelPage.pincode.length === 6) {
+      return { match: true, reason: `Delivery Pincode Match (${labelPage.pincode})` };
+    }
+
+    // 4. Fallback: Pincode + Address tokens match
+    if (labelPage.pincode && invoiceDoc.pincode && labelPage.pincode === invoiceDoc.pincode && labelPage.pincode.length === 6) {
       const lblWords = (labelPage.lines || []).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4);
-      const invWords = (invoicePage.lines || []).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+      const invWords = (invoiceDoc.lines || []).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4);
       const shared = lblWords.filter(w => invWords.includes(w) && !['road', 'street', 'near', 'floor', 'india', 'surat', 'shree', 'kuberji'].includes(w));
       if (shared.length >= 2) {
         return { match: true, reason: `Pincode & Address Match (${labelPage.pincode})` };
@@ -830,32 +862,47 @@ export default function LabelCropper({ showToast }) {
         });
       }
 
-      // 3. Propagate Ship To name, order ID & pincode to continuation invoice pages
-      // (If invoice page p has no Ship To, but follows an invoice page that does, it belongs to that invoice)
-      for (let j = 0; j < invoicePagesInfo.length; j++) {
-        if (!invoicePagesInfo[j].shipToName && j > 0 && invoicePagesInfo[j - 1].shipToName) {
-          invoicePagesInfo[j].shipToName = invoicePagesInfo[j - 1].shipToName;
-          if (!invoicePagesInfo[j].orderId && invoicePagesInfo[j - 1].orderId) {
-            invoicePagesInfo[j].orderId = invoicePagesInfo[j - 1].orderId;
-          }
-          if (!invoicePagesInfo[j].pincode && invoicePagesInfo[j - 1].pincode) {
-            invoicePagesInfo[j].pincode = invoicePagesInfo[j - 1].pincode;
-          }
-          invoicePagesInfo[j].isContinuation = true;
+      // 3. Group invoice pages into structured Invoice Documents (handles multi-page invoices seamlessly)
+      // Page 1 of an invoice has TAX INVOICE NO, Order #, and footer "Page 1 of N".
+      // Subsequent pages (Page 2, 3...) have footer "Page 2 of N", repeated customer name, but omit TAX INVOICE NO.
+      const invoiceDocuments = [];
+      let curInvoice = null;
+
+      for (let i = 0; i < invoicePagesInfo.length; i++) {
+        const p = invoicePagesInfo[i];
+        if (!p.isContinuation || !curInvoice) {
+          curInvoice = {
+            invoiceIndex: invoiceDocuments.length,
+            invoiceNumber: p.invoiceNumber,
+            orderId: p.orderId,
+            shipToName: p.shipToName,
+            pincode: p.pincode,
+            lines: p.lines || [],
+            expectedPages: p.pageTotal || 1,
+            pages: [p],
+          };
+          invoiceDocuments.push(curInvoice);
+        } else {
+          curInvoice.pages.push(p);
+          if (!curInvoice.orderId && p.orderId) curInvoice.orderId = p.orderId;
+          if (!curInvoice.shipToName && p.shipToName) curInvoice.shipToName = p.shipToName;
+          if (!curInvoice.pincode && p.pincode) curInvoice.pincode = p.pincode;
+          if (p.lines && p.lines.length > 0) curInvoice.lines = [...(curInvoice.lines || []), ...p.lines];
         }
       }
 
       setAjioState(prev => ({
         ...prev,
         mergeProgress: 60,
-        mergeStatusText: 'Matching labels to invoices by order & customer name...',
+        mergeStatusText: `Matching ${labelPagesInfo.length} labels to ${invoiceDocuments.length} invoice documents...`,
       }));
 
       // 4. Build target page sequence:
       // For each 1-page label:
       //   Add label page
-      //   Find all matching unused invoice pages (1, 2, or more) and add them next to this label!
-      const usedInvoicePageIndices = new Set();
+      //   Match against invoice documents:
+      //     Append ALL pages belonging to this invoice document ([P1, P2...]) right behind the label!
+      const usedInvoiceDocIndices = new Set();
       const matchedPairs = [];
       const mergeSequence = [];
 
@@ -864,41 +911,31 @@ export default function LabelCropper({ showToast }) {
         mergeSequence.push({
           type: 'label',
           pageIndex: lbl.pageIndex,
+          pageNum: lbl.pageNum,
           name: lbl.shipToName,
           labelNum: i + 1,
         });
 
-        // Find all unused invoice pages matching this label
-        const matchedInvoicesForThisLabel = [];
-        let matchReason = '';
+        let matchedDoc = null;
+        let matchRes = null;
 
-        for (let j = 0; j < invoicePagesInfo.length; j++) {
-          if (!usedInvoicePageIndices.has(j)) {
-            const inv = invoicePagesInfo[j];
-            const matchRes = isAjioPageMatch(lbl, inv);
-            if (matchRes.match) {
-              matchReason = matchRes.reason;
-              usedInvoicePageIndices.add(j);
-              matchedInvoicesForThisLabel.push(inv);
-              mergeSequence.push({
-                type: 'invoice',
-                pageIndex: inv.pageIndex,
-                name: inv.shipToName,
-                labelNum: i + 1,
-              });
-
-              // Check if immediately following pages are continuation pages belonging to this same invoice
-              let nextIdx = j + 1;
-              while (nextIdx < invoicePagesInfo.length && invoicePagesInfo[nextIdx].isContinuation && !usedInvoicePageIndices.has(nextIdx)) {
-                usedInvoicePageIndices.add(nextIdx);
-                matchedInvoicesForThisLabel.push(invoicePagesInfo[nextIdx]);
+        for (let j = 0; j < invoiceDocuments.length; j++) {
+          if (!usedInvoiceDocIndices.has(j)) {
+            const invDoc = invoiceDocuments[j];
+            const res = isAjioPageMatch(lbl, invDoc);
+            if (res.match) {
+              matchedDoc = invDoc;
+              matchRes = res;
+              usedInvoiceDocIndices.add(j);
+              // Append ALL pages of this invoice document immediately after the label
+              for (const pg of invDoc.pages) {
                 mergeSequence.push({
                   type: 'invoice',
-                  pageIndex: invoicePagesInfo[nextIdx].pageIndex,
-                  name: invoicePagesInfo[nextIdx].shipToName,
+                  pageIndex: pg.pageIndex,
+                  pageNum: pg.pageNum,
+                  name: invDoc.shipToName,
                   labelNum: i + 1,
                 });
-                nextIdx++;
               }
               break;
             }
@@ -908,28 +945,32 @@ export default function LabelCropper({ showToast }) {
         matchedPairs.push({
           labelNum: i + 1,
           labelPageIndex: lbl.pageIndex,
+          labelPage: lbl.pageNum,
           customerName: lbl.shipToName || 'Customer Name Not Detected',
           orderId: lbl.orderId,
-          matchReason: matchReason || (matchedInvoicesForThisLabel.length > 0 ? 'Matched' : 'No match found'),
-          matchedInvoices: matchedInvoicesForThisLabel.map(m => ({
-            pageNum: m.pageNum,
-            pageIndex: m.pageIndex,
-          })),
+          matchReason: matchRes ? matchRes.reason : 'No matching invoice',
+          matchedInvoices: matchedDoc ? matchedDoc.pages.map(pg => ({
+            pageNum: pg.pageNum,
+            pageIndex: pg.pageIndex,
+          })) : [],
         });
       }
 
-      // Any remaining unmatched invoices are appended at the end
+      // Any remaining unmatched invoice documents are appended at the end
       const unmatchedInvoices = [];
-      for (let j = 0; j < invoicePagesInfo.length; j++) {
-        if (!usedInvoicePageIndices.has(j)) {
-          const inv = invoicePagesInfo[j];
-          unmatchedInvoices.push(inv);
-          mergeSequence.push({
-            type: 'invoice',
-            pageIndex: inv.pageIndex,
-            name: inv.shipToName,
-            unmatched: true,
-          });
+      for (let j = 0; j < invoiceDocuments.length; j++) {
+        if (!usedInvoiceDocIndices.has(j)) {
+          const invDoc = invoiceDocuments[j];
+          for (const pg of invDoc.pages) {
+            unmatchedInvoices.push(pg);
+            mergeSequence.push({
+              type: 'invoice',
+              pageIndex: pg.pageIndex,
+              pageNum: pg.pageNum,
+              name: invDoc.shipToName,
+              unmatched: true,
+            });
+          }
         }
       }
 
