@@ -77,7 +77,8 @@ import {
   ChevronDown,
   DownloadCloud,
   Rocket,
-  AlertTriangle
+  AlertTriangle,
+  Smartphone
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
@@ -1708,6 +1709,10 @@ export default function App() {
   };
 
   const handleOpenAddModal = () => {
+    if (!isNativeMobile()) {
+      showToast('To connect a Meesho store, please add it inside the OrderMunim Android App on your phone.', 'info', 'Mobile App Required');
+      return;
+    }
     setSyncingAccount(false);
     setModalError('');
     setConnectStep(1);
@@ -3413,9 +3418,14 @@ export default function App() {
                 )}
               </div>
 
-              {/* Desktop Web Only: Add Store Button (On Mobile, replaced with Floating Action Button) */}
+              {/* Action Button: Visible on Android App; on Web browser guides to Mobile App */}
               <div className="flex items-center gap-2.5">
-                {accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
+                {!isNativeMobile() ? (
+                  <div className="flex items-center gap-1.5 bg-cyan-950/40 border border-cyan-800/40 px-3 py-1.5 rounded-xl text-cyan-300 text-xs font-medium">
+                    <Smartphone className="w-4 h-4 text-cyan-400" />
+                    <span>Add Store via Android App</span>
+                  </div>
+                ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
                     className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all"
@@ -3436,7 +3446,29 @@ export default function App() {
               <div className="bg-slate-900 border border-dashed border-slate-800 rounded-3xl p-10 text-center">
                 <Package className="w-12 h-12 text-slate-600 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-white">No Meesho Accounts Linked Yet</h3>
-                {accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
+                {!isNativeMobile() ? (
+                  <div className="mt-4 p-5 bg-cyan-950/30 border border-cyan-800/40 rounded-2xl max-w-md mx-auto text-center space-y-2.5">
+                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <h4 className="text-sm font-semibold text-white">Connect Store from Mobile App</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Meesho accounts must be connected inside the <strong>OrderMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
+                    </p>
+                    <p className="text-[11px] text-cyan-400 font-medium">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
+                    <div className="pt-1">
+                      <a
+                        href={broadcastUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all"
+                      >
+                        <DownloadCloud className="w-4 h-4" />
+                        Download Android App
+                      </a>
+                    </div>
+                  </div>
+                ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
                     className="mt-4 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold rounded-xl"
@@ -4011,8 +4043,8 @@ export default function App() {
       </nav>
 
       {/* ================= MOBILE APP FLOATING ACTION BUTTON (FAB) ================= */}
-      {/* Positioned at right bottom above navigation bar, showing only + icon in rounded circular shape */}
-      {activeTab === 'dashboard' && (
+      {/* Positioned at right bottom above navigation bar, visible strictly on Android native app */}
+      {isNativeMobile() && activeTab === 'dashboard' && (
         <button
           type="button"
           onClick={() => {

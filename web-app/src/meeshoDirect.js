@@ -5,15 +5,18 @@ const NativeMeesho = registerPlugin('MeeshoDirect');
 
 export function isNativeMobile() {
   try {
+    if (typeof Capacitor !== 'undefined' && typeof Capacitor.isNativePlatform === 'function') {
+      if (Capacitor.isNativePlatform()) return true;
+    }
     if (typeof window !== 'undefined') {
       if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
         if (window.Capacitor.isNativePlatform()) return true;
       }
-      if (window.location && (window.location.protocol === 'capacitor:' || window.location.hostname === 'localhost')) {
+      if (window.location && window.location.protocol === 'capacitor:') {
         return true;
       }
     }
-    return typeof Capacitor !== 'undefined' && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform();
+    return false;
   } catch {
     return false;
   }
