@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
+import * as XLSX from 'xlsx';
 import { 
   FileText, 
   CheckCircle2, 
@@ -25,11 +26,11 @@ import {
   Trash2, 
   Plus, 
   RefreshCw, 
-  Store,
-  Layers,
-  Sparkles,
-  Check,
-  QrCode
+  Store, 
+  Layers, 
+  Sparkles, 
+  Check, 
+  QrCode 
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -47,8 +48,8 @@ export const MARKETPLACES = [
     badgeText: 'ajio',
     badgeStyle: 'bg-slate-950 text-amber-400 border border-slate-700 shadow-amber-500/10',
     iconLetter: 'A',
-    description: 'Crop and organize Ajio standard & dropship courier manifests with automated barcode cropping.',
-    ready: false
+    description: 'Merge Ajio shipping labels & invoices in alternating page order.',
+    ready: true
   },
   {
     id: 'amazon',
@@ -436,6 +437,245 @@ export default function LabelCropper({ showToast }) {
   };
 
   const fileInputRef = useRef(null);
+
+  // Helper for formatting file size
+  const formatFileSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Ajio Interleaved PDF Merger State
+  const [ajioState, setAjioState] = useState({
+    labelFile: null,
+    labelPageCount: 0,
+    invoiceFile: null,
+    invoicePageCount: 0,
+    excelFile: null,
+    excelRowCount: 0,
+    excelData: null,
+    isMerging: false,
+    mergeProgress: 0,
+    mergedDownload: null,
+    error: null,
+  });
+
+  const ajioLabelInputRef = useRef(null);
+  const ajioInvoiceInputRef = useRef(null);
+  const ajioExcelInputRef = useRef(null);
+
+  const handleAjioLabelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      showToast?.('Please upload a PDF file for Ajio Labels', 'warning');
+      return;
+    }
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+      const count = pdfDoc.getPageCount();
+      setAjioState(prev => ({
+        ...prev,
+        labelFile: file,
+        labelPageCount: count,
+        mergedDownload: null,
+        error: null,
+      }));
+      showToast?.(`Loaded Label PDF: ${file.name} (${count} pages)`, 'success');
+    } catch (err) {
+      console.error('Error reading Ajio Label PDF:', err);
+      showToast?.('Failed to read Label PDF: ' + err.message, 'error');
+    }
+  };
+
+  const handleAjioInvoiceUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      showToast?.('Please upload a PDF file for Ajio Invoices', 'warning');
+      return;
+    }
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+      const count = pdfDoc.getPageCount();
+      setAjioState(prev => ({
+        ...prev,
+        invoiceFile: file,
+        invoicePageCount: count,
+        mergedDownload: null,
+        error: null,
+      }));
+      showToast?.(`Loaded Invoice PDF: ${file.name} (${count} pages)`, 'success');
+    } catch (err) {
+      console.error('Error reading Ajio Invoice PDF:', err);
+      showToast?.('Failed to read Invoice PDF: ' + err.message, 'error');
+    }
+  };
+
+  const handleAjioExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      const count = rows.length;
+      setAjioState(prev => ({
+        ...prev,
+        excelFile: file,
+        excelRowCount: count,
+        excelData: rows,
+      }));
+      showToast?.(`Loaded Ajio Excel: ${file.name} (${count} rows)`, 'success');
+    } catch (err) {
+      console.error('Error reading Ajio Excel:', err);
+      showToast?.('Failed to read Excel file: ' + err.message, 'error');
+    }
+  };
+
+  const clearAjioLabel = () => {
+    if (ajioLabelInputRef.current) ajioLabelInputRef.current.value = '';
+    setAjioState(prev => ({
+      ...prev,
+      labelFile: null,
+      labelPageCount: 0,
+      mergedDownload: null,
+    }));
+  };
+
+  const clearAjioInvoice = () => {
+    if (ajioInvoiceInputRef.current) ajioInvoiceInputRef.current.value = '';
+    setAjioState(prev => ({
+      ...prev,
+      invoiceFile: null,
+      invoicePageCount: 0,
+      mergedDownload: null,
+    }));
+  };
+
+  const clearAjioExcel = () => {
+    if (ajioExcelInputRef.current) ajioExcelInputRef.current.value = '';
+    setAjioState(prev => ({
+      ...prev,
+      excelFile: null,
+      excelRowCount: 0,
+      excelData: null,
+    }));
+  };
+
+  const clearAllAjio = () => {
+    if (ajioLabelInputRef.current) ajioLabelInputRef.current.value = '';
+    if (ajioInvoiceInputRef.current) ajioInvoiceInputRef.current.value = '';
+    if (ajioExcelInputRef.current) ajioExcelInputRef.current.value = '';
+    setAjioState({
+      labelFile: null,
+      labelPageCount: 0,
+      invoiceFile: null,
+      invoicePageCount: 0,
+      excelFile: null,
+      excelRowCount: 0,
+      excelData: null,
+      isMerging: false,
+      mergeProgress: 0,
+      mergedDownload: null,
+      error: null,
+    });
+  };
+
+  const handleMergeAjioPdf = async () => {
+    if (!ajioState.labelFile || !ajioState.invoiceFile) {
+      showToast?.('Please upload both Label PDF and Invoice PDF to merge', 'warning');
+      return;
+    }
+
+    setAjioState(prev => ({ ...prev, isMerging: true, mergeProgress: 5, error: null }));
+
+    try {
+      const mergedDoc = await PDFDocument.create();
+
+      const labelBytes = await ajioState.labelFile.arrayBuffer();
+      const invoiceBytes = await ajioState.invoiceFile.arrayBuffer();
+
+      const labelDoc = await PDFDocument.load(labelBytes, { ignoreEncryption: true });
+      const invoiceDoc = await PDFDocument.load(invoiceBytes, { ignoreEncryption: true });
+
+      const labelCount = labelDoc.getPageCount();
+      const invoiceCount = invoiceDoc.getPageCount();
+      const maxPages = Math.max(labelCount, invoiceCount);
+      const totalOutputPages = labelCount + invoiceCount;
+      let pagesCopied = 0;
+
+      for (let i = 0; i < maxPages; i++) {
+        // Condition: Take page i from Label PDF into merged PDF as page 1, 3, 5...
+        if (i < labelCount) {
+          const [labelPage] = await mergedDoc.copyPages(labelDoc, [i]);
+          mergedDoc.addPage(labelPage);
+          pagesCopied++;
+        }
+        // Condition: Take page i from Invoice PDF into merged PDF as page 2, 4, 6...
+        if (i < invoiceCount) {
+          const [invoicePage] = await mergedDoc.copyPages(invoiceDoc, [i]);
+          mergedDoc.addPage(invoicePage);
+          pagesCopied++;
+        }
+
+        // Progress update every few pages
+        if (i % 3 === 0 || i === maxPages - 1) {
+          const pct = Math.min(95, Math.round((pagesCopied / totalOutputPages) * 100));
+          setAjioState(prev => ({ ...prev, mergeProgress: pct }));
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+
+      setAjioState(prev => ({ ...prev, mergeProgress: 98 }));
+      const mergedBytes = await mergedDoc.save();
+      const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const filename = `Ajio_Merged_${labelCount}_Labels_Invoices_${dateTag}.pdf`;
+
+      const downloadInfo = {
+        type: 'single',
+        url,
+        filename,
+        blob,
+        totalPages: pagesCopied,
+        labelCount,
+        invoiceCount,
+      };
+
+      setAjioState(prev => ({
+        ...prev,
+        isMerging: false,
+        mergeProgress: 100,
+        mergedDownload: downloadInfo,
+      }));
+
+      updateMarketplaceState('ajio', {
+        downloadReady: downloadInfo,
+        isProcessing: false,
+      });
+
+      // Auto trigger browser download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showToast?.(`Merged successfully! ${pagesCopied} pages downloaded.`, 'success');
+    } catch (err) {
+      console.error('Error during Ajio PDF merge:', err);
+      setAjioState(prev => ({ ...prev, isMerging: false, error: err.message }));
+      showToast?.('Failed to merge PDFs: ' + err.message, 'error');
+    }
+  };
 
   const handleSelectMarketplace = (id) => {
     setSelectedMarketplace(id);
@@ -1951,8 +2191,11 @@ export default function LabelCropper({ showToast }) {
   };
 
   const handleDirectPrint = () => {
-    if (!downloadReady?.url) return;
-    const printWin = window.open(downloadReady.url);
+    const activeUrl = selectedMarketplace === 'ajio'
+      ? (ajioState.mergedDownload?.url || downloadReady?.url)
+      : downloadReady?.url;
+    if (!activeUrl) return;
+    const printWin = window.open(activeUrl);
     if (printWin) {
       printWin.onload = () => printWin.print();
     }
@@ -1968,7 +2211,7 @@ export default function LabelCropper({ showToast }) {
               Marketplace
             </span>
             <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
-              (Choose platform to crop labels)
+              (Choose platform to process labels)
             </span>
           </div>
           {!activeMarketplace?.ready && (
@@ -1983,9 +2226,11 @@ export default function LabelCropper({ showToast }) {
           {MARKETPLACES.map((mp) => {
             const isSelected = selectedMarketplace === mp.id;
             const mpState = marketplaceStates[mp.id];
-            const mpFilesCount = mpState?.files?.length || 0;
-            const mpIsProcessing = mpState?.isProcessing;
-            const mpHasDownload = Boolean(mpState?.downloadReady);
+            const mpFilesCount = mp.id === 'ajio'
+              ? ((ajioState.labelFile ? 1 : 0) + (ajioState.invoiceFile ? 1 : 0) + (ajioState.excelFile ? 1 : 0))
+              : (mpState?.files?.length || 0);
+            const mpIsProcessing = mp.id === 'ajio' ? ajioState.isMerging : mpState?.isProcessing;
+            const mpHasDownload = mp.id === 'ajio' ? Boolean(ajioState.mergedDownload) : Boolean(mpState?.downloadReady);
 
             return (
               <button
@@ -2749,25 +2994,345 @@ export default function LabelCropper({ showToast }) {
 
       </div>
         </>
-      ) : (
-        <>
-          {/* ================= MARKETPLACE HEADER ================= */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+      ) : selectedMarketplace === 'ajio' ? (
+        /* ================= AJIO INTERLEAVED PDF MERGER ================= */
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-5 md:p-7 mb-6 space-y-6">
+          {/* Top Instructions & Action Bar */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-                {activeMarketplace?.name} Label Cropping and sorting tools
-              </h1>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-amber-500" />
+                Ajio Label & Invoice PDF Merger
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Upload your Label PDF and Invoice PDF to merge in alternating order (Page 1 Label &rarr; Page 1 Invoice &rarr; Page 2 Label &rarr; Page 2 Invoice...).
+              </p>
+            </div>
+            {(ajioState.labelFile || ajioState.invoiceFile || ajioState.excelFile) && (
+              <button
+                type="button"
+                onClick={clearAllAjio}
+                className="self-start md:self-auto text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Hidden file inputs */}
+          <input
+            ref={ajioLabelInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={handleAjioLabelUpload}
+            className="hidden"
+          />
+          <input
+            ref={ajioInvoiceInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={handleAjioInvoiceUpload}
+            className="hidden"
+          />
+          <input
+            ref={ajioExcelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleAjioExcelUpload}
+            className="hidden"
+          />
+
+          {/* The 3 Upload Buttons with file status shown just beside each button */}
+          <div className="space-y-4">
+            {/* 1. Label PDF Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <button
+                type="button"
+                onClick={() => ajioLabelInputRef.current?.click()}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
+              >
+                <FileText className="w-4 h-4 text-amber-400" />
+                <span>Label PDF</span>
+              </button>
+
+              {/* Just beside the button */}
+              <div className="flex-1 min-w-0">
+                {ajioState.labelFile ? (
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-slate-800 truncate" title={ajioState.labelFile.name}>
+                        {ajioState.labelFile.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold shrink-0">
+                        {ajioState.labelPageCount} {ajioState.labelPageCount === 1 ? 'Page' : 'Pages'}
+                      </span>
+                      <span className="text-slate-400 text-[11px] shrink-0">
+                        ({formatFileSize(ajioState.labelFile.size)})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearAjioLabel}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                      title="Remove Label PDF"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 italic pl-1">
+                    No Label PDF selected yet
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Active Marketplace Logo Badge */}
-            <div className="flex items-center gap-2">
-              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-md`}>
-                <span className="font-extrabold text-base leading-none">{activeMarketplace?.iconLetter}</span>
-                <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">{activeMarketplace?.badgeText}</span>
+            {/* 2. Invoice PDF Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <button
+                type="button"
+                onClick={() => ajioInvoiceInputRef.current?.click()}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
+              >
+                <FileCheck className="w-4 h-4 text-sky-400" />
+                <span>Invoice PDF</span>
+              </button>
+
+              {/* Just beside the button */}
+              <div className="flex-1 min-w-0">
+                {ajioState.invoiceFile ? (
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span className="font-semibold text-slate-800 truncate" title={ajioState.invoiceFile.name}>
+                        {ajioState.invoiceFile.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[11px] font-bold shrink-0">
+                        {ajioState.invoicePageCount} {ajioState.invoicePageCount === 1 ? 'Page' : 'Pages'}
+                      </span>
+                      <span className="text-slate-400 text-[11px] shrink-0">
+                        ({formatFileSize(ajioState.invoiceFile.size)})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearAjioInvoice}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                      title="Remove Invoice PDF"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 italic pl-1">
+                    No Invoice PDF selected yet
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Ajio Excel Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <button
+                type="button"
+                onClick={() => ajioExcelInputRef.current?.click()}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
+              >
+                <FileCode className="w-4 h-4 text-emerald-400" />
+                <span>Ajio Excel</span>
+              </button>
+
+              {/* Just beside the button */}
+              <div className="flex-1 min-w-0">
+                {ajioState.excelFile ? (
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-purple-50 border border-purple-200 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span className="font-semibold text-slate-800 truncate" title={ajioState.excelFile.name}>
+                        {ajioState.excelFile.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold shrink-0">
+                        {ajioState.excelRowCount} Rows
+                      </span>
+                      <span className="text-slate-400 text-[11px] shrink-0">
+                        ({formatFileSize(ajioState.excelFile.size)})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearAjioExcel}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                      title="Remove Ajio Excel"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 italic pl-1">
+                    No Ajio Excel selected yet (Optional)
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
+          {/* Merge Preview & Sequence Indicator */}
+          {ajioState.labelFile && ajioState.invoiceFile && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  Merge Sequence Preview
+                </span>
+                <span className="font-mono text-indigo-600">
+                  Total: {ajioState.labelPageCount + ajioState.invoicePageCount} Pages
+                </span>
+              </div>
+
+              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 font-mono text-[11px] leading-relaxed">
+                Page 1: Label #1 &rarr; Page 2: Invoice #1 &rarr; Page 3: Label #2 &rarr; Page 4: Invoice #2
+                {Math.max(ajioState.labelPageCount, ajioState.invoicePageCount) > 2 ? ' ...' : ''}
+                {ajioState.labelPageCount === ajioState.invoicePageCount && (
+                  <span> &rarr; Page {ajioState.labelPageCount * 2 - 1}: Label #{ajioState.labelPageCount} &rarr; Page {ajioState.labelPageCount * 2}: Invoice #{ajioState.invoicePageCount}</span>
+                )}
+              </div>
+
+              {ajioState.labelPageCount === ajioState.invoicePageCount ? (
+                <div className="flex items-center gap-1.5 text-emerald-700 font-semibold pt-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Page counts match: {ajioState.labelPageCount} Labels and {ajioState.invoicePageCount} Invoices will create an alternating {ajioState.labelPageCount * 2}-page PDF.</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-amber-700 font-semibold pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Notice: Label has {ajioState.labelPageCount} pages and Invoice has {ajioState.invoicePageCount} pages. Pages will interleave up to page {Math.min(ajioState.labelPageCount, ajioState.invoicePageCount)}, then append remaining pages.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Excel Preview (if loaded) */}
+          {ajioState.excelData && ajioState.excelData.length > 0 && (
+            <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-200/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                  <FileCode className="w-3.5 h-3.5 text-purple-600" />
+                  Ajio Excel Records ({ajioState.excelRowCount} total rows)
+                </span>
+                <span className="text-[10px] text-purple-600 font-medium">
+                  Showing first {Math.min(4, ajioState.excelData.length)} rows
+                </span>
+              </div>
+              <div className="overflow-x-auto text-[11px] bg-white rounded-lg border border-purple-100">
+                <table className="w-full text-left">
+                  <thead className="bg-purple-50/80 text-purple-900 font-bold border-b border-purple-100">
+                    <tr>
+                      {Object.keys(ajioState.excelData[0]).slice(0, 5).map((col, idx) => (
+                        <th key={idx} className="p-2 whitespace-nowrap">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-purple-50 text-slate-700">
+                    {ajioState.excelData.slice(0, 4).map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-purple-50/30">
+                        {Object.keys(ajioState.excelData[0]).slice(0, 5).map((col, cIdx) => (
+                          <td key={cIdx} className="p-2 whitespace-nowrap font-mono">{String(row[col] ?? '')}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Progress Bar (if merging) */}
+          {ajioState.isMerging && (
+            <div className="space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                  Interleaving and merging PDF pages...
+                </span>
+                <span className="font-mono text-indigo-600">{ajioState.mergeProgress}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${ajioState.mergeProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Merge & Download Action Button */}
+          <button
+            type="button"
+            disabled={!ajioState.labelFile || !ajioState.invoiceFile || ajioState.isMerging}
+            onClick={handleMergeAjioPdf}
+            className={`w-full py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer ${
+              !ajioState.labelFile || !ajioState.invoiceFile
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                : ajioState.isMerging
+                ? 'bg-indigo-400 text-white cursor-wait'
+                : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 hover:from-slate-900 hover:to-indigo-900 text-white shadow-slate-950/20 active:scale-[0.99]'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-amber-400" />
+            <span>
+              {ajioState.isMerging
+                ? 'Merging Pages...'
+                : (!ajioState.labelFile || !ajioState.invoiceFile)
+                ? 'Please Upload Both Label PDF & Invoice PDF'
+                : 'Merge & Download Interleaved PDF'}
+            </span>
+          </button>
+
+          {/* Download / Success Area (once merged) */}
+          {ajioState.mergedDownload && (
+            <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs sm:text-sm text-emerald-900">
+                      Interleaved PDF Ready!
+                    </h4>
+                    <p className="text-[11px] text-emerald-700">
+                      {ajioState.mergedDownload.totalPages} Pages Generated ({ajioState.mergedDownload.labelCount} Labels + {ajioState.mergedDownload.invoiceCount} Invoices)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(true)}
+                  className="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-800 border border-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-emerald-600" />
+                  Preview / Print
+                </button>
+
+                <a
+                  href={ajioState.mergedDownload.url}
+                  download={ajioState.mergedDownload.filename}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors text-center cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF Again
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
           {/* ================= UNDER DEVELOPMENT CARD ================= */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm text-center max-w-2xl mx-auto my-6">
             <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center mb-4 bg-slate-100 text-slate-800 shadow-inner">
@@ -2919,19 +3484,25 @@ export default function LabelCropper({ showToast }) {
       )}
 
       {/* ================= PREVIEW MODAL ================= */}
-      {showPreviewModal && downloadReady && downloadReady.url && (
+      {showPreviewModal && (selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : (downloadReady && downloadReady.url)) && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-3xl w-full p-5 shadow-2xl space-y-3 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-emerald-600" />
+                {selectedMarketplace === 'ajio' ? (
+                  <Layers className="w-5 h-5 text-indigo-600" />
+                ) : (
+                  <Scissors className="w-5 h-5 text-emerald-600" />
+                )}
                 <h3 className="font-bold text-sm text-slate-900">
-                  Cropped Thermal Label Preview ({selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : '4x6" Landscape'})
+                  {selectedMarketplace === 'ajio'
+                    ? `Ajio Merged Label & Invoice Preview (${ajioState.mergedDownload?.totalPages || 0} Pages)`
+                    : `Cropped Thermal Label Preview (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : '4x6" Landscape'})`}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={downloadReady.url}
+                  href={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 font-semibold rounded-lg border border-indigo-200 transition-colors"
@@ -2950,15 +3521,17 @@ export default function LabelCropper({ showToast }) {
 
             <div className="flex-1 bg-slate-100 rounded-xl overflow-hidden min-h-[440px] flex items-center justify-center border border-slate-200">
               <iframe
-                src={`${downloadReady.url}#toolbar=0&navpanes=0`}
-                title="Cropped PDF Preview"
+                src={`${(selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url)}#toolbar=0&navpanes=0`}
+                title="PDF Preview"
                 className="w-full h-full min-h-[440px] rounded-xl"
               />
             </div>
 
             <div className="border-t pt-3 flex items-center justify-between">
               <span className="text-xs text-slate-400">
-                {activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated ({selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : 'LabelMantra Format'})
+                {selectedMarketplace === 'ajio'
+                  ? `Ajio Interleaved Document • Alternating Label and Invoice Pages`
+                  : `${activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : 'LabelMantra Format'})`}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -2969,8 +3542,8 @@ export default function LabelCropper({ showToast }) {
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
                 <a
-                  href={downloadReady.url}
-                  download={downloadReady.filename}
+                  href={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url}
+                  download={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.filename : downloadReady?.filename}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" /> Download PDF
