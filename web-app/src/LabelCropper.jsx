@@ -834,10 +834,7 @@ export default function LabelCropper({ showToast }) {
         labelPagesInfo.push({
           pageIndex: p - 1, // 0-based index for pdf-lib
           pageNum: p,
-          shipToName: extracted.shipToName,
-          orderId: extracted.orderId,
-          pincode: extracted.pincode,
-          lines: extracted.lines,
+          ...extracted,
         });
       }
 
@@ -855,10 +852,7 @@ export default function LabelCropper({ showToast }) {
         invoicePagesInfo.push({
           pageIndex: p - 1, // 0-based index for pdf-lib
           pageNum: p,
-          shipToName: extracted.shipToName,
-          orderId: extracted.orderId,
-          pincode: extracted.pincode,
-          lines: extracted.lines,
+          ...extracted,
         });
       }
 
@@ -870,7 +864,19 @@ export default function LabelCropper({ showToast }) {
 
       for (let i = 0; i < invoicePagesInfo.length; i++) {
         const p = invoicePagesInfo[i];
-        if (!p.isContinuation || !curInvoice) {
+        
+        // Multi-page continuation detection:
+        // A page belongs to the previous invoice if:
+        // 1) It explicitly has pageCurrent > 1 (e.g. Page 2 of 2)
+        // 2) Or previous invoice still expects more pages (expectedPages > pages.length)
+        // 3) Or this page lacks both Tax Invoice No and Order ID
+        const isContinuation = curInvoice && (
+          (p.pageCurrent && p.pageCurrent > 1) ||
+          (curInvoice.expectedPages && curInvoice.expectedPages > curInvoice.pages.length) ||
+          (!p.invoiceNumber && !p.orderId)
+        );
+
+        if (!isContinuation || !curInvoice) {
           curInvoice = {
             invoiceIndex: invoiceDocuments.length,
             invoiceNumber: p.invoiceNumber,
