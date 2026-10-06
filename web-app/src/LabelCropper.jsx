@@ -1038,57 +1038,100 @@ export default function LabelCropper({ showToast }) {
           const [copiedPage] = await mergedDoc.copyPages(labelDoc, [item.pageIndex]);
 
           // Stamp SKU name and Quantity in the bottom-right corner of the shipping label
-          // (underneath the Total box, directly beside the Consignor address block)
+          // Uses a solid white background rectangle so the vertical table line does not interfere/cut through the text,
+          // and maintains a consistent clean font size (6.5pt) for both single and multi-item orders.
           if (item.items && item.items.length > 0) {
-            const pageWidth = copiedPage.getWidth();
-            const startX = 168;
-            const maxTextWidth = (pageWidth - startX - 8); // Available width ~112pt
+            const boxX = 172; // Safely right of Consignor address (ends at <= 168)
+            const boxY = 12;
+            const boxW = 106; // Extends to 278 (clear of page right border at 282)
+            const boxH = 48; // Extends to 60 (under the Total box horizontal separator)
+
+            // 1. Solid white background to cleanly erase the vertical line
+            copiedPage.drawRectangle({
+              x: boxX,
+              y: boxY,
+              width: boxW,
+              height: boxH,
+              color: rgb(1, 1, 1),
+            });
+
+            // 2. Draw text with consistent compact font size (6.5pt)
+            const textStartX = 175;
+            const maxTextWidth = 100;
+            const baseFontSize = 6.5;
 
             if (item.items.length === 1) {
               const itm = item.items[0];
-              let fontSize = 8;
-              while (fontSize > 5.5 && helveticaBold.widthOfTextAtSize(itm.sku, fontSize) > maxTextWidth) {
-                fontSize -= 0.5;
+              let fSize = baseFontSize;
+              while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(itm.sku, fSize) > maxTextWidth) {
+                fSize -= 0.5;
               }
-              const skuW = helveticaBold.widthOfTextAtSize(itm.sku, fontSize);
+              const skuW = helveticaBold.widthOfTextAtSize(itm.sku, fSize);
               const qtyStr = String(itm.qty || 1);
-              const qtySize = fontSize + 1;
+              const qtySize = baseFontSize + 1; // 7.5pt
               const qtyW = helveticaBold.widthOfTextAtSize(qtyStr, qtySize);
 
               // Line 1: SKU Name (e.g. O1 PANT DARK GREY-32)
               copiedPage.drawText(itm.sku, {
-                x: startX,
-                y: 30,
-                size: fontSize,
+                x: textStartX,
+                y: 33,
+                size: fSize,
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
               });
 
-              // Line 2: Quantity (e.g. 1) centered under the SKU
+              // Line 2: Quantity centered under the SKU
               copiedPage.drawText(qtyStr, {
-                x: startX + Math.max(0, (skuW - qtyW) / 2),
-                y: 18,
+                x: textStartX + Math.max(0, (skuW - qtyW) / 2),
+                y: 21,
                 size: qtySize,
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
               });
-            } else {
-              // Multiple items: stack them neatly
-              const count = Math.min(item.items.length, 3);
-              const fontSize = count === 2 ? 7 : 6;
-              const lineGap = count === 2 ? 12 : 9.5;
-              const topY = count === 2 ? 34 : 38;
-
-              for (let k = 0; k < count; k++) {
+            } else if (item.items.length === 2) {
+              for (let k = 0; k < 2; k++) {
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty})`;
-                let fSize = fontSize;
+                let fSize = baseFontSize;
                 while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
                   fSize -= 0.5;
                 }
                 copiedPage.drawText(text, {
-                  x: startX,
-                  y: topY - (k * lineGap),
+                  x: textStartX,
+                  y: 35 - (k * 12),
+                  size: fSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+            } else if (item.items.length === 3) {
+              for (let k = 0; k < 3; k++) {
+                const itm = item.items[k];
+                const text = `${itm.sku} (${itm.qty})`;
+                let fSize = baseFontSize;
+                while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5;
+                }
+                copiedPage.drawText(text, {
+                  x: textStartX,
+                  y: 39 - (k * 11),
+                  size: fSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+            } else {
+              const count = Math.min(item.items.length, 4);
+              for (let k = 0; k < count; k++) {
+                const itm = item.items[k];
+                const text = `${itm.sku} (${itm.qty})`;
+                let fSize = 5.5;
+                while (fSize > 4.0 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5;
+                }
+                copiedPage.drawText(text, {
+                  x: textStartX,
+                  y: 44 - (k * 9.5),
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
