@@ -9,6 +9,8 @@ import {
   CheckCircle2, 
   Copy, 
   AlertTriangle, 
+  AlertCircle,
+  X,
   UploadCloud, 
   ChevronUp, 
   ChevronDown, 
@@ -461,6 +463,8 @@ export default function LabelCropper({ showToast }) {
     mergedDownload: null,
     matchStats: null,
     error: null,
+    labelError: null,
+    invoiceError: null,
   });
 
   const [showAjioBreakdown, setShowAjioBreakdown] = useState(false);
@@ -713,6 +717,8 @@ export default function LabelCropper({ showToast }) {
     }
     try {
       const newLabelFiles = [];
+      let detectedError = null;
+
       for (const file of pdfFiles) {
         try {
           const arrayBuffer = await file.arrayBuffer();
@@ -728,7 +734,9 @@ export default function LabelCropper({ showToast }) {
 
             const isInvoice = /tax\s*invoice/i.test(pageText) || (/taxable\s*value/i.test(pageText) && /hsn/i.test(pageText));
             if (isInvoice) {
-              showToast?.(`⚠️ "${file.name}" is a Tax Invoice PDF! Please upload it under "Invoice PDF" instead.`, 'error');
+              const errMsg = `"${file.name}" is a Tax Invoice PDF! Please upload it under "Invoice PDF" instead.`;
+              detectedError = errMsg;
+              showToast?.(`⚠️ ${errMsg}`, 'error');
               continue; // Skip uploading invoice into label box
             }
           } catch (vErr) {
@@ -745,6 +753,13 @@ export default function LabelCropper({ showToast }) {
           console.error(`Error reading ${file.name}:`, fErr);
           showToast?.(`Could not read ${file.name}: ${fErr.message}`, 'error');
         }
+      }
+
+      if (detectedError) {
+        setAjioState(prev => ({
+          ...prev,
+          labelError: detectedError,
+        }));
       }
 
       if (newLabelFiles.length === 0) return;
@@ -764,6 +779,7 @@ export default function LabelCropper({ showToast }) {
           labelTotalPages: totalPages,
           mergedDownload: null,
           error: null,
+          labelError: detectedError || null,
         };
       });
 
@@ -787,6 +803,8 @@ export default function LabelCropper({ showToast }) {
     }
     try {
       const newInvoiceFiles = [];
+      let detectedError = null;
+
       for (const file of pdfFiles) {
         try {
           const arrayBuffer = await file.arrayBuffer();
@@ -804,7 +822,9 @@ export default function LabelCropper({ showToast }) {
             const isShippingLabel = (/awb\s*no/i.test(pageText) || /\bawb\b/i.test(pageText) || /return\s*address/i.test(pageText) || /routing\s*code/i.test(pageText)) && !hasTaxInvoice;
 
             if (isShippingLabel) {
-              showToast?.(`⚠️ "${file.name}" is a Shipping Label PDF! Please upload it under "Label PDF" instead.`, 'error');
+              const errMsg = `"${file.name}" is a Shipping Label PDF! Please upload it under "Label PDF" instead.`;
+              detectedError = errMsg;
+              showToast?.(`⚠️ ${errMsg}`, 'error');
               continue; // Skip uploading label into invoice box
             }
           } catch (vErr) {
@@ -821,6 +841,13 @@ export default function LabelCropper({ showToast }) {
           console.error(`Error reading ${file.name}:`, fErr);
           showToast?.(`Could not read ${file.name}: ${fErr.message}`, 'error');
         }
+      }
+
+      if (detectedError) {
+        setAjioState(prev => ({
+          ...prev,
+          invoiceError: detectedError,
+        }));
       }
 
       if (newInvoiceFiles.length === 0) return;
@@ -840,6 +867,7 @@ export default function LabelCropper({ showToast }) {
           invoiceTotalPages: totalPages,
           mergedDownload: null,
           error: null,
+          invoiceError: detectedError || null,
         };
       });
 
@@ -895,6 +923,7 @@ export default function LabelCropper({ showToast }) {
       ...prev,
       labelFiles: [],
       labelTotalPages: 0,
+      labelError: null,
       mergedDownload: null,
     }));
   };
@@ -918,6 +947,7 @@ export default function LabelCropper({ showToast }) {
       ...prev,
       invoiceFiles: [],
       invoiceTotalPages: 0,
+      invoiceError: null,
       mergedDownload: null,
     }));
   };
@@ -950,6 +980,8 @@ export default function LabelCropper({ showToast }) {
       mergedDownload: null,
       matchStats: null,
       error: null,
+      labelError: null,
+      invoiceError: null,
     });
   };
 
@@ -3776,7 +3808,7 @@ export default function LabelCropper({ showToast }) {
             className="hidden"
           />
 
-          {/* The 3 Upload Buttons with file status shown just beside each button */}
+          {/* The Upload Buttons with file status shown just beside each button */}
           <div className="space-y-4">
             {/* 1. Label PDF Button & List */}
             <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
@@ -3792,7 +3824,24 @@ export default function LabelCropper({ showToast }) {
               </div>
 
               {/* Just beside the button */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 space-y-2">
+                {ajioState.labelError && (
+                  <div className="flex items-center justify-between gap-3 p-2.5 px-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 text-xs shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="font-bold text-[12px] leading-snug">{ajioState.labelError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAjioState(prev => ({ ...prev, labelError: null }))}
+                      className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+                      title="Dismiss Error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {ajioState.labelFiles && ajioState.labelFiles.length > 0 ? (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
@@ -3828,7 +3877,7 @@ export default function LabelCropper({ showToast }) {
                       ))}
                     </div>
                   </div>
-                ) : (
+                ) : !ajioState.labelError && (
                   <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
                     No Label PDF selected yet (Select one or multiple PDFs)
                   </span>
@@ -3850,7 +3899,24 @@ export default function LabelCropper({ showToast }) {
               </div>
 
               {/* Just beside the button */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 space-y-2">
+                {ajioState.invoiceError && (
+                  <div className="flex items-center justify-between gap-3 p-2.5 px-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 text-xs shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="font-bold text-[12px] leading-snug">{ajioState.invoiceError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAjioState(prev => ({ ...prev, invoiceError: null }))}
+                      className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+                      title="Dismiss Error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {ajioState.invoiceFiles && ajioState.invoiceFiles.length > 0 ? (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
@@ -3886,53 +3952,9 @@ export default function LabelCropper({ showToast }) {
                       ))}
                     </div>
                   </div>
-                ) : (
+                ) : !ajioState.invoiceError && (
                   <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
                     No Invoice PDF selected yet (Select one or multiple PDFs)
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* 3. Ajio Excel Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
-              <button
-                type="button"
-                onClick={() => ajioExcelInputRef.current?.click()}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
-              >
-                <FileCode className="w-4 h-4 text-emerald-400" />
-                <span>Ajio Excel</span>
-              </button>
-
-              {/* Just beside the button */}
-              <div className="flex-1 min-w-0">
-                {ajioState.excelFile ? (
-                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-purple-50 border border-purple-200 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
-                      <span className="font-semibold text-slate-800 truncate" title={ajioState.excelFile.name}>
-                        {ajioState.excelFile.name}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold shrink-0">
-                        {ajioState.excelRowCount} Rows
-                      </span>
-                      <span className="text-slate-400 text-[11px] shrink-0">
-                        ({formatFileSize(ajioState.excelFile.size)})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearAjioExcel}
-                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
-                      title="Remove Ajio Excel"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs text-slate-400 italic pl-1">
-                    No Ajio Excel selected yet (Optional)
                   </span>
                 )}
               </div>
@@ -3959,41 +3981,6 @@ export default function LabelCropper({ showToast }) {
                 <p className="text-slate-400 text-[10px]">
                   ✓ Even if invoices have multiple pages or different sort orders, every label receives its exact matching invoice(s).
                 </p>
-              </div>
-            </div>
-          )}
-
-          {/* Excel Preview (if loaded) */}
-          {ajioState.excelData && ajioState.excelData.length > 0 && (
-            <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-200/80">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                  <FileCode className="w-3.5 h-3.5 text-purple-600" />
-                  Ajio Excel Records ({ajioState.excelRowCount} total rows)
-                </span>
-                <span className="text-[10px] text-purple-600 font-medium">
-                  Showing first {Math.min(4, ajioState.excelData.length)} rows
-                </span>
-              </div>
-              <div className="overflow-x-auto text-[11px] bg-white rounded-lg border border-purple-100">
-                <table className="w-full text-left">
-                  <thead className="bg-purple-50/80 text-purple-900 font-bold border-b border-purple-100">
-                    <tr>
-                      {Object.keys(ajioState.excelData[0]).slice(0, 5).map((col, idx) => (
-                        <th key={idx} className="p-2 whitespace-nowrap">{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-purple-50 text-slate-700">
-                    {ajioState.excelData.slice(0, 4).map((row, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-purple-50/30">
-                        {Object.keys(ajioState.excelData[0]).slice(0, 5).map((col, cIdx) => (
-                          <td key={cIdx} className="p-2 whitespace-nowrap font-mono">{String(row[col] ?? '')}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}
