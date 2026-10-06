@@ -1282,8 +1282,8 @@ export default function App() {
     e.preventDefault();
     setModalError('');
 
-    if (accounts.length >= profile.maxAccounts) {
-      setModalError(`Plan Limit Reached! Your plan allows ${profile.maxAccounts} store(s). Contact admin to add slots.`);
+    if (accounts.length >= (Number(profile.maxAccounts) || 1)) {
+      setModalError(`Plan Limit Reached! Your plan allows ${profile.maxAccounts || 1} store(s). Contact admin to add slots.`);
       return;
     }
 
@@ -1393,14 +1393,14 @@ export default function App() {
         }
       }
 
-      // If store is already linked, seamlessly update it instead of erroring
+      // Only merge if the EXACT SAME email is already added (re-authenticating an existing store)
+      // Never merge by identifier alone so multi-store / multi-brand sellers can add all their stores!
       const existingStore = accounts.find(a =>
-        (a.identifier && data.identifier && a.identifier === data.identifier) ||
-        (a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail)
+        a.email && cleanEmail && a.email.trim().toLowerCase() === cleanEmail
       );
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
-      const finalStoreName = data.storeName || newStoreName.trim() || autoStoreName;
+      const finalStoreName = newStoreName.trim() || data.storeName || autoStoreName;
       const targetAccRef = doc(db, 'accounts', targetSyncKey);
 
       await setDoc(targetAccRef, {
