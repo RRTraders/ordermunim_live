@@ -448,10 +448,10 @@ export default function LabelCropper({ showToast }) {
 
   // Ajio Customer-Matched PDF Merger State
   const [ajioState, setAjioState] = useState({
-    labelFile: null,
-    labelPageCount: 0,
-    invoiceFile: null,
-    invoicePageCount: 0,
+    labelFiles: [], // Array of { file, name, size, pageCount }
+    labelTotalPages: 0,
+    invoiceFiles: [], // Array of { file, name, size, pageCount }
+    invoiceTotalPages: 0,
     excelFile: null,
     excelRowCount: 0,
     excelData: null,
@@ -704,52 +704,116 @@ export default function LabelCropper({ showToast }) {
   const ajioExcelInputRef = useRef(null);
 
   const handleAjioLabelUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      showToast?.('Please upload a PDF file for Ajio Labels', 'warning');
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
+    const pdfFiles = rawFiles.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.type === 'application/pdf');
+    if (pdfFiles.length === 0) {
+      showToast?.('Please upload PDF file(s) for Ajio Labels', 'warning');
       return;
     }
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-      const count = pdfDoc.getPageCount();
-      setAjioState(prev => ({
-        ...prev,
-        labelFile: file,
-        labelPageCount: count,
-        mergedDownload: null,
-        error: null,
-      }));
-      showToast?.(`Loaded Label PDF: ${file.name} (${count} pages)`, 'success');
+      const newLabelFiles = [];
+      for (const file of pdfFiles) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+          const count = pdfDoc.getPageCount();
+          newLabelFiles.push({
+            file,
+            name: file.name,
+            size: file.size,
+            pageCount: count,
+          });
+        } catch (fErr) {
+          console.error(`Error reading ${file.name}:`, fErr);
+          showToast?.(`Could not read ${file.name}: ${fErr.message}`, 'error');
+        }
+      }
+
+      if (newLabelFiles.length === 0) return;
+
+      setAjioState(prev => {
+        const existing = prev.labelFiles || [];
+        const combined = [...existing];
+        for (const item of newLabelFiles) {
+          if (!combined.some(c => c.name === item.name && c.size === item.size)) {
+            combined.push(item);
+          }
+        }
+        const totalPages = combined.reduce((acc, f) => acc + (f.pageCount || 0), 0);
+        return {
+          ...prev,
+          labelFiles: combined,
+          labelTotalPages: totalPages,
+          mergedDownload: null,
+          error: null,
+        };
+      });
+
+      const totalNewPages = newLabelFiles.reduce((acc, f) => acc + f.pageCount, 0);
+      showToast?.(`Loaded ${newLabelFiles.length} Label PDF(s) (${totalNewPages} pages total)`, 'success');
     } catch (err) {
-      console.error('Error reading Ajio Label PDF:', err);
-      showToast?.('Failed to read Label PDF: ' + err.message, 'error');
+      console.error('Error reading Ajio Label PDFs:', err);
+      showToast?.('Failed to read Label PDFs: ' + err.message, 'error');
+    } finally {
+      if (ajioLabelInputRef.current) ajioLabelInputRef.current.value = '';
     }
   };
 
   const handleAjioInvoiceUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      showToast?.('Please upload a PDF file for Ajio Invoices', 'warning');
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
+    const pdfFiles = rawFiles.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.type === 'application/pdf');
+    if (pdfFiles.length === 0) {
+      showToast?.('Please upload PDF file(s) for Ajio Invoices', 'warning');
       return;
     }
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-      const count = pdfDoc.getPageCount();
-      setAjioState(prev => ({
-        ...prev,
-        invoiceFile: file,
-        invoicePageCount: count,
-        mergedDownload: null,
-        error: null,
-      }));
-      showToast?.(`Loaded Invoice PDF: ${file.name} (${count} pages)`, 'success');
+      const newInvoiceFiles = [];
+      for (const file of pdfFiles) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+          const count = pdfDoc.getPageCount();
+          newInvoiceFiles.push({
+            file,
+            name: file.name,
+            size: file.size,
+            pageCount: count,
+          });
+        } catch (fErr) {
+          console.error(`Error reading ${file.name}:`, fErr);
+          showToast?.(`Could not read ${file.name}: ${fErr.message}`, 'error');
+        }
+      }
+
+      if (newInvoiceFiles.length === 0) return;
+
+      setAjioState(prev => {
+        const existing = prev.invoiceFiles || [];
+        const combined = [...existing];
+        for (const item of newInvoiceFiles) {
+          if (!combined.some(c => c.name === item.name && c.size === item.size)) {
+            combined.push(item);
+          }
+        }
+        const totalPages = combined.reduce((acc, f) => acc + (f.pageCount || 0), 0);
+        return {
+          ...prev,
+          invoiceFiles: combined,
+          invoiceTotalPages: totalPages,
+          mergedDownload: null,
+          error: null,
+        };
+      });
+
+      const totalNewPages = newInvoiceFiles.reduce((acc, f) => acc + f.pageCount, 0);
+      showToast?.(`Loaded ${newInvoiceFiles.length} Invoice PDF(s) (${totalNewPages} pages total)`, 'success');
     } catch (err) {
-      console.error('Error reading Ajio Invoice PDF:', err);
-      showToast?.('Failed to read Invoice PDF: ' + err.message, 'error');
+      console.error('Error reading Ajio Invoice PDFs:', err);
+      showToast?.('Failed to read Invoice PDFs: ' + err.message, 'error');
+    } finally {
+      if (ajioInvoiceInputRef.current) ajioInvoiceInputRef.current.value = '';
     }
   };
 
@@ -776,22 +840,48 @@ export default function LabelCropper({ showToast }) {
     }
   };
 
+  const removeAjioLabelFile = (indexToRemove) => {
+    setAjioState(prev => {
+      const updated = (prev.labelFiles || []).filter((_, idx) => idx !== indexToRemove);
+      const totalPages = updated.reduce((acc, f) => acc + (f.pageCount || 0), 0);
+      return {
+        ...prev,
+        labelFiles: updated,
+        labelTotalPages: totalPages,
+        mergedDownload: null,
+      };
+    });
+  };
+
   const clearAjioLabel = () => {
     if (ajioLabelInputRef.current) ajioLabelInputRef.current.value = '';
     setAjioState(prev => ({
       ...prev,
-      labelFile: null,
-      labelPageCount: 0,
+      labelFiles: [],
+      labelTotalPages: 0,
       mergedDownload: null,
     }));
+  };
+
+  const removeAjioInvoiceFile = (indexToRemove) => {
+    setAjioState(prev => {
+      const updated = (prev.invoiceFiles || []).filter((_, idx) => idx !== indexToRemove);
+      const totalPages = updated.reduce((acc, f) => acc + (f.pageCount || 0), 0);
+      return {
+        ...prev,
+        invoiceFiles: updated,
+        invoiceTotalPages: totalPages,
+        mergedDownload: null,
+      };
+    });
   };
 
   const clearAjioInvoice = () => {
     if (ajioInvoiceInputRef.current) ajioInvoiceInputRef.current.value = '';
     setAjioState(prev => ({
       ...prev,
-      invoiceFile: null,
-      invoicePageCount: 0,
+      invoiceFiles: [],
+      invoiceTotalPages: 0,
       mergedDownload: null,
     }));
   };
@@ -811,23 +901,25 @@ export default function LabelCropper({ showToast }) {
     if (ajioInvoiceInputRef.current) ajioInvoiceInputRef.current.value = '';
     if (ajioExcelInputRef.current) ajioExcelInputRef.current.value = '';
     setAjioState({
-      labelFile: null,
-      labelPageCount: 0,
-      invoiceFile: null,
-      invoicePageCount: 0,
+      labelFiles: [],
+      labelTotalPages: 0,
+      invoiceFiles: [],
+      invoiceTotalPages: 0,
       excelFile: null,
       excelRowCount: 0,
       excelData: null,
       isMerging: false,
       mergeProgress: 0,
+      mergeStatusText: '',
       mergedDownload: null,
+      matchStats: null,
       error: null,
     });
   };
 
   const handleMergeAjioPdf = async () => {
-    if (!ajioState.labelFile || !ajioState.invoiceFile) {
-      showToast?.('Please upload both Label PDF and Invoice PDF to merge', 'warning');
+    if (!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length) {
+      showToast?.('Please upload both Label PDF(s) and Invoice PDF(s) to merge', 'warning');
       return;
     }
 
@@ -835,72 +927,118 @@ export default function LabelCropper({ showToast }) {
       ...prev,
       isMerging: true,
       mergeProgress: 5,
-      mergeStatusText: 'Reading Label PDF...',
+      mergeStatusText: 'Loading Label PDFs...',
       error: null,
     }));
 
     try {
-      const labelBytes = await ajioState.labelFile.arrayBuffer();
-      const invoiceBytes = await ajioState.invoiceFile.arrayBuffer();
+      // 0. Load all Label and Invoice documents into memory
+      const labelSources = [];
+      let totalLabelPages = 0;
+      for (let fIdx = 0; fIdx < ajioState.labelFiles.length; fIdx++) {
+        const fObj = ajioState.labelFiles[fIdx];
+        const bytes = await fObj.file.arrayBuffer();
+        const pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+        const pdfLibDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        labelSources.push({
+          fileIndex: fIdx,
+          name: fObj.name,
+          pdfJsDoc,
+          pdfLibDoc,
+          numPages: pdfJsDoc.numPages,
+        });
+        totalLabelPages += pdfJsDoc.numPages;
+      }
 
-      // Load with pdfjsLib to parse text content
-      const labelPdfJs = await pdfjsLib.getDocument({ data: labelBytes.slice(0) }).promise;
-      const invoicePdfJs = await pdfjsLib.getDocument({ data: invoiceBytes.slice(0) }).promise;
+      setAjioState(prev => ({
+        ...prev,
+        mergeProgress: 10,
+        mergeStatusText: 'Loading Invoice PDFs...',
+      }));
 
-      const labelTotalPages = labelPdfJs.numPages;
-      const invoiceTotalPages = invoicePdfJs.numPages;
+      const invoiceSources = [];
+      let totalInvoicePages = 0;
+      for (let fIdx = 0; fIdx < ajioState.invoiceFiles.length; fIdx++) {
+        const fObj = ajioState.invoiceFiles[fIdx];
+        const bytes = await fObj.file.arrayBuffer();
+        const pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+        const pdfLibDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        invoiceSources.push({
+          fileIndex: fIdx,
+          name: fObj.name,
+          pdfJsDoc,
+          pdfLibDoc,
+          numPages: pdfJsDoc.numPages,
+        });
+        totalInvoicePages += pdfJsDoc.numPages;
+      }
 
-      // 1. Extract text, customer name, order number, and pincode from each label page
+      // 1. Extract text, customer name, order number, and pincode from each label page across all label files
       const labelPagesInfo = [];
-      for (let p = 1; p <= labelTotalPages; p++) {
-        setAjioState(prev => ({
-          ...prev,
-          mergeProgress: Math.min(25, Math.round((p / labelTotalPages) * 25)),
-          mergeStatusText: `Reading Label page ${p} of ${labelTotalPages} (extracting customer & order details)...`,
-        }));
-        const page = await labelPdfJs.getPage(p);
-        const textContent = await page.getTextContent();
-        const extracted = extractShipToFromPage(textContent);
-        labelPagesInfo.push({
-          pageIndex: p - 1, // 0-based index for pdf-lib
-          pageNum: p,
-          ...extracted,
-        });
+      let readLabelCount = 0;
+      for (let sIdx = 0; sIdx < labelSources.length; sIdx++) {
+        const src = labelSources[sIdx];
+        for (let p = 1; p <= src.numPages; p++) {
+          readLabelCount++;
+          setAjioState(prev => ({
+            ...prev,
+            mergeProgress: 10 + Math.min(20, Math.round((readLabelCount / Math.max(1, totalLabelPages)) * 20)),
+            mergeStatusText: `Reading Label page ${readLabelCount} of ${totalLabelPages} (${src.name})...`,
+          }));
+          const page = await src.pdfJsDoc.getPage(p);
+          const textContent = await page.getTextContent();
+          const extracted = extractShipToFromPage(textContent);
+          labelPagesInfo.push({
+            fileIndex: sIdx,
+            fileName: src.name,
+            pageIndex: p - 1, // 0-based within src.pdfLibDoc
+            pageNum: p, // 1-based within this file
+            globalLabelNum: labelPagesInfo.length + 1,
+            ...extracted,
+          });
+        }
       }
 
-      // 2. Extract text, customer name, order number, and pincode from each invoice page
+      // 2. Extract text, customer name, order number, pincode, and SKU items from each invoice page across all invoice files
       const invoicePagesInfo = [];
-      for (let p = 1; p <= invoiceTotalPages; p++) {
-        setAjioState(prev => ({
-          ...prev,
-          mergeProgress: 25 + Math.min(30, Math.round((p / invoiceTotalPages) * 30)),
-          mergeStatusText: `Reading Invoice page ${p} of ${invoiceTotalPages} (extracting customer & order details)...`,
-        }));
-        const page = await invoicePdfJs.getPage(p);
-        const textContent = await page.getTextContent();
-        const extracted = extractShipToFromPage(textContent);
-        invoicePagesInfo.push({
-          pageIndex: p - 1, // 0-based index for pdf-lib
-          pageNum: p,
-          ...extracted,
-        });
+      let readInvoiceCount = 0;
+      for (let sIdx = 0; sIdx < invoiceSources.length; sIdx++) {
+        const src = invoiceSources[sIdx];
+        for (let p = 1; p <= src.numPages; p++) {
+          readInvoiceCount++;
+          setAjioState(prev => ({
+            ...prev,
+            mergeProgress: 30 + Math.min(25, Math.round((readInvoiceCount / Math.max(1, totalInvoicePages)) * 25)),
+            mergeStatusText: `Reading Invoice page ${readInvoiceCount} of ${totalInvoicePages} (${src.name})...`,
+          }));
+          const page = await src.pdfJsDoc.getPage(p);
+          const textContent = await page.getTextContent();
+          const extracted = extractShipToFromPage(textContent);
+          invoicePagesInfo.push({
+            fileIndex: sIdx,
+            fileName: src.name,
+            pageIndex: p - 1, // 0-based within src.pdfLibDoc
+            pageNum: p, // 1-based within this file
+            globalInvoiceNum: invoicePagesInfo.length + 1,
+            ...extracted,
+          });
+        }
       }
 
-      // 3. Group invoice pages into structured Invoice Documents (handles multi-page invoices seamlessly)
-      // Page 1 of an invoice has TAX INVOICE NO, Order #, and footer "Page 1 of N".
-      // Subsequent pages (Page 2, 3...) have footer "Page 2 of N", repeated customer name, but omit TAX INVOICE NO.
+      // 3. Group invoice pages into structured Invoice Documents
+      // IMPORTANT: Continuation pages MUST NOT cross file boundaries! (curInvoice.fileIndex === p.fileIndex)
       const invoiceDocuments = [];
       let curInvoice = null;
 
       for (let i = 0; i < invoicePagesInfo.length; i++) {
         const p = invoicePagesInfo[i];
-        
+
         // Multi-page continuation detection:
-        // A page belongs to the previous invoice if:
+        // A page belongs to the previous invoice IF AND ONLY IF it is from the same file AND:
         // 1) It explicitly has pageCurrent > 1 (e.g. Page 2 of 2)
         // 2) Or previous invoice still expects more pages (expectedPages > pages.length)
         // 3) Or this page lacks both Tax Invoice No and Order ID
-        const isContinuation = curInvoice && (
+        const isContinuation = curInvoice && (curInvoice.fileIndex === p.fileIndex) && (
           (p.pageCurrent && p.pageCurrent > 1) ||
           (curInvoice.expectedPages && curInvoice.expectedPages > curInvoice.pages.length) ||
           (!p.invoiceNumber && !p.orderId)
@@ -909,6 +1047,8 @@ export default function LabelCropper({ showToast }) {
         if (!isContinuation || !curInvoice) {
           curInvoice = {
             invoiceIndex: invoiceDocuments.length,
+            fileIndex: p.fileIndex,
+            fileName: p.fileName,
             invoiceNumber: p.invoiceNumber,
             orderId: p.orderId,
             shipToName: p.shipToName,
@@ -967,6 +1107,8 @@ export default function LabelCropper({ showToast }) {
         // Add label page with matched invoice items (for SKU stamping)
         mergeSequence.push({
           type: 'label',
+          fileIndex: lbl.fileIndex,
+          fileName: lbl.fileName,
           pageIndex: lbl.pageIndex,
           pageNum: lbl.pageNum,
           name: lbl.shipToName,
@@ -979,6 +1121,8 @@ export default function LabelCropper({ showToast }) {
           for (const pg of matchedDoc.pages) {
             mergeSequence.push({
               type: 'invoice',
+              fileIndex: pg.fileIndex,
+              fileName: pg.fileName,
               pageIndex: pg.pageIndex,
               pageNum: pg.pageNum,
               name: matchedDoc.shipToName,
@@ -989,6 +1133,7 @@ export default function LabelCropper({ showToast }) {
 
         matchedPairs.push({
           labelNum: i + 1,
+          fileName: lbl.fileName,
           labelPageIndex: lbl.pageIndex,
           labelPage: lbl.pageNum,
           customerName: lbl.shipToName || 'Customer Name Not Detected',
@@ -996,6 +1141,7 @@ export default function LabelCropper({ showToast }) {
           matchReason: matchRes ? matchRes.reason : 'No matching invoice',
           items: matchedDoc?.items || [],
           matchedInvoices: matchedDoc ? matchedDoc.pages.map(pg => ({
+            fileName: pg.fileName,
             pageNum: pg.pageNum,
             pageIndex: pg.pageIndex,
           })) : [],
@@ -1011,6 +1157,8 @@ export default function LabelCropper({ showToast }) {
             unmatchedInvoices.push(pg);
             mergeSequence.push({
               type: 'invoice',
+              fileIndex: pg.fileIndex,
+              fileName: pg.fileName,
               pageIndex: pg.pageIndex,
               pageNum: pg.pageNum,
               name: invDoc.shipToName,
@@ -1028,14 +1176,13 @@ export default function LabelCropper({ showToast }) {
 
       // 5. Build merged PDF using pdf-lib
       const mergedDoc = await PDFDocument.create();
-      const labelDoc = await PDFDocument.load(labelBytes, { ignoreEncryption: true });
-      const invoiceDoc = await PDFDocument.load(invoiceBytes, { ignoreEncryption: true });
       const helveticaBold = await mergedDoc.embedFont(StandardFonts.HelveticaBold);
 
       for (let idx = 0; idx < mergeSequence.length; idx++) {
         const item = mergeSequence[idx];
         if (item.type === 'label') {
-          const [copiedPage] = await mergedDoc.copyPages(labelDoc, [item.pageIndex]);
+          const srcDoc = labelSources[item.fileIndex].pdfLibDoc;
+          const [copiedPage] = await mergedDoc.copyPages(srcDoc, [item.pageIndex]);
 
           // Stamp SKU name and Quantity in the bottom-right corner of the shipping label
           // Uses a solid white background rectangle so the vertical table line does not interfere/cut through the text,
@@ -1142,7 +1289,8 @@ export default function LabelCropper({ showToast }) {
 
           mergedDoc.addPage(copiedPage);
         } else {
-          const [copiedPage] = await mergedDoc.copyPages(invoiceDoc, [item.pageIndex]);
+          const srcDoc = invoiceSources[item.fileIndex].pdfLibDoc;
+          const [copiedPage] = await mergedDoc.copyPages(srcDoc, [item.pageIndex]);
           mergedDoc.addPage(copiedPage);
         }
 
@@ -1166,8 +1314,10 @@ export default function LabelCropper({ showToast }) {
       const filename = `Ajio_Matched_Labels_Invoices_${dateTag}.pdf`;
 
       const matchStats = {
-        totalLabels: labelTotalPages,
-        totalInvoices: invoiceTotalPages,
+        totalLabels: totalLabelPages,
+        totalInvoices: totalInvoicePages,
+        labelFilesCount: ajioState.labelFiles.length,
+        invoiceFilesCount: ajioState.invoiceFiles.length,
         totalPages: mergeSequence.length,
         fullyMatchedCount: matchedPairs.filter(p => p.matchedInvoices.length > 0).length,
         unmatchedLabelsCount: matchedPairs.filter(p => p.matchedInvoices.length === 0).length,
@@ -1182,8 +1332,8 @@ export default function LabelCropper({ showToast }) {
         filename,
         blob,
         totalPages: mergeSequence.length,
-        labelCount: labelTotalPages,
-        invoiceCount: invoiceTotalPages,
+        labelCount: totalLabelPages,
+        invoiceCount: totalInvoicePages,
         matchStats,
       };
 
@@ -2772,7 +2922,7 @@ export default function LabelCropper({ showToast }) {
             const isSelected = selectedMarketplace === mp.id;
             const mpState = marketplaceStates[mp.id];
             const mpFilesCount = mp.id === 'ajio'
-              ? ((ajioState.labelFile ? 1 : 0) + (ajioState.invoiceFile ? 1 : 0) + (ajioState.excelFile ? 1 : 0))
+              ? ((ajioState.labelFiles?.length || 0) + (ajioState.invoiceFiles?.length || 0) + (ajioState.excelFile ? 1 : 0))
               : (mpState?.files?.length || 0);
             const mpIsProcessing = mp.id === 'ajio' ? ajioState.isMerging : mpState?.isProcessing;
             const mpHasDownload = mp.id === 'ajio' ? Boolean(ajioState.mergedDownload) : Boolean(mpState?.downloadReady);
@@ -3553,7 +3703,7 @@ export default function LabelCropper({ showToast }) {
                 Automatically reads the customer name after <strong className="text-slate-700">"Ship To :"</strong> on each 1-page label and attaches all matching invoice pages (1, 2, or more) next to that label.
               </p>
             </div>
-            {(ajioState.labelFile || ajioState.invoiceFile || ajioState.excelFile) && (
+            {(ajioState.labelFiles?.length > 0 || ajioState.invoiceFiles?.length > 0 || ajioState.excelFile) && (
               <button
                 type="button"
                 onClick={clearAllAjio}
@@ -3569,6 +3719,7 @@ export default function LabelCropper({ showToast }) {
           <input
             ref={ajioLabelInputRef}
             type="file"
+            multiple
             accept="application/pdf,.pdf"
             onChange={handleAjioLabelUpload}
             className="hidden"
@@ -3576,6 +3727,7 @@ export default function LabelCropper({ showToast }) {
           <input
             ref={ajioInvoiceInputRef}
             type="file"
+            multiple
             accept="application/pdf,.pdf"
             onChange={handleAjioInvoiceUpload}
             className="hidden"
@@ -3590,89 +3742,117 @@ export default function LabelCropper({ showToast }) {
 
           {/* The 3 Upload Buttons with file status shown just beside each button */}
           <div className="space-y-4">
-            {/* 1. Label PDF Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
-              <button
-                type="button"
-                onClick={() => ajioLabelInputRef.current?.click()}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
-              >
-                <FileText className="w-4 h-4 text-amber-400" />
-                <span>Label PDF</span>
-              </button>
+            {/* 1. Label PDF Button & List */}
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => ajioLabelInputRef.current?.click()}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>+ Add Label PDF(s)</span>
+                </button>
+              </div>
 
               {/* Just beside the button */}
               <div className="flex-1 min-w-0">
-                {ajioState.labelFile ? (
-                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="font-semibold text-slate-800 truncate" title={ajioState.labelFile.name}>
-                        {ajioState.labelFile.name}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold shrink-0">
-                        {ajioState.labelPageCount} {ajioState.labelPageCount === 1 ? 'Page' : 'Pages'}
-                      </span>
-                      <span className="text-slate-400 text-[11px] shrink-0">
-                        ({formatFileSize(ajioState.labelFile.size)})
+                {ajioState.labelFiles && ajioState.labelFiles.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
+                      <span>{ajioState.labelFiles.length} file(s) selected</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
+                        Total: {ajioState.labelTotalPages} {ajioState.labelTotalPages === 1 ? 'Page' : 'Pages'}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={clearAjioLabel}
-                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
-                      title="Remove Label PDF"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                      {ajioState.labelFiles.map((fObj, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span className="font-semibold text-slate-800 truncate" title={fObj.name}>
+                              {fObj.name}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                              {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
+                            </span>
+                            <span className="text-slate-400 text-[10px] shrink-0">
+                              ({formatFileSize(fObj.size)})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAjioLabelFile(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                            title="Remove this file"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-400 italic pl-1">
-                    No Label PDF selected yet
+                  <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
+                    No Label PDF selected yet (Select one or multiple PDFs)
                   </span>
                 )}
               </div>
             </div>
 
-            {/* 2. Invoice PDF Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
-              <button
-                type="button"
-                onClick={() => ajioInvoiceInputRef.current?.click()}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer transition-all active:scale-95"
-              >
-                <FileCheck className="w-4 h-4 text-sky-400" />
-                <span>Invoice PDF</span>
-              </button>
+            {/* 2. Invoice PDF Button & List */}
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => ajioInvoiceInputRef.current?.click()}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <FileCheck className="w-4 h-4 text-sky-400" />
+                  <span>+ Add Invoice PDF(s)</span>
+                </button>
+              </div>
 
               {/* Just beside the button */}
               <div className="flex-1 min-w-0">
-                {ajioState.invoiceFile ? (
-                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 className="w-4 h-4 text-sky-600 shrink-0" />
-                      <span className="font-semibold text-slate-800 truncate" title={ajioState.invoiceFile.name}>
-                        {ajioState.invoiceFile.name}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[11px] font-bold shrink-0">
-                        {ajioState.invoicePageCount} {ajioState.invoicePageCount === 1 ? 'Page' : 'Pages'}
-                      </span>
-                      <span className="text-slate-400 text-[11px] shrink-0">
-                        ({formatFileSize(ajioState.invoiceFile.size)})
+                {ajioState.invoiceFiles && ajioState.invoiceFiles.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
+                      <span>{ajioState.invoiceFiles.length} file(s) selected</span>
+                      <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 font-bold">
+                        Total: {ajioState.invoiceTotalPages} {ajioState.invoiceTotalPages === 1 ? 'Page' : 'Pages'}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={clearAjioInvoice}
-                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
-                      title="Remove Invoice PDF"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                      {ajioState.invoiceFiles.map((fObj, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                            <span className="font-semibold text-slate-800 truncate" title={fObj.name}>
+                              {fObj.name}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-bold shrink-0">
+                              {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
+                            </span>
+                            <span className="text-slate-400 text-[10px] shrink-0">
+                              ({formatFileSize(fObj.size)})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAjioInvoiceFile(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                            title="Remove this file"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-400 italic pl-1">
-                    No Invoice PDF selected yet
+                  <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
+                    No Invoice PDF selected yet (Select one or multiple PDFs)
                   </span>
                 )}
               </div>
@@ -3724,7 +3904,7 @@ export default function LabelCropper({ showToast }) {
           </div>
 
           {/* Merge Logic & Status Preview */}
-          {ajioState.labelFile && ajioState.invoiceFile && (
+          {ajioState.labelFiles.length > 0 && ajioState.invoiceFiles.length > 0 && (
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
               <div className="flex items-center justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
@@ -3732,7 +3912,7 @@ export default function LabelCropper({ showToast }) {
                   Smart "Ship To :" Customer Name Matching
                 </span>
                 <span className="font-mono text-indigo-600">
-                  Label: {ajioState.labelPageCount} Pages • Invoice: {ajioState.invoicePageCount} Pages
+                  Labels: {ajioState.labelTotalPages} Pages ({ajioState.labelFiles.length} {ajioState.labelFiles.length === 1 ? 'file' : 'files'}) • Invoices: {ajioState.invoiceTotalPages} Pages ({ajioState.invoiceFiles.length} {ajioState.invoiceFiles.length === 1 ? 'file' : 'files'})
                 </span>
               </div>
 
@@ -3804,10 +3984,10 @@ export default function LabelCropper({ showToast }) {
           {/* Merge & Download Action Button */}
           <button
             type="button"
-            disabled={!ajioState.labelFile || !ajioState.invoiceFile || ajioState.isMerging}
+            disabled={!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length || ajioState.isMerging}
             onClick={handleMergeAjioPdf}
             className={`w-full py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer ${
-              !ajioState.labelFile || !ajioState.invoiceFile
+              !ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 : ajioState.isMerging
                 ? 'bg-indigo-400 text-white cursor-wait'
@@ -3818,8 +3998,8 @@ export default function LabelCropper({ showToast }) {
             <span>
               {ajioState.isMerging
                 ? (ajioState.mergeStatusText || 'Matching & Merging Pages...')
-                : (!ajioState.labelFile || !ajioState.invoiceFile)
-                ? 'Please Upload Both Label PDF & Invoice PDF'
+                : (!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length)
+                ? 'Please Upload Both Label PDF(s) & Invoice PDF(s)'
                 : 'Match by Order# / Customer Name & Merge PDF'}
             </span>
           </button>
@@ -3877,13 +4057,13 @@ export default function LabelCropper({ showToast }) {
                         )}
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]">
-                          Label P{pair.labelPageIndex + 1}
+                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]" title={pair.fileName}>
+                          {pair.fileName ? `${pair.fileName} P${pair.labelPage}` : `Label P${pair.labelPage}`}
                         </span>
                         <span>&rarr;</span>
                         {pair.matchedInvoices.length > 0 ? (
                           <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-mono text-[10px] font-semibold">
-                            Invoice P{pair.matchedInvoices.map(m => m.pageNum).join(', ')} ({pair.matchedInvoices.length} {pair.matchedInvoices.length === 1 ? 'page' : 'pages'})
+                            Invoice {pair.matchedInvoices.map(m => (m.fileName ? `${m.fileName} P${m.pageNum}` : `P${m.pageNum}`)).join(', ')} ({pair.matchedInvoices.length} {pair.matchedInvoices.length === 1 ? 'page' : 'pages'})
                           </span>
                         ) : (
                           <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px]">
