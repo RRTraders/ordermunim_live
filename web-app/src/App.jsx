@@ -73,8 +73,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 12;
-const CURRENT_APP_VERSION_NAME = "2.2";
+const CURRENT_APP_VERSION_CODE = 13;
+const CURRENT_APP_VERSION_NAME = "2.3";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -526,20 +526,34 @@ export default function App() {
 
       for (const acc of accounts) {
         const key = acc.syncKey || acc.id;
-        const existing = cur[key] || cur[acc.id];
+        const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null);
         if (!existing && acc.cookies) {
-          cur[key] = {
+          const newSess = {
             email: acc.email || '',
             password: '',
             identifier: acc.identifier || '',
             supplierId: acc.supplierId || 0,
             storeName: acc.storeName || '',
-            cookies: acc.cookies || ''
+            cookies: acc.cookies || '',
+            expired: false
           };
+          cur[key] = newSess;
+          if (acc.id) cur[acc.id] = newSess;
+          if (acc.syncKey) cur[acc.syncKey] = newSess;
           changed = true;
-        } else if (existing && acc.cookies && existing.cookies !== acc.cookies) {
-          existing.cookies = acc.cookies;
-          changed = true;
+        } else if (existing) {
+          if (acc.cookies && existing.cookies !== acc.cookies) {
+            existing.cookies = acc.cookies;
+            changed = true;
+          }
+          if (acc.id && !cur[acc.id]) {
+            cur[acc.id] = existing;
+            changed = true;
+          }
+          if (acc.syncKey && !cur[acc.syncKey]) {
+            cur[acc.syncKey] = existing;
+            changed = true;
+          }
         }
       }
 
@@ -642,8 +656,25 @@ export default function App() {
 
           // Guard: Never overwrite Firestore if fetch encountered an error or expired session!
           if (otpRes.error || otpRes.expired) {
+            if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
+              if (sessions[key] && !sessions[key].expired) {
+                sessions[key].expired = true;
+                try {
+                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                  setLocalSessions({ ...sessions });
+                } catch {}
+              }
+            }
             console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
             continue;
+          } else {
+            if (sessions[key] && sessions[key].expired) {
+              sessions[key].expired = false;
+              try {
+                localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                setLocalSessions({ ...sessions });
+              } catch {}
+            }
           }
 
           const newOtp = otpRes.otp || '----';
@@ -1095,9 +1126,34 @@ export default function App() {
             }
 
             if (otpRes.error || otpRes.expired) {
+              if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
+                const sKey = targetAcc?.syncKey || syncKey;
+                const aId = targetAcc?.id || syncKey;
+                if (sessions[sKey]) sessions[sKey].expired = true;
+                if (sessions[aId]) sessions[aId].expired = true;
+                try {
+                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                  setLocalSessions({ ...sessions });
+                } catch {}
+                if (targetAcc) {
+                  setReconnectAccount(targetAcc);
+                  setReconnectPass('');
+                  setReconnectError(`Session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
+                  setShowReconnectModal(true);
+                }
+              }
               showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
               return;
             }
+
+            const sKey = targetAcc?.syncKey || syncKey;
+            const aId = targetAcc?.id || syncKey;
+            if (sessions[sKey]) sessions[sKey].expired = false;
+            if (sessions[aId]) sessions[aId].expired = false;
+            try {
+              localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+              setLocalSessions({ ...sessions });
+            } catch {}
 
             const newOtp = otpRes.otp || '----';
             const newCourier = otpRes.courier || 'No Return';
@@ -1180,16 +1236,20 @@ export default function App() {
       const raw = localStorage.getItem('native_meesho_sessions');
       const curSessions = raw ? JSON.parse(raw) : {};
       const key = reconnectAccount.syncKey || reconnectAccount.id;
-      curSessions[key] = {
+      const sessData = {
         email: email.trim(),
         password: reconnectPass,
         identifier: res.identifier || reconnectAccount.identifier || '',
         supplierId: res.supplierId || reconnectAccount.supplierId || 0,
         storeName: res.storeName || reconnectAccount.storeName,
-        cookies: res.cookies
+        cookies: res.cookies,
+        expired: false
       };
+      curSessions[key] = sessData;
+      if (reconnectAccount.id) curSessions[reconnectAccount.id] = sessData;
+      if (reconnectAccount.syncKey) curSessions[reconnectAccount.syncKey] = sessData;
       localStorage.setItem('native_meesho_sessions', JSON.stringify(curSessions));
-      setLocalSessions(curSessions);
+      setLocalSessions({ ...curSessions });
       syncBackgroundSessions(curSessions);
 
       // 2. Update Firestore so all devices get live status & cookies (NEVER password)
@@ -1359,6 +1419,27 @@ export default function App() {
         cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),
         lastUpdated: new Date().toISOString()
       }, { merge: true });
+
+      if (isNativeMobile()) {
+        try {
+          const raw = localStorage.getItem('native_meesho_sessions');
+          const sessions = raw ? JSON.parse(raw) : {};
+          const sessObj = {
+            email: cleanEmail,
+            password: meeshoPass,
+            identifier: data?.identifier || existingStore?.identifier || '',
+            supplierId: data?.supplierId || existingStore?.supplierId || 0,
+            storeName: finalStoreName,
+            cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),
+            expired: false
+          };
+          sessions[syncKey] = sessObj;
+          if (targetSyncKey) sessions[targetSyncKey] = sessObj;
+          localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+          setLocalSessions({ ...sessions });
+          syncBackgroundSessions(sessions);
+        } catch (e) {}
+      }
 
       setNewStoreName('');
       setMeeshoEmail('');
@@ -3276,9 +3357,30 @@ export default function App() {
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {acc.dateTime || 'Just now'}</span>
                               {(() => {
-                                const hasSess = Boolean(
-                                  localSessions[acc.syncKey] || localSessions[acc.id] || acc.cookies
-                                );
+                                const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
+                                const isExpired = localSess?.expired || acc.status === 'expired';
+                                const hasSess = Boolean(localSess || acc.cookies);
+
+                                if (isExpired) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReconnectAccount(acc);
+                                        setReconnectPass('');
+                                        setReconnectError('Session expired (HTTP 403). Enter Meesho password to reconnect.');
+                                        setShowReconnectModal(true);
+                                      }}
+                                      className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-semibold cursor-pointer bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30 active:scale-95 transition-all"
+                                      title="Click to reconnect this store"
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                                      Session Expired (Tap to Reconnect)
+                                    </button>
+                                  );
+                                }
+
                                 if (hasSess) {
                                   return (
                                     <span className="flex items-center gap-1 text-emerald-400 font-medium">
