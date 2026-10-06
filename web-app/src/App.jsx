@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
+  saveEncryptedStoreCredentials, 
+  getDecryptedStoreCredentials, 
+  findCredentialsForAccount, 
+  removeEncryptedStoreCredentials, 
+  clearVault 
+} from './localVault';
+import { 
   auth, 
   db 
 } from './firebase';
@@ -434,6 +441,7 @@ export default function App() {
             localStorage.removeItem('native_meesho_sessions');
             localStorage.removeItem('cached_user_profile');
             localStorage.removeItem('cached_user_accounts');
+            clearVault();
           } catch {}
           setLocalSessions({});
           signOut(auth).catch(() => {});
@@ -578,13 +586,17 @@ export default function App() {
       for (const acc of accounts) {
         const key = acc.syncKey || acc.id;
         const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null);
+        const vaultCred = findCredentialsForAccount(acc);
+        const restoredPassword = (existing && existing.password) ? existing.password : (vaultCred?.password || '');
+        const restoredEmail = (existing && existing.email) ? existing.email : (acc.email || vaultCred?.email || '');
+
         if (!existing && acc.cookies) {
           const newSess = {
-            email: acc.email || '',
-            password: '',
-            identifier: acc.identifier || '',
-            supplierId: acc.supplierId || 0,
-            storeName: acc.storeName || '',
+            email: restoredEmail,
+            password: restoredPassword,
+            identifier: acc.identifier || (vaultCred?.identifier || ''),
+            supplierId: acc.supplierId || (vaultCred?.supplierId || 0),
+            storeName: acc.storeName || (vaultCred?.storeName || ''),
             cookies: acc.cookies || '',
             expired: false
           };
@@ -593,6 +605,14 @@ export default function App() {
           if (acc.syncKey) cur[acc.syncKey] = newSess;
           changed = true;
         } else if (existing) {
+          if (!existing.password && restoredPassword) {
+            existing.password = restoredPassword;
+            changed = true;
+          }
+          if (!existing.email && restoredEmail) {
+            existing.email = restoredEmail;
+            changed = true;
+          }
           if (acc.cookies && existing.cookies !== acc.cookies) {
             existing.cookies = acc.cookies;
             changed = true;
@@ -669,6 +689,15 @@ export default function App() {
           if (polledIdentifiers.has(dedupKey)) continue;
           polledIdentifiers.add(dedupKey);
 
+          // Restore credentials from encrypted local vault if missing
+          if (!sess.password) {
+            const vaultCred = findCredentialsForAccount({ id: key, syncKey: key, ...sess });
+            if (vaultCred?.password) {
+              sess.password = vaultCred.password;
+              if (!sess.email && vaultCred.email) sess.email = vaultCred.email;
+            }
+          }
+
           // If cookies missing but credentials exist, attempt initial login
           if (!sess.cookies && sess.email && sess.password) {
             const fresh = await directMeeshoLogin(sess.email, sess.password);
@@ -691,18 +720,21 @@ export default function App() {
           if (!sess.cookies) continue;
 
           let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
-          if (otpRes.expired && sess.email && sess.password) {
-            // Auto re-login on session expire directly from phone
+          if ((otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') && sess.email && sess.password) {
+            // Auto re-login on session expire directly from phone using encrypted local credentials
             const fresh = await directMeeshoLogin(sess.email, sess.password);
             if (fresh.success) {
               sessions[key].cookies = fresh.cookies;
               sessions[key].identifier = fresh.identifier;
               sessions[key].supplierId = fresh.supplierId;
               sessions[key].storeName = fresh.storeName;
+              sessions[key].expired = false;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
               setLocalSessions(sessions);
               await updateDoc(doc(db, 'accounts', key), {
                 cookies: fresh.cookies,
+                identifier: fresh.identifier,
+                supplierId: fresh.supplierId,
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
               otpRes = await directFetchDeliveryOTPs(sessions[key].identifier, fresh.cookies, sessions[key].supplierId);
@@ -1132,6 +1164,7 @@ export default function App() {
       localStorage.removeItem('native_meesho_sessions');
       localStorage.removeItem('cached_user_profile');
       localStorage.removeItem('cached_user_accounts');
+      clearVault();
     } catch {}
     setLocalSessions({});
     await signOut(auth);
@@ -1175,17 +1208,27 @@ export default function App() {
         }
 
         // 2. If we have session / credentials, fetch directly
+        const vaultCred = findCredentialsForAccount(targetAcc || { id: syncKey, syncKey });
         if (sess) {
-          if (!sess.cookies && sess.email && sess.password) {
-            const fresh = await directMeeshoLogin(sess.email, sess.password);
+          if (!sess.password && vaultCred?.password) sess.password = vaultCred.password;
+          if (!sess.email && vaultCred?.email) sess.email = vaultCred.email;
+
+          const loginEmail = sess.email || targetAcc?.email || vaultCred?.email || '';
+          const loginPass = sess.password || vaultCred?.password || '';
+
+          if (!sess.cookies && loginEmail && loginPass) {
+            const fresh = await directMeeshoLogin(loginEmail, loginPass);
             if (fresh.success) {
               sess.cookies = fresh.cookies;
-              sess.identifier = fresh.identifier || sess.identifier;
-              sess.supplierId = fresh.supplierId || sess.supplierId;
+              sess.identifier = fresh.identifier || sess.identifier || targetAcc?.identifier || '';
+              sess.supplierId = fresh.supplierId || sess.supplierId || targetAcc?.supplierId || 0;
+              sess.email = loginEmail;
+              sess.password = loginPass;
               sessions[syncKey] = sess;
               try {
                 localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                 setLocalSessions(sessions);
+                syncBackgroundSessions(sessions);
               } catch {}
               await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
                 cookies: fresh.cookies,
@@ -1198,22 +1241,32 @@ export default function App() {
 
           if (sess.cookies) {
             let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
-            if (otpRes.expired && sess.email && sess.password) {
-              const fresh = await directMeeshoLogin(sess.email, sess.password);
+
+            // AUTO RE-LOGIN if cookie expired (HTTP 403 / 401) using local vault password
+            if ((otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') && loginEmail && loginPass) {
+              const fresh = await directMeeshoLogin(loginEmail, loginPass);
               if (fresh.success) {
+                const freshIdent = fresh.identifier || sess.identifier || targetAcc?.identifier || '';
+                const freshSupId = fresh.supplierId || sess.supplierId || targetAcc?.supplierId || 0;
                 sessions[syncKey].cookies = fresh.cookies;
-                sessions[syncKey].identifier = fresh.identifier;
-                sessions[syncKey].supplierId = fresh.supplierId;
-                sessions[syncKey].storeName = fresh.storeName;
+                sessions[syncKey].identifier = freshIdent;
+                sessions[syncKey].supplierId = freshSupId;
+                sessions[syncKey].storeName = fresh.storeName || sess.storeName;
+                sessions[syncKey].password = loginPass;
+                sessions[syncKey].email = loginEmail;
+                sessions[syncKey].expired = false;
                 try {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions(sessions);
+                  syncBackgroundSessions(sessions);
                 } catch {}
-                otpRes = await directFetchDeliveryOTPs(sess.identifier, fresh.cookies, fresh.supplierId);
                 await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
                   cookies: fresh.cookies,
+                  identifier: freshIdent,
+                  supplierId: freshSupId,
                   lastUpdated: new Date().toISOString()
                 }).catch(() => {});
+                otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
               }
             }
 
@@ -1243,14 +1296,15 @@ export default function App() {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions({ ...sessions });
                 } catch {}
-                // If there is NO active OTP on screen, open the reconnect modal.
-                // If an OTP is ALREADY visible, show amber badge without popping up over active OTP!
-                const hasActiveOtp = targetAcc?.currentOtp && targetAcc.currentOtp !== '----';
-                if (targetAcc && !hasActiveOtp) {
-                  setReconnectAccount(targetAcc);
-                  setReconnectPass('');
-                  setReconnectError(`Session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
-                  setShowReconnectModal(true);
+                // Only open reconnect modal if password is NOT present in local database
+                if (!loginPass) {
+                  const hasActiveOtp = targetAcc?.currentOtp && targetAcc.currentOtp !== '----';
+                  if (targetAcc && !hasActiveOtp) {
+                    setReconnectAccount(targetAcc);
+                    setReconnectPass('');
+                    setReconnectError(`Session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
+                    setShowReconnectModal(true);
+                  }
                 }
               }
               showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
@@ -1299,8 +1353,45 @@ export default function App() {
           }
         }
 
-        // 3. If session is completely missing on this phone and no password saved:
+        // 3. If session is missing on this phone, attempt auto-login from vault before asking for password:
         if (targetAcc) {
+          if (vaultCred?.password && (vaultCred.email || targetAcc.email)) {
+            const loginEmail = vaultCred.email || targetAcc.email;
+            const fresh = await directMeeshoLogin(loginEmail, vaultCred.password);
+            if (fresh.success) {
+              const freshIdent = fresh.identifier || targetAcc.identifier || '';
+              const freshSupId = fresh.supplierId || targetAcc.supplierId || 0;
+              const newSess = {
+                email: loginEmail,
+                password: vaultCred.password,
+                identifier: freshIdent,
+                supplierId: freshSupId,
+                storeName: targetAcc.storeName || fresh.storeName,
+                cookies: fresh.cookies,
+                expired: false
+              };
+              const raw = localStorage.getItem('native_meesho_sessions');
+              const curSess = raw ? JSON.parse(raw) : {};
+              curSess[syncKey] = newSess;
+              if (targetAcc.id) curSess[targetAcc.id] = newSess;
+              localStorage.setItem('native_meesho_sessions', JSON.stringify(curSess));
+              setLocalSessions(curSess);
+              syncBackgroundSessions(curSess);
+              await updateDoc(doc(db, 'accounts', targetAcc.id), {
+                cookies: fresh.cookies,
+                identifier: freshIdent,
+                supplierId: freshSupId,
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+              const otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
+              if (otpRes.otp && otpRes.otp !== '----') {
+                showToast(`Return OTP for ${storeName}: ${otpRes.otp} (${otpRes.courier || 'Courier'})`, 'success');
+              } else {
+                showToast(`Checked ${storeName}: No return courier right now.`, 'info');
+              }
+              return;
+            }
+          }
           setReconnectAccount(targetAcc);
           setReconnectPass('');
           setReconnectError('');
@@ -1343,7 +1434,24 @@ export default function App() {
         return;
       }
 
-      // 1. Update local sessions
+      // 1. Update local sessions & save encrypted credentials into local database
+      saveEncryptedStoreCredentials(reconnectAccount.id, {
+        email: email.trim(),
+        password: reconnectPass,
+        identifier: res.identifier || reconnectAccount.identifier || '',
+        supplierId: res.supplierId || reconnectAccount.supplierId || 0,
+        storeName: res.storeName || reconnectAccount.storeName
+      });
+      if (reconnectAccount.syncKey) {
+        saveEncryptedStoreCredentials(reconnectAccount.syncKey, {
+          email: email.trim(),
+          password: reconnectPass,
+          identifier: res.identifier || reconnectAccount.identifier || '',
+          supplierId: res.supplierId || reconnectAccount.supplierId || 0,
+          storeName: res.storeName || reconnectAccount.storeName
+        });
+      }
+
       const raw = localStorage.getItem('native_meesho_sessions');
       const curSessions = raw ? JSON.parse(raw) : {};
       const key = reconnectAccount.syncKey || reconnectAccount.id;
@@ -1571,6 +1679,17 @@ export default function App() {
         lastUpdated: new Date().toISOString()
       }, { merge: true });
 
+      // Save credentials encrypted in local database on this device
+      try {
+        saveEncryptedStoreCredentials(targetSyncKey, {
+          email: cleanEmail,
+          password: meeshoPass,
+          identifier: data?.identifier || existingStore?.identifier || '',
+          supplierId: data?.supplierId || existingStore?.supplierId || 0,
+          storeName: finalStoreName
+        });
+      } catch (e) {}
+
       if (isNativeMobile()) {
         try {
           const raw = localStorage.getItem('native_meesho_sessions');
@@ -1651,6 +1770,7 @@ export default function App() {
               }
             } catch {}
           }
+          removeEncryptedStoreCredentials(accId);
           showToast('Store removed successfully', 'success');
         } catch (err) {
           showToast(`Error removing store: ${err.message}`, 'error');
