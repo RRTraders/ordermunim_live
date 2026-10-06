@@ -1,0 +1,6 @@
+# Public repository: Exclusively for APK distribution
+# Prevent any source code or other files from ever being added
+*
+!meesho_otp.apk
+!README.md
+!.gitignore
