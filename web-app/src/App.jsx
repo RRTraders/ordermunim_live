@@ -1125,6 +1125,22 @@ export default function App() {
               }
             }
 
+            // If local session failed with 401/403, check if another device updated cookies in Firestore
+            if ((otpRes.error || otpRes.expired) && (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401')) {
+              if (targetAcc?.cookies && targetAcc.cookies !== sess.cookies) {
+                const cloudRes = await directFetchDeliveryOTPs(targetAcc.identifier || sess.identifier, targetAcc.cookies, targetAcc.supplierId || sess.supplierId);
+                if (!cloudRes.error && !cloudRes.expired) {
+                  otpRes = cloudRes;
+                  sess.cookies = targetAcc.cookies;
+                  sessions[syncKey] = sess;
+                  try {
+                    localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                    setLocalSessions({ ...sessions });
+                  } catch {}
+                }
+              }
+            }
+
             if (otpRes.error || otpRes.expired) {
               if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
                 const sKey = targetAcc?.syncKey || syncKey;
@@ -1135,7 +1151,10 @@ export default function App() {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions({ ...sessions });
                 } catch {}
-                if (targetAcc) {
+                // If there is NO active OTP on screen, open the reconnect modal.
+                // If an OTP is ALREADY visible, show amber badge without popping up over active OTP!
+                const hasActiveOtp = targetAcc?.currentOtp && targetAcc.currentOtp !== '----';
+                if (targetAcc && !hasActiveOtp) {
                   setReconnectAccount(targetAcc);
                   setReconnectPass('');
                   setReconnectError(`Session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
