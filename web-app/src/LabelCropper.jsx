@@ -476,10 +476,10 @@ export default function LabelCropper({ showToast }) {
       .trim();
   };
 
-  // Extract recipient / customer name under "Ship To :" from PDF page text
+  // Extract recipient / customer name, order number, and pincode from Ajio PDF page text
   const extractShipToFromPage = (content) => {
     const items = content?.items || [];
-    if (items.length === 0) return { shipToName: '', orderId: '' };
+    if (items.length === 0) return { shipToName: '', orderId: '', pincode: '', lines: [] };
 
     // Sort items top-to-bottom (Y descending), left-to-right (X ascending)
     const sorted = [...items].filter(it => it.str && it.str.trim()).sort((a, b) => {
@@ -514,10 +514,12 @@ export default function LabelCropper({ showToast }) {
 
     const rawText = lines.join('\n');
 
-    // Clean name candidate
+    // Clean name candidate: removes adjacent column noise like "SHIP FROM ADDRESS", "SELLER", etc.
     const cleanCandidate = (raw) => {
       if (!raw) return '';
       let c = raw.trim();
+      // Crucial: remove adjacent column text like "SHIP FROM ADDRESS: ...", "SELLER/CONSIGNOR: ..."
+      c = c.replace(/\b(?:ship\s*from|seller|consignor|gstin|mobile|state\s*code|place\s*of|order\s*number).*/i, '').trim();
       c = c.replace(/^(?:name|customer|buyer|consignee|m\/s|mr\.|mrs\.|ms\.)[\s:\.\-]+/i, '').trim();
       if (c.includes(',')) {
         c = c.split(',')[0].trim();
@@ -531,25 +533,25 @@ export default function LabelCropper({ showToast }) {
 
     let shipToName = '';
 
-    // 1. Same line match: "Ship To : Rahul Sharma"
+    // 1. Same line match: "BILL TO / SHIP TO: Joginder" or "Ship To: Joginder"
     for (const line of lines) {
-      const m = line.match(/(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]+([A-Za-z0-9\s\.\&\-]{2,50})/i);
+      const m = line.match(/(?:bill\s*to\s*\/\s*ship\s*to|ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]+([A-Za-z0-9\s\.\&\-]{1,50})/i);
       if (m) {
         const candidate = cleanCandidate(m[1]);
-        if (candidate.length >= 2) {
+        if (candidate.length >= 1) {
           shipToName = candidate;
           break;
         }
       }
     }
 
-    // 2. Next line match: Line has "Ship To :" and next line has customer name
+    // 2. Next line match: Line has "Ship To:" and next line has customer name
     if (!shipToName) {
       for (let i = 0; i < lines.length - 1; i++) {
         const line = lines[i].trim();
-        if (/^(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]*$/i.test(line)) {
+        if (/^(?:bill\s*to\s*\/\s*ship\s*to|ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to|deliver[\s\-]*to|consignee)[\s:\-]*$/i.test(line)) {
           const candidate = cleanCandidate(lines[i + 1]);
-          if (candidate.length >= 2) {
+          if (candidate.length >= 1) {
             shipToName = candidate;
             break;
           }
@@ -559,42 +561,80 @@ export default function LabelCropper({ showToast }) {
 
     // 3. Multi-line regex fallback
     if (!shipToName) {
-      const rawM = rawText.match(/(?:ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to)[\s:\-]+(?:\n|\r\n)?\s*([A-Za-z\s]{2,40})/i);
+      const rawM = rawText.match(/(?:bill\s*to\s*\/\s*ship\s*to|ship[\s\-]*to|shipping[\s\-]*address|delivery[\s\-]*to)[\s:\-]+(?:\n|\r\n)?\s*([A-Za-z0-9\s]{1,40})/i);
       if (rawM) {
         const candidate = cleanCandidate(rawM[1]);
-        if (candidate.length >= 2) {
+        if (candidate.length >= 1) {
           shipToName = candidate;
         }
       }
     }
 
-    // Order ID if present
+    // 4. Extract Order Number (FN..., EX..., or standard order pattern)
+    // Ajio customer orders typically start with FN or EX followed by digits (e.g., FN9224801976, EX0039111266)
     let orderId = '';
-    const ordMatch = rawText.match(/(?:Cust(?:omer)?\s*Order\s*(?:No|ID|#)|Order\s*(?:No|ID|Number|#))[\s:#\-]*([A-Za-z0-9\-_]{6,30})/i);
-    if (ordMatch) {
-      orderId = ordMatch[1].trim();
+    const fnMatch = rawText.match(/\b(FN\d{8,12}|EX\d{8,12})\b/i);
+    if (fnMatch) {
+      orderId = fnMatch[1].toUpperCase();
+    } else {
+      const ordMatch = rawText.match(/(?:ORDER\s*(?:NUMBER|NO|#)|Order#)[\s:#\-]+([A-Za-z0-9\-_]{6,25})/i);
+      if (ordMatch && !/^(?:shipment|payment|collect|surface|carrier|total)$/i.test(ordMatch[1])) {
+        orderId = ordMatch[1].trim().toUpperCase();
+      }
     }
 
-    return { shipToName, orderId };
+    // 5. Extract Pincode (6-digit Indian pincode)
+    let pincode = '';
+    const pinMatch = rawText.match(/\b([1-9][0-9]{5})\b/);
+    if (pinMatch) {
+      pincode = pinMatch[1];
+    }
+
+    return { shipToName, orderId, pincode, lines };
   };
 
   // Determine if a label page matches an invoice page
+  // Priority 1: Exact Order ID match (as requested: "if you cant get invoice from name then take by matching order")
+  // Priority 2: Customer Name match (Exact or Substring)
+  // Priority 3: Short Name + Pincode match or Pincode + Address match
   const isAjioPageMatch = (labelPage, invoicePage) => {
+    // 1. Order Number Match (Highest priority)
+    if (labelPage.orderId && invoicePage.orderId && labelPage.orderId.length >= 6) {
+      if (labelPage.orderId.toLowerCase() === invoicePage.orderId.toLowerCase()) {
+        return { match: true, reason: `Order ID Match (#${labelPage.orderId})` };
+      }
+    }
+
+    // 2. Customer Name Match
     const normLbl = normalizeCustomerName(labelPage.shipToName);
     const normInv = normalizeCustomerName(invoicePage.shipToName);
 
     if (normLbl && normInv) {
-      if (normLbl === normInv) return true;
-      if (normLbl.length >= 6 && normInv.length >= 6) {
-        if (normLbl.includes(normInv) || normInv.includes(normLbl)) return true;
+      if (normLbl === normInv) {
+        return { match: true, reason: `Customer Name Match ("${labelPage.shipToName}")` };
+      }
+      if (normLbl.length >= 3 && normInv.length >= 3) {
+        if (normLbl.includes(normInv) || normInv.includes(normLbl)) {
+          return { match: true, reason: `Customer Name Match ("${labelPage.shipToName}")` };
+        }
+      }
+      // Short names (e.g. "S" or "S R") verified with Pincode
+      if ((normLbl.length < 3 || normInv.length < 3) && labelPage.pincode && invoicePage.pincode && labelPage.pincode === invoicePage.pincode) {
+        return { match: true, reason: `Name & Pincode Match ("${labelPage.shipToName}" + ${labelPage.pincode})` };
       }
     }
 
-    if (labelPage.orderId && invoicePage.orderId && labelPage.orderId.toLowerCase() === invoicePage.orderId.toLowerCase()) {
-      return true;
+    // 3. Fallback: Pincode + Address tokens match
+    if (labelPage.pincode && invoicePage.pincode && labelPage.pincode === invoicePage.pincode && labelPage.pincode.length === 6) {
+      const lblWords = (labelPage.lines || []).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+      const invWords = (invoicePage.lines || []).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+      const shared = lblWords.filter(w => invWords.includes(w) && !['road', 'street', 'near', 'floor', 'india', 'surat', 'shree', 'kuberji'].includes(w));
+      if (shared.length >= 2) {
+        return { match: true, reason: `Pincode & Address Match (${labelPage.pincode})` };
+      }
     }
 
-    return false;
+    return { match: false, reason: '' };
   };
 
   const ajioLabelInputRef = useRef(null);
@@ -748,13 +788,13 @@ export default function LabelCropper({ showToast }) {
       const labelTotalPages = labelPdfJs.numPages;
       const invoiceTotalPages = invoicePdfJs.numPages;
 
-      // 1. Extract text and "Ship To" name from each label page
+      // 1. Extract text, customer name, order number, and pincode from each label page
       const labelPagesInfo = [];
       for (let p = 1; p <= labelTotalPages; p++) {
         setAjioState(prev => ({
           ...prev,
           mergeProgress: Math.min(25, Math.round((p / labelTotalPages) * 25)),
-          mergeStatusText: `Reading Label page ${p} of ${labelTotalPages} (extracting Ship To name)...`,
+          mergeStatusText: `Reading Label page ${p} of ${labelTotalPages} (extracting customer & order details)...`,
         }));
         const page = await labelPdfJs.getPage(p);
         const textContent = await page.getTextContent();
@@ -764,16 +804,18 @@ export default function LabelCropper({ showToast }) {
           pageNum: p,
           shipToName: extracted.shipToName,
           orderId: extracted.orderId,
+          pincode: extracted.pincode,
+          lines: extracted.lines,
         });
       }
 
-      // 2. Extract text and "Ship To" name from each invoice page
+      // 2. Extract text, customer name, order number, and pincode from each invoice page
       const invoicePagesInfo = [];
       for (let p = 1; p <= invoiceTotalPages; p++) {
         setAjioState(prev => ({
           ...prev,
           mergeProgress: 25 + Math.min(30, Math.round((p / invoiceTotalPages) * 30)),
-          mergeStatusText: `Reading Invoice page ${p} of ${invoiceTotalPages} (extracting Ship To name)...`,
+          mergeStatusText: `Reading Invoice page ${p} of ${invoiceTotalPages} (extracting customer & order details)...`,
         }));
         const page = await invoicePdfJs.getPage(p);
         const textContent = await page.getTextContent();
@@ -783,16 +825,21 @@ export default function LabelCropper({ showToast }) {
           pageNum: p,
           shipToName: extracted.shipToName,
           orderId: extracted.orderId,
+          pincode: extracted.pincode,
+          lines: extracted.lines,
         });
       }
 
-      // 3. Propagate Ship To name to continuation invoice pages
+      // 3. Propagate Ship To name, order ID & pincode to continuation invoice pages
       // (If invoice page p has no Ship To, but follows an invoice page that does, it belongs to that invoice)
       for (let j = 0; j < invoicePagesInfo.length; j++) {
         if (!invoicePagesInfo[j].shipToName && j > 0 && invoicePagesInfo[j - 1].shipToName) {
           invoicePagesInfo[j].shipToName = invoicePagesInfo[j - 1].shipToName;
           if (!invoicePagesInfo[j].orderId && invoicePagesInfo[j - 1].orderId) {
             invoicePagesInfo[j].orderId = invoicePagesInfo[j - 1].orderId;
+          }
+          if (!invoicePagesInfo[j].pincode && invoicePagesInfo[j - 1].pincode) {
+            invoicePagesInfo[j].pincode = invoicePagesInfo[j - 1].pincode;
           }
           invoicePagesInfo[j].isContinuation = true;
         }
@@ -801,7 +848,7 @@ export default function LabelCropper({ showToast }) {
       setAjioState(prev => ({
         ...prev,
         mergeProgress: 60,
-        mergeStatusText: 'Matching labels to invoices by customer name...',
+        mergeStatusText: 'Matching labels to invoices by order & customer name...',
       }));
 
       // 4. Build target page sequence:
@@ -823,10 +870,14 @@ export default function LabelCropper({ showToast }) {
 
         // Find all unused invoice pages matching this label
         const matchedInvoicesForThisLabel = [];
+        let matchReason = '';
+
         for (let j = 0; j < invoicePagesInfo.length; j++) {
           if (!usedInvoicePageIndices.has(j)) {
             const inv = invoicePagesInfo[j];
-            if (isAjioPageMatch(lbl, inv)) {
+            const matchRes = isAjioPageMatch(lbl, inv);
+            if (matchRes.match) {
+              matchReason = matchRes.reason;
               usedInvoicePageIndices.add(j);
               matchedInvoicesForThisLabel.push(inv);
               mergeSequence.push({
@@ -835,6 +886,21 @@ export default function LabelCropper({ showToast }) {
                 name: inv.shipToName,
                 labelNum: i + 1,
               });
+
+              // Check if immediately following pages are continuation pages belonging to this same invoice
+              let nextIdx = j + 1;
+              while (nextIdx < invoicePagesInfo.length && invoicePagesInfo[nextIdx].isContinuation && !usedInvoicePageIndices.has(nextIdx)) {
+                usedInvoicePageIndices.add(nextIdx);
+                matchedInvoicesForThisLabel.push(invoicePagesInfo[nextIdx]);
+                mergeSequence.push({
+                  type: 'invoice',
+                  pageIndex: invoicePagesInfo[nextIdx].pageIndex,
+                  name: invoicePagesInfo[nextIdx].shipToName,
+                  labelNum: i + 1,
+                });
+                nextIdx++;
+              }
+              break;
             }
           }
         }
@@ -844,6 +910,7 @@ export default function LabelCropper({ showToast }) {
           labelPageIndex: lbl.pageIndex,
           customerName: lbl.shipToName || 'Customer Name Not Detected',
           orderId: lbl.orderId,
+          matchReason: matchReason || (matchedInvoicesForThisLabel.length > 0 ? 'Matched' : 'No match found'),
           matchedInvoices: matchedInvoicesForThisLabel.map(m => ({
             pageNum: m.pageNum,
             pageIndex: m.pageIndex,
@@ -3561,7 +3628,7 @@ export default function LabelCropper({ showToast }) {
                 ? (ajioState.mergeStatusText || 'Matching & Merging Pages...')
                 : (!ajioState.labelFile || !ajioState.invoiceFile)
                 ? 'Please Upload Both Label PDF & Invoice PDF'
-                : 'Match by "Ship To" Name & Merge PDF'}
+                : 'Match by Order# / Customer Name & Merge PDF'}
             </span>
           </button>
 
@@ -3606,6 +3673,11 @@ export default function LabelCropper({ showToast }) {
                       <div className="min-w-0 pr-2">
                         <span className="font-bold text-slate-800">#{pair.labelNum} {pair.customerName}</span>
                         {pair.orderId && <span className="text-slate-400 text-[10px] ml-1.5 font-mono">({pair.orderId})</span>}
+                        {pair.matchReason && (
+                          <span className="inline-block text-emerald-700 text-[10px] ml-1.5 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            {pair.matchReason}
+                          </span>
+                        )}
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5">
                         <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]">
