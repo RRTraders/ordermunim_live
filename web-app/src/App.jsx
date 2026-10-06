@@ -3545,6 +3545,9 @@ export default function App() {
                   const isLive = acc.status === 'live';
                   const isOnHold = profile.status === 'on_hold';
                   const isExpanded = Boolean(expandedStoreIds[acc.id]);
+                  const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
+                  const vaultCred = findCredentialsForAccount(acc, user?.uid);
+                  const isAutoSync = Boolean(localSess || acc.cookies || vaultCred?.password);
                   const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
                     ? acc.otpList
                     : (acc.currentOtp && acc.currentOtp !== '----'
@@ -3598,18 +3601,20 @@ export default function App() {
 
                           {/* Actions & Chevron */}
                           <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleManualRefresh(acc.syncKey, acc.storeName);
-                              }}
-                              disabled={refreshingId === acc.syncKey}
-                              className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors disabled:opacity-50"
-                              title="Check for live OTP now"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-cyan-400' : ''}`} />
-                            </button>
+                            {!isAutoSync && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleManualRefresh(acc.syncKey, acc.storeName);
+                                }}
+                                disabled={refreshingId === acc.syncKey}
+                                className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors disabled:opacity-50"
+                                title="Check for live OTP now"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-cyan-400' : ''}`} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -3690,29 +3695,17 @@ export default function App() {
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {acc.dateTime || 'Just now'}</span>
-                              {(() => {
-                                const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
-                                const isExpired = localSess?.expired || acc.status === 'expired';
-                                const hasSess = Boolean(localSess || acc.cookies);
-
-                                const vaultCred = findCredentialsForAccount(acc);
-                                const isReady = Boolean(localSess || acc.cookies || vaultCred?.password);
-
-                                if (isReady) {
-                                  return (
-                                    <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                      Auto-Sync Active
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="flex items-center gap-1 text-slate-400 font-medium">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                    Connected
-                                  </span>
-                                );
-                              })()}
+                              {isAutoSync ? (
+                                <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  Auto-Sync Active
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                  Connected
+                                </span>
+                              )}
                             </div>
                           </div>
                         )}
