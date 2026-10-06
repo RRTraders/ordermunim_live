@@ -215,9 +215,14 @@ public class MeeshoBackgroundService extends Service {
             int code = conn.getResponseCode();
 
             if (code == 401 || code == 403) {
-                // Auto re-login if cookie expired
+                // Auto re-login silently if cookie expired
                 if (!email.isEmpty() && !password.isEmpty()) {
                     cookies = autoRelogin(email, password, syncKey);
+                    if (!cookies.isEmpty()) {
+                        sess.put("cookies", cookies);
+                        // Immediately fetch OTPs with the fresh cookies!
+                        pollSingleAccount(syncKey, sess);
+                    }
                 }
                 return;
             }

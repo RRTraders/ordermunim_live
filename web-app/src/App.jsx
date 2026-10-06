@@ -425,41 +425,6 @@ export default function App() {
     const unsubUser = onSnapshot(userRef, (snap) => {
       if (snap.exists()) {
         const profData = snap.data();
-        const currentDeviceId = getDeviceId();
-
-        // SINGLE ACTIVE DEVICE RESTRICTION:
-        // Evict immediately if another device logged into this account
-        if (!isSuper && profData.activeDeviceId && profData.activeDeviceId !== currentDeviceId) {
-          console.warn('[Single Device] Evicted by active device:', profData.activeDeviceId);
-          if (isNativeMobile()) {
-            try {
-              stopBackgroundMonitoring();
-              syncBackgroundSessions({});
-            } catch {}
-          }
-          try {
-            localStorage.removeItem('native_meesho_sessions');
-            localStorage.removeItem('cached_user_profile');
-            localStorage.removeItem('cached_user_accounts');
-            clearVault();
-          } catch {}
-          setLocalSessions({});
-          signOut(auth).catch(() => {});
-          setUser(null);
-          setAccounts([]);
-          setProfile({ maxAccounts: 0, mobile: '', status: 'active' });
-          alert('⚠️ Session Terminated: This OrderMunim account was accessed on another device.\n\nOnly 1 active device login is allowed at a time. Meesho terminates sessions (HTTP 403) when multiple devices poll simultaneously.\n\nTo share access with your staff safely, please use Staff Mode.');
-          return;
-        }
-
-        // If no activeDeviceId set yet (legacy profile), adopt current device
-        if (!profData.activeDeviceId) {
-          updateDoc(userRef, {
-            activeDeviceId: currentDeviceId,
-            activeDeviceAt: new Date().toISOString()
-          }).catch(() => {});
-        }
-
         setProfile(profData);
         try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
         if (isSuper || profData.role === 'super_admin') {
@@ -720,38 +685,42 @@ export default function App() {
           if (!sess.cookies) continue;
 
           let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
-          if ((otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') && sess.email && sess.password) {
-            // Auto re-login on session expire directly from phone using encrypted local credentials
-            const fresh = await directMeeshoLogin(sess.email, sess.password);
-            if (fresh.success) {
-              sessions[key].cookies = fresh.cookies;
-              sessions[key].identifier = fresh.identifier;
-              sessions[key].supplierId = fresh.supplierId;
-              sessions[key].storeName = fresh.storeName;
-              sessions[key].expired = false;
-              localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-              setLocalSessions(sessions);
-              await updateDoc(doc(db, 'accounts', key), {
-                cookies: fresh.cookies,
-                identifier: fresh.identifier,
-                supplierId: fresh.supplierId,
-                lastUpdated: new Date().toISOString()
-              }).catch(() => {});
-              otpRes = await directFetchDeliveryOTPs(sessions[key].identifier, fresh.cookies, sessions[key].supplierId);
-            }
-          }
+          if (otpRes.error || otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
+            // Auto re-login silently using encrypted local credentials whenever session expires
+            const vaultCred = findCredentialsForAccount({ id: key, syncKey: key, ...sess });
+            const loginEmail = sess.email || vaultCred?.email;
+            const loginPass = sess.password || vaultCred?.password;
 
-          // Guard: Never overwrite Firestore if fetch encountered an error or expired session!
-          if (otpRes.error || otpRes.expired) {
-            if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-              if (sessions[key] && !sessions[key].expired) {
-                sessions[key].expired = true;
+            if (loginEmail && loginPass) {
+              const fresh = await directMeeshoLogin(loginEmail, loginPass);
+              if (fresh.success) {
+                const freshIdent = fresh.identifier || sess.identifier || '';
+                const freshSupId = fresh.supplierId || sess.supplierId || 0;
+                sessions[key].cookies = fresh.cookies;
+                sessions[key].identifier = freshIdent;
+                sessions[key].supplierId = freshSupId;
+                sessions[key].storeName = fresh.storeName || sess.storeName;
+                sessions[key].email = loginEmail;
+                sessions[key].password = loginPass;
+                sessions[key].expired = false;
                 try {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions({ ...sessions });
+                  syncBackgroundSessions(sessions);
                 } catch {}
+                await updateDoc(doc(db, 'accounts', key), {
+                  cookies: fresh.cookies,
+                  identifier: freshIdent,
+                  supplierId: freshSupId,
+                  lastUpdated: new Date().toISOString()
+                }).catch(() => {});
+                otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
               }
             }
+          }
+
+          // Guard: Never overwrite Firestore if fetch encountered a network error
+          if (otpRes.error || otpRes.expired) {
             console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
             continue;
           } else {
@@ -3634,27 +3603,10 @@ export default function App() {
                                 const isExpired = localSess?.expired || acc.status === 'expired';
                                 const hasSess = Boolean(localSess || acc.cookies);
 
-                                if (isExpired) {
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setReconnectAccount(acc);
-                                        setReconnectPass('');
-                                        setReconnectError('Session expired (HTTP 403). Enter Meesho password to reconnect.');
-                                        setShowReconnectModal(true);
-                                      }}
-                                      className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-semibold cursor-pointer bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30 active:scale-95 transition-all"
-                                      title="Click to reconnect this store"
-                                    >
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
-                                      Session Expired (Tap to Reconnect)
-                                    </button>
-                                  );
-                                }
+                                const vaultCred = findCredentialsForAccount(acc);
+                                const isReady = Boolean(localSess || acc.cookies || vaultCred?.password);
 
-                                if (hasSess) {
+                                if (isReady) {
                                   return (
                                     <span className="flex items-center gap-1 text-emerald-400 font-medium">
                                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -3663,19 +3615,10 @@ export default function App() {
                                   );
                                 }
                                 return (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setReconnectAccount(acc);
-                                      setReconnectPass('');
-                                      setReconnectError('');
-                                      setShowReconnectModal(true);
-                                    }}
-                                    className="text-amber-400 hover:text-amber-300 font-medium cursor-pointer"
-                                  >
-                                    Tap to Connect
-                                  </button>
+                                  <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    Connected
+                                  </span>
                                 );
                               })()}
                             </div>
