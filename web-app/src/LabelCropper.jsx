@@ -617,7 +617,37 @@ export default function LabelCropper({ showToast }) {
     // 6. Continuation detection: Page 2 of N, or page lacking both Tax Invoice No and Order ID
     const isContinuation = pageCurrent > 1 || (!invoiceNumber && !orderId);
 
-    return { shipToName, orderId, pincode, lines, isContinuation, invoiceNumber, pageCurrent, pageTotal };
+    // 7. Extract Item SKUs & Quantities from invoice table
+    // Matches patterns like: Men Relaxed Fit Flat-Front Trousers,grey,703666422025 (O1PANTDARKGREY32),O1 PANT DARK GREY-32
+    // or standalone line: LILN PNT BLACK-32
+    const invoiceItems = [];
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      let sku = '';
+      const m1 = l.match(/\([A-Za-z0-9]+\),([A-Za-z0-9\s\-]+)$/);
+      if (m1) {
+        sku = m1[1].trim();
+      } else {
+        const m2 = l.match(/^([A-Z0-9]{2,8}\s+(?:PANT|PNT|PT)[A-Z0-9\s\-]+)$/i);
+        if (m2 && !l.includes('Total') && !l.includes('TAX') && !l.includes('HSN')) {
+          sku = m2[1].trim();
+        }
+      }
+
+      if (sku) {
+        let qty = 1;
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+          const qm = lines[j].match(/\b\d{6,8}\s+(\d+(?:\.\d+)?)\b/);
+          if (qm) {
+            qty = Math.round(parseFloat(qm[1]));
+            break;
+          }
+        }
+        invoiceItems.push({ sku, qty });
+      }
+    }
+
+    return { shipToName, orderId, pincode, lines, isContinuation, invoiceNumber, pageCurrent, pageTotal, invoiceItems };
   };
 
   // Determine if a label page matches an invoice document (single or multi-page)
@@ -886,6 +916,7 @@ export default function LabelCropper({ showToast }) {
             lines: p.lines || [],
             expectedPages: p.pageTotal || 1,
             pages: [p],
+            items: p.invoiceItems || [],
           };
           invoiceDocuments.push(curInvoice);
         } else {
@@ -894,6 +925,9 @@ export default function LabelCropper({ showToast }) {
           if (!curInvoice.shipToName && p.shipToName) curInvoice.shipToName = p.shipToName;
           if (!curInvoice.pincode && p.pincode) curInvoice.pincode = p.pincode;
           if (p.lines && p.lines.length > 0) curInvoice.lines = [...(curInvoice.lines || []), ...p.lines];
+          if (p.invoiceItems && p.invoiceItems.length > 0) {
+            curInvoice.items = [...(curInvoice.items || []), ...p.invoiceItems];
+          }
         }
       }
 
@@ -905,22 +939,14 @@ export default function LabelCropper({ showToast }) {
 
       // 4. Build target page sequence:
       // For each 1-page label:
-      //   Add label page
-      //   Match against invoice documents:
-      //     Append ALL pages belonging to this invoice document ([P1, P2...]) right behind the label!
+      //   Add label page (carrying matched item SKUs for bottom-right stamping)
+      //   Append ALL pages belonging to matching invoice document ([P1, P2...]) right behind the label!
       const usedInvoiceDocIndices = new Set();
       const matchedPairs = [];
       const mergeSequence = [];
 
       for (let i = 0; i < labelPagesInfo.length; i++) {
         const lbl = labelPagesInfo[i];
-        mergeSequence.push({
-          type: 'label',
-          pageIndex: lbl.pageIndex,
-          pageNum: lbl.pageNum,
-          name: lbl.shipToName,
-          labelNum: i + 1,
-        });
 
         let matchedDoc = null;
         let matchRes = null;
@@ -933,18 +959,31 @@ export default function LabelCropper({ showToast }) {
               matchedDoc = invDoc;
               matchRes = res;
               usedInvoiceDocIndices.add(j);
-              // Append ALL pages of this invoice document immediately after the label
-              for (const pg of invDoc.pages) {
-                mergeSequence.push({
-                  type: 'invoice',
-                  pageIndex: pg.pageIndex,
-                  pageNum: pg.pageNum,
-                  name: invDoc.shipToName,
-                  labelNum: i + 1,
-                });
-              }
               break;
             }
+          }
+        }
+
+        // Add label page with matched invoice items (for SKU stamping)
+        mergeSequence.push({
+          type: 'label',
+          pageIndex: lbl.pageIndex,
+          pageNum: lbl.pageNum,
+          name: lbl.shipToName,
+          labelNum: i + 1,
+          items: matchedDoc?.items || [],
+        });
+
+        // Append all invoice pages belonging to this matched document
+        if (matchedDoc) {
+          for (const pg of matchedDoc.pages) {
+            mergeSequence.push({
+              type: 'invoice',
+              pageIndex: pg.pageIndex,
+              pageNum: pg.pageNum,
+              name: matchedDoc.shipToName,
+              labelNum: i + 1,
+            });
           }
         }
 
@@ -955,6 +994,7 @@ export default function LabelCropper({ showToast }) {
           customerName: lbl.shipToName || 'Customer Name Not Detected',
           orderId: lbl.orderId,
           matchReason: matchRes ? matchRes.reason : 'No matching invoice',
+          items: matchedDoc?.items || [],
           matchedInvoices: matchedDoc ? matchedDoc.pages.map(pg => ({
             pageNum: pg.pageNum,
             pageIndex: pg.pageIndex,
@@ -990,11 +1030,73 @@ export default function LabelCropper({ showToast }) {
       const mergedDoc = await PDFDocument.create();
       const labelDoc = await PDFDocument.load(labelBytes, { ignoreEncryption: true });
       const invoiceDoc = await PDFDocument.load(invoiceBytes, { ignoreEncryption: true });
+      const helveticaBold = await mergedDoc.embedFont(StandardFonts.HelveticaBold);
 
       for (let idx = 0; idx < mergeSequence.length; idx++) {
         const item = mergeSequence[idx];
         if (item.type === 'label') {
           const [copiedPage] = await mergedDoc.copyPages(labelDoc, [item.pageIndex]);
+
+          // Stamp SKU name and Quantity in the bottom-right corner of the shipping label
+          // (underneath the Total box, directly beside the Consignor address block)
+          if (item.items && item.items.length > 0) {
+            const pageWidth = copiedPage.getWidth();
+            const startX = 168;
+            const maxTextWidth = (pageWidth - startX - 8); // Available width ~112pt
+
+            if (item.items.length === 1) {
+              const itm = item.items[0];
+              let fontSize = 8;
+              while (fontSize > 5.5 && helveticaBold.widthOfTextAtSize(itm.sku, fontSize) > maxTextWidth) {
+                fontSize -= 0.5;
+              }
+              const skuW = helveticaBold.widthOfTextAtSize(itm.sku, fontSize);
+              const qtyStr = String(itm.qty || 1);
+              const qtySize = fontSize + 1;
+              const qtyW = helveticaBold.widthOfTextAtSize(qtyStr, qtySize);
+
+              // Line 1: SKU Name (e.g. O1 PANT DARK GREY-32)
+              copiedPage.drawText(itm.sku, {
+                x: startX,
+                y: 30,
+                size: fontSize,
+                font: helveticaBold,
+                color: rgb(0, 0, 0),
+              });
+
+              // Line 2: Quantity (e.g. 1) centered under the SKU
+              copiedPage.drawText(qtyStr, {
+                x: startX + Math.max(0, (skuW - qtyW) / 2),
+                y: 18,
+                size: qtySize,
+                font: helveticaBold,
+                color: rgb(0, 0, 0),
+              });
+            } else {
+              // Multiple items: stack them neatly
+              const count = Math.min(item.items.length, 3);
+              const fontSize = count === 2 ? 7 : 6;
+              const lineGap = count === 2 ? 12 : 9.5;
+              const topY = count === 2 ? 34 : 38;
+
+              for (let k = 0; k < count; k++) {
+                const itm = item.items[k];
+                const text = `${itm.sku} (${itm.qty})`;
+                let fSize = fontSize;
+                while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5;
+                }
+                copiedPage.drawText(text, {
+                  x: startX,
+                  y: topY - (k * lineGap),
+                  size: fSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+            }
+          }
+
           mergedDoc.addPage(copiedPage);
         } else {
           const [copiedPage] = await mergedDoc.copyPages(invoiceDoc, [item.pageIndex]);
@@ -3723,6 +3825,11 @@ export default function LabelCropper({ showToast }) {
                         {pair.matchReason && (
                           <span className="inline-block text-emerald-700 text-[10px] ml-1.5 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                             {pair.matchReason}
+                          </span>
+                        )}
+                        {pair.items && pair.items.length > 0 && (
+                          <span className="inline-block text-indigo-700 text-[10px] ml-1.5 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-mono">
+                            SKU: {pair.items.map(it => `${it.sku}${it.qty > 1 ? ` (x${it.qty})` : ''}`).join(', ')}
                           </span>
                         )}
                       </div>
