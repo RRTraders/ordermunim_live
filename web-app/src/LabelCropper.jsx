@@ -32,6 +32,7 @@ import {
   Layers, 
   Sparkles, 
   Check, 
+  Filter, 
   QrCode 
 } from 'lucide-react';
 
@@ -61,8 +62,8 @@ export const MARKETPLACES = [
     badgeText: 'amazon',
     badgeStyle: 'bg-[#131921] text-[#FF9900] border border-amber-500/30 shadow-orange-500/10',
     iconLetter: 'a',
-    description: 'Crop and organize Amazon Easy Ship 4x6 thermal shipping labels, FBA barcodes, and multi-package manifests.',
-    ready: false
+    description: 'Filter out tax invoice pages and extract only shipping labels from Amazon single PDF.',
+    ready: true
   },
   {
     id: 'flipcart',
@@ -468,6 +469,22 @@ export default function LabelCropper({ showToast }) {
   });
 
   const [showAjioBreakdown, setShowAjioBreakdown] = useState(false);
+
+  // Amazon Label Extractor State (Keep Labels Only, Filter Invoices)
+  const [amazonState, setAmazonState] = useState({
+    files: [], // Array of { file, name, size, pageCount, arrayBuffer }
+    totalPages: 0,
+    isProcessing: false,
+    progress: 0,
+    statusText: '',
+    pagesAnalysis: [], // Array of { fileIndex, fileName, pageIndex, pageNum, globalPageNum, isInvoice, isLabel, orderId, trackingId, recipientName, reason, keep }
+    labelsCount: 0,
+    invoicesCount: 0,
+    result: null, // { url, filename, totalPages, labelsCount, invoicesCount, blob }
+    error: null,
+  });
+  const [showAmazonBreakdown, setShowAmazonBreakdown] = useState(false);
+  const amazonInputRef = useRef(null);
 
   // Normalize customer name for accurate comparison
   const normalizeCustomerName = (str) => {
@@ -1438,6 +1455,434 @@ export default function LabelCropper({ showToast }) {
       }));
       showToast?.('Failed to merge PDFs: ' + err.message, 'error');
     }
+  };
+
+  // ================= AMAZON LABEL & INVOICE PARSER & SEPARATOR =================
+  const analyzeAmazonPage = (pageText) => {
+    const lower = (pageText || '').toLowerCase();
+
+    // Strong Invoice Indicators
+    const hasTaxInvoice = /tax\s*invoice/i.test(lower);
+    const hasInvoiceNo = /(?:invoice\s*(?:no|number|date)|invoice\s*details)/i.test(lower);
+    const hasBilling = /(?:billing\s*address|bill\s*to)/i.test(lower);
+    const hasTaxTable = /(?:taxable\s*value|hsn(?:\/sac)?|cgst|sgst|igst)/i.test(lower);
+    const hasAuthSignatory = /authorized\s*signatory/i.test(lower);
+    const hasPlaceOfSupply = /place\s*of\s*(?:supply|delivery)/i.test(lower);
+    const hasAmountWords = /(?:amount\s*in\s*words|total\s*(?:amount|inr|\u20B9))/i.test(lower);
+
+    let invoiceScore = 0;
+    if (hasTaxInvoice) invoiceScore += 4;
+    if (hasInvoiceNo) invoiceScore += 2;
+    if (hasBilling) invoiceScore += 2;
+    if (hasTaxTable) invoiceScore += 2;
+    if (hasAuthSignatory) invoiceScore += 2;
+    if (hasPlaceOfSupply) invoiceScore += 1;
+    if (hasAmountWords) invoiceScore += 1;
+
+    // Strong Label Indicators
+    const hasShipTo = /(?:ship\s*to|deliver\s*to|delivery\s*address)/i.test(lower);
+    const hasTracking = /(?:tracking\s*(?:id|#|number|no)|awb\b)/i.test(lower);
+    const hasAts = /(?:amazon\s*transportation|easy\s*ship|\bats\b)/i.test(lower);
+    const hasRouting = /(?:routing\s*code|sort\s*code|dest(?:ination)?\s*code)/i.test(lower);
+
+    let labelScore = 0;
+    if (hasShipTo) labelScore += 2;
+    if (hasTracking) labelScore += 3;
+    if (hasAts) labelScore += 2;
+    if (hasRouting) labelScore += 1;
+
+    // Decision: Is it an invoice page?
+    const isInvoice = hasTaxInvoice || invoiceScore >= 4 || (hasInvoiceNo && hasTaxTable);
+    const isLabel = !isInvoice;
+
+    // Extract Order ID if present (Amazon order format: 40X-XXXXXXX-XXXXXXX)
+    const orderMatch = pageText.match(/\b([0-9]{3}-[0-9]{7}-[0-9]{7})\b/) || pageText.match(/(?:Order\s*(?:ID|#|Number|No)[\s:#\-]+)([A-Za-z0-9\-]+)/i);
+    const orderId = orderMatch ? (orderMatch[1] || orderMatch[0]) : '';
+
+    // Extract Tracking ID / AWB if present
+    const trackMatch = pageText.match(/(?:Tracking\s*(?:ID|#|Number|No)[\s:#\-]+)([A-Za-z0-9]+)/i) || pageText.match(/\b(TBA[0-9]{12}|IN[0-9]{10,14})\b/i);
+    const trackingId = trackMatch ? (trackMatch[1] || trackMatch[0]) : '';
+
+    // Extract Customer / Recipient Name
+    let recipientName = '';
+    const shipMatch = pageText.match(/(?:ship\s*to|deliver\s*to|delivery\s*address)[\s:\-]+([A-Za-z0-9\s\.\-]{2,40})/i);
+    if (shipMatch) {
+      recipientName = shipMatch[1].trim().replace(/[\r\n].*$/s, '').trim();
+    }
+
+    return {
+      isInvoice,
+      isLabel,
+      reason: isInvoice ? 'Tax Invoice Page (Filtered out)' : 'Shipping Label Page (Kept)',
+      orderId,
+      trackingId,
+      recipientName,
+    };
+  };
+
+  const handleAmazonUpload = async (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
+    const pdfFiles = rawFiles.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.type === 'application/pdf');
+    if (pdfFiles.length === 0) {
+      setAmazonState(prev => ({
+        ...prev,
+        error: 'Please upload valid PDF file(s) for Amazon.',
+      }));
+      showToast?.('Please upload PDF file(s) for Amazon', 'warning');
+      return;
+    }
+
+    try {
+      setAmazonState(prev => ({
+        ...prev,
+        isProcessing: true,
+        progress: 10,
+        statusText: 'Reading and analyzing Amazon PDF pages...',
+        error: null,
+      }));
+
+      // Combine with existing files if any
+      const currentFiles = amazonState.files || [];
+      const updatedFiles = [...currentFiles];
+      const newlyAddedFiles = [];
+
+      for (const file of pdfFiles) {
+        if (!updatedFiles.some(f => f.name === file.name && f.size === file.size)) {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+          const count = pdfDoc.getPageCount();
+          const fileObj = {
+            file,
+            name: file.name,
+            size: file.size,
+            pageCount: count,
+            arrayBuffer,
+          };
+          updatedFiles.push(fileObj);
+          newlyAddedFiles.push(fileObj);
+        }
+      }
+
+      if (newlyAddedFiles.length === 0 && currentFiles.length > 0) {
+        setAmazonState(prev => ({ ...prev, isProcessing: false }));
+        return;
+      }
+
+      // Scan all pages across all files to detect labels vs invoices
+      const allPagesAnalysis = [];
+      let totalPages = 0;
+      for (let fIdx = 0; fIdx < updatedFiles.length; fIdx++) {
+        totalPages += updatedFiles[fIdx].pageCount;
+      }
+
+      let scannedCount = 0;
+      for (let fIdx = 0; fIdx < updatedFiles.length; fIdx++) {
+        const fObj = updatedFiles[fIdx];
+        const bytes = fObj.arrayBuffer || (await fObj.file.arrayBuffer());
+        const pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+
+        for (let p = 1; p <= fObj.pageCount; p++) {
+          scannedCount++;
+          const page = await pdfJsDoc.getPage(p);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(it => it.str).join(' ');
+
+          const analysis = analyzeAmazonPage(pageText);
+
+          allPagesAnalysis.push({
+            fileIndex: fIdx,
+            fileName: fObj.name,
+            pageIndex: p - 1,
+            pageNum: p,
+            globalPageNum: scannedCount,
+            ...analysis,
+            keep: analysis.isLabel, // Keep shipping labels, remove invoices by default
+          });
+
+          if (scannedCount % 5 === 0 || scannedCount === totalPages) {
+            const pct = 10 + Math.round((scannedCount / Math.max(1, totalPages)) * 50);
+            setAmazonState(prev => ({
+              ...prev,
+              progress: pct,
+              statusText: `Analyzing page ${scannedCount} of ${totalPages}...`,
+            }));
+            await new Promise(r => setTimeout(r, 0));
+          }
+        }
+      }
+
+      const labelsCount = allPagesAnalysis.filter(p => p.keep).length;
+      const invoicesCount = allPagesAnalysis.filter(p => !p.keep).length;
+
+      setAmazonState(prev => ({
+        ...prev,
+        files: updatedFiles,
+        totalPages,
+        pagesAnalysis: allPagesAnalysis,
+        labelsCount,
+        invoicesCount,
+        isProcessing: false,
+        progress: 100,
+        statusText: `Analysis complete: ${labelsCount} Labels found, ${invoicesCount} Invoices to remove.`,
+        result: null,
+        error: null,
+      }));
+
+      showToast?.(`Analyzed ${totalPages} pages: ${labelsCount} Labels kept, ${invoicesCount} Invoices removed`, 'success');
+    } catch (err) {
+      console.error('Error analyzing Amazon PDF:', err);
+      setAmazonState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: err.message,
+      }));
+      showToast?.('Error analyzing Amazon PDF: ' + err.message, 'error');
+    } finally {
+      if (amazonInputRef.current) amazonInputRef.current.value = '';
+    }
+  };
+
+  const toggleAmazonPageKeep = (globalIndex) => {
+    setAmazonState(prev => {
+      const updated = [...prev.pagesAnalysis];
+      if (updated[globalIndex]) {
+        updated[globalIndex] = {
+          ...updated[globalIndex],
+          keep: !updated[globalIndex].keep,
+        };
+      }
+      const labelsCount = updated.filter(p => p.keep).length;
+      const invoicesCount = updated.filter(p => !p.keep).length;
+      return {
+        ...prev,
+        pagesAnalysis: updated,
+        labelsCount,
+        invoicesCount,
+        result: null,
+      };
+    });
+  };
+
+  const setAllAmazonPagesKeep = (mode) => {
+    setAmazonState(prev => {
+      const updated = (prev.pagesAnalysis || []).map(p => ({
+        ...p,
+        keep: mode === 'all' ? true : mode === 'invoices' ? p.isInvoice : p.isLabel,
+      }));
+      const labelsCount = updated.filter(p => p.keep).length;
+      const invoicesCount = updated.filter(p => !p.keep).length;
+      return {
+        ...prev,
+        pagesAnalysis: updated,
+        labelsCount,
+        invoicesCount,
+        result: null,
+      };
+    });
+  };
+
+  const handleExtractAmazonLabels = async () => {
+    if (!amazonState.files?.length || !amazonState.pagesAnalysis?.length) {
+      showToast?.('Please upload an Amazon PDF first', 'warning');
+      return;
+    }
+
+    const pagesToKeep = amazonState.pagesAnalysis.filter(p => p.keep);
+    if (pagesToKeep.length === 0) {
+      showToast?.('No pages selected to keep! Please select at least one page.', 'warning');
+      return;
+    }
+
+    try {
+      setAmazonState(prev => ({
+        ...prev,
+        isProcessing: true,
+        progress: 10,
+        statusText: `Extracting ${pagesToKeep.length} shipping label pages...`,
+        error: null,
+      }));
+
+      // Load all source documents into memory
+      const pdfLibDocs = [];
+      for (let i = 0; i < amazonState.files.length; i++) {
+        const fObj = amazonState.files[i];
+        const bytes = fObj.arrayBuffer || (await fObj.file.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        pdfLibDocs.push(pdfDoc);
+      }
+
+      const cleanDoc = await PDFDocument.create();
+
+      for (let idx = 0; idx < pagesToKeep.length; idx++) {
+        const item = pagesToKeep[idx];
+        const srcDoc = pdfLibDocs[item.fileIndex];
+        const [copiedPage] = await cleanDoc.copyPages(srcDoc, [item.pageIndex]);
+        cleanDoc.addPage(copiedPage);
+
+        if (idx % 5 === 0 || idx === pagesToKeep.length - 1) {
+          const pct = 20 + Math.round((idx / pagesToKeep.length) * 75);
+          setAmazonState(prev => ({
+            ...prev,
+            progress: pct,
+            statusText: `Copying label page ${idx + 1} of ${pagesToKeep.length}...`,
+          }));
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+
+      setAmazonState(prev => ({
+        ...prev,
+        progress: 98,
+        statusText: 'Saving clean labels PDF...',
+      }));
+
+      const cleanBytes = await cleanDoc.save();
+      const blob = new Blob([cleanBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const filename = `Amazon_Labels_Only_${pagesToKeep.length}_pages_${dateTag}.pdf`;
+
+      const resultInfo = {
+        type: 'single',
+        url,
+        filename,
+        blob,
+        totalPages: pagesToKeep.length,
+        labelsCount: pagesToKeep.length,
+        invoicesCount: amazonState.pagesAnalysis.length - pagesToKeep.length,
+      };
+
+      setAmazonState(prev => ({
+        ...prev,
+        isProcessing: false,
+        progress: 100,
+        statusText: `Ready! Extracted ${pagesToKeep.length} shipping labels.`,
+        result: resultInfo,
+      }));
+
+      updateMarketplaceState('amazon', {
+        downloadReady: resultInfo,
+        isProcessing: false,
+      });
+
+      // Auto trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showToast?.(`Success! Extracted ${pagesToKeep.length} labels (removed ${amazonState.pagesAnalysis.length - pagesToKeep.length} invoices).`, 'success');
+    } catch (err) {
+      console.error('Error generating clean Amazon labels:', err);
+      setAmazonState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: err.message,
+      }));
+      showToast?.('Error extracting labels: ' + err.message, 'error');
+    }
+  };
+
+  const handleDownloadAmazonInvoices = async () => {
+    const invoicePages = amazonState.pagesAnalysis.filter(p => !p.keep);
+    if (invoicePages.length === 0) {
+      showToast?.('No invoice pages to extract.', 'info');
+      return;
+    }
+
+    try {
+      showToast?.(`Extracting ${invoicePages.length} invoice pages...`, 'info');
+      const pdfLibDocs = [];
+      for (let i = 0; i < amazonState.files.length; i++) {
+        const fObj = amazonState.files[i];
+        const bytes = fObj.arrayBuffer || (await fObj.file.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        pdfLibDocs.push(pdfDoc);
+      }
+
+      const invDoc = await PDFDocument.create();
+      for (const item of invoicePages) {
+        const srcDoc = pdfLibDocs[item.fileIndex];
+        const [copiedPage] = await invDoc.copyPages(srcDoc, [item.pageIndex]);
+        invDoc.addPage(copiedPage);
+      }
+
+      const invBytes = await invDoc.save();
+      const blob = new Blob([invBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const filename = `Amazon_Invoices_Only_${invoicePages.length}_pages_${dateTag}.pdf`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showToast?.(`Downloaded ${invoicePages.length} invoice pages!`, 'success');
+    } catch (err) {
+      console.error('Error extracting invoices:', err);
+      showToast?.('Failed to download invoices: ' + err.message, 'error');
+    }
+  };
+
+  const removeAmazonFile = (indexToRemove) => {
+    setAmazonState(prev => {
+      const updatedFiles = (prev.files || []).filter((_, idx) => idx !== indexToRemove);
+      if (updatedFiles.length === 0) {
+        return {
+          files: [],
+          totalPages: 0,
+          isProcessing: false,
+          progress: 0,
+          statusText: '',
+          pagesAnalysis: [],
+          labelsCount: 0,
+          invoicesCount: 0,
+          result: null,
+          error: null,
+        };
+      }
+      const remainingPages = (prev.pagesAnalysis || [])
+        .filter(p => p.fileIndex !== indexToRemove)
+        .map((p, i) => ({
+          ...p,
+          fileIndex: p.fileIndex > indexToRemove ? p.fileIndex - 1 : p.fileIndex,
+          globalPageNum: i + 1,
+        }));
+      const totalPages = updatedFiles.reduce((acc, f) => acc + (f.pageCount || 0), 0);
+      const labelsCount = remainingPages.filter(p => p.keep).length;
+      const invoicesCount = remainingPages.filter(p => !p.keep).length;
+      return {
+        ...prev,
+        files: updatedFiles,
+        totalPages,
+        pagesAnalysis: remainingPages,
+        labelsCount,
+        invoicesCount,
+        result: null,
+      };
+    });
+  };
+
+  const clearAmazonAll = () => {
+    if (amazonInputRef.current) amazonInputRef.current.value = '';
+    setAmazonState({
+      files: [],
+      totalPages: 0,
+      isProcessing: false,
+      progress: 0,
+      statusText: '',
+      pagesAnalysis: [],
+      labelsCount: 0,
+      invoicesCount: 0,
+      result: null,
+      error: null,
+    });
   };
 
   const handleSelectMarketplace = (id) => {
@@ -2956,6 +3401,8 @@ export default function LabelCropper({ showToast }) {
   const handleDirectPrint = () => {
     const activeUrl = selectedMarketplace === 'ajio'
       ? (ajioState.mergedDownload?.url || downloadReady?.url)
+      : selectedMarketplace === 'amazon'
+      ? (amazonState.result?.url || downloadReady?.url)
       : downloadReady?.url;
     if (!activeUrl) return;
     const printWin = window.open(activeUrl);
@@ -2990,10 +3437,20 @@ export default function LabelCropper({ showToast }) {
             const isSelected = selectedMarketplace === mp.id;
             const mpState = marketplaceStates[mp.id];
             const mpFilesCount = mp.id === 'ajio'
-              ? ((ajioState.labelFiles?.length || 0) + (ajioState.invoiceFiles?.length || 0) + (ajioState.excelFile ? 1 : 0))
+              ? ((ajioState.labelFiles?.length || 0) + (ajioState.invoiceFiles?.length || 0))
+              : mp.id === 'amazon'
+              ? (amazonState.files?.length || 0)
               : (mpState?.files?.length || 0);
-            const mpIsProcessing = mp.id === 'ajio' ? ajioState.isMerging : mpState?.isProcessing;
-            const mpHasDownload = mp.id === 'ajio' ? Boolean(ajioState.mergedDownload) : Boolean(mpState?.downloadReady);
+            const mpIsProcessing = mp.id === 'ajio'
+              ? ajioState.isMerging
+              : mp.id === 'amazon'
+              ? amazonState.isProcessing
+              : mpState?.isProcessing;
+            const mpHasDownload = mp.id === 'ajio'
+              ? Boolean(ajioState.mergedDownload)
+              : mp.id === 'amazon'
+              ? Boolean(amazonState.result)
+              : Boolean(mpState?.downloadReady);
 
             return (
               <button
@@ -4126,6 +4583,344 @@ export default function LabelCropper({ showToast }) {
             </div>
           )}
         </div>
+      ) : selectedMarketplace === 'amazon' ? (
+        /* ================= AMAZON LABEL EXTRACTOR (REMOVE INVOICES) ================= */
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-5 md:p-7 mb-6 space-y-6">
+          {/* Top Instructions & Action Bar */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-[#131921] text-[#FF9900] flex items-center justify-center text-xs font-bold shadow-xs">
+                  a
+                </div>
+                Amazon Shipping Label Extractor
+                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Easy Ship & Seller Flex
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Upload your Amazon PDF file(s). OrderMunim automatically filters out and removes the tax invoice pages, keeping only the clean shipping labels ready for 4x6 / A4 printing.
+              </p>
+            </div>
+            {(amazonState.files?.length > 0 || amazonState.error) && (
+              <button
+                type="button"
+                onClick={clearAmazonAll}
+                className="self-start md:self-auto text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={amazonInputRef}
+            type="file"
+            multiple
+            accept="application/pdf,.pdf"
+            onChange={handleAmazonUpload}
+            className="hidden"
+          />
+
+          {/* Upload Button with file status shown just beside button */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => amazonInputRef.current?.click()}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>+ Add Amazon PDF(s)</span>
+                </button>
+              </div>
+
+              {/* Beside button: Red error box or Files summary / list */}
+              <div className="flex-1 min-w-0 space-y-2">
+                {amazonState.error && (
+                  <div className="flex items-center justify-between gap-3 p-2.5 px-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 text-xs shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="font-bold text-[12px] leading-snug">{amazonState.error}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAmazonState(prev => ({ ...prev, error: null }))}
+                      className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+                      title="Dismiss Error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {amazonState.files && amazonState.files.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
+                      <span>{amazonState.files.length} file(s) selected</span>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold">
+                        Total: {amazonState.totalPages} {amazonState.totalPages === 1 ? 'Page' : 'Pages'}
+                      </span>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                      {amazonState.files.map((fObj, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-amber-50/70 border border-amber-200 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-semibold text-slate-800 truncate" title={fObj.name}>
+                              {fObj.name}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold shrink-0">
+                              {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
+                            </span>
+                            <span className="text-slate-400 text-[10px] shrink-0">
+                              ({formatFileSize(fObj.size)})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAmazonFile(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                            title="Remove this file"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : !amazonState.error && (
+                  <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
+                    No Amazon PDF selected yet (Select your single or multiple Amazon PDFs)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Analysis & KPI Summary (When files are analyzed) */}
+          {amazonState.pagesAnalysis && amazonState.pagesAnalysis.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                  <Layers className="w-4 h-4 text-amber-500" />
+                  <span>Page Classification Summary</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAllAmazonPagesKeep('labels')}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+                    title="Keep all detected shipping labels and remove invoices"
+                  >
+                    Keep Labels Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAmazonBreakdown(!showAmazonBreakdown)}
+                    className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{showAmazonBreakdown ? 'Hide Details' : 'View Page Breakdown'}</span>
+                    {showAmazonBreakdown ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* 3 KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Scanned Pages</div>
+                    <div className="text-lg font-extrabold text-slate-800 font-mono">{amazonState.totalPages}</div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs">
+                    📄
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Labels to Keep</div>
+                    <div className="text-lg font-extrabold text-emerald-800 font-mono">{amazonState.labelsCount} Pages</div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                    🏷️
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Invoices Removed</div>
+                    <div className="text-lg font-extrabold text-rose-800 font-mono">{amazonState.invoicesCount} Pages</div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs">
+                    🗑️
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 text-[11px] leading-relaxed">
+                <p>
+                  <strong>How it works:</strong> OrderMunim inspects each page's text. Pages containing Tax Invoice indicators (<code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Tax Invoice</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">HSN</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Taxable Value</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Authorized Signatory</code>) are automatically filtered out. Only pure shipping labels will be saved in the clean PDF.
+                </p>
+              </div>
+
+              {/* Expandable Page-by-Page Table with Keep/Remove Toggles */}
+              {showAmazonBreakdown && (
+                <div className="p-3 bg-white rounded-xl border border-slate-200 max-h-72 overflow-y-auto space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between font-bold text-slate-800 pb-1.5 border-b border-slate-100 text-[11px]">
+                    <span>Page-by-Page Inspection:</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Click toggle button to override any page</span>
+                  </div>
+                  {amazonState.pagesAnalysis.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[11px] transition-colors ${
+                        p.keep
+                          ? 'bg-emerald-50/50 border-emerald-200'
+                          : 'bg-slate-50 border-slate-200 opacity-70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-slate-700 shrink-0">
+                          P{p.globalPageNum}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded font-bold text-[10px] shrink-0 ${
+                            p.isLabel
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}
+                        >
+                          {p.isLabel ? '🏷️ Shipping Label' : '📄 Tax Invoice'}
+                        </span>
+                        <div className="truncate text-slate-700">
+                          {p.recipientName && <span className="font-semibold mr-1.5">To: {p.recipientName}</span>}
+                          {p.orderId && <span className="text-slate-500 font-mono text-[10px] mr-1.5">({p.orderId})</span>}
+                          {p.trackingId && <span className="text-indigo-600 font-mono text-[10px]">Track: {p.trackingId}</span>}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleAmazonPageKeep(idx)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition-colors cursor-pointer ${
+                          p.keep
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
+                            : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                        }`}
+                        title={p.keep ? 'Click to exclude this page' : 'Click to include this page'}
+                      >
+                        {p.keep ? '✓ Kept' : '✕ Removed'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Progress Bar (if processing) */}
+          {amazonState.isProcessing && (
+            <div className="space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                  {amazonState.statusText || 'Extracting Amazon shipping labels...'}
+                </span>
+                <span className="font-mono text-amber-600">{amazonState.progress}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-amber-500 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${amazonState.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Primary Action Button: Extract & Download Clean PDF */}
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <button
+              type="button"
+              disabled={!amazonState.files?.length || amazonState.labelsCount === 0 || amazonState.isProcessing}
+              onClick={handleExtractAmazonLabels}
+              className={`flex-1 py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer ${
+                !amazonState.files?.length || amazonState.labelsCount === 0
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                  : amazonState.isProcessing
+                  ? 'bg-amber-400 text-white cursor-wait'
+                  : 'bg-gradient-to-r from-slate-950 via-slate-900 to-amber-950 hover:from-slate-900 hover:to-amber-900 text-white shadow-slate-950/20 active:scale-[0.99]'
+              }`}
+            >
+              <FileCheck className="w-4 h-4 text-amber-400" />
+              <span>
+                {amazonState.isProcessing
+                  ? (amazonState.statusText || 'Extracting Labels...')
+                  : !amazonState.files?.length
+                  ? 'Please Upload Amazon PDF First'
+                  : `Extract & Download ${amazonState.labelsCount} Shipping Labels (Remove ${amazonState.invoicesCount} Invoices)`}
+              </span>
+            </button>
+
+            {/* Optional Secondary Button: Download Invoices Only */}
+            {amazonState.invoicesCount > 0 && (
+              <button
+                type="button"
+                onClick={handleDownloadAmazonInvoices}
+                className="px-4 py-3 sm:py-0 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                title="Download only the extracted tax invoice pages"
+              >
+                <Download className="w-3.5 h-3.5 text-rose-600" />
+                <span>Invoices Only ({amazonState.invoicesCount})</span>
+              </button>
+            )}
+          </div>
+
+          {/* Result Ready Banner */}
+          {amazonState.result && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs space-y-3 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-emerald-900">
+                      Amazon Clean Labels Ready!
+                    </h4>
+                    <p className="text-[11px] text-emerald-700">
+                      {amazonState.result.labelsCount} Shipping Labels Extracted • {amazonState.result.invoicesCount} Invoices Eliminated • 100% Ready to Print
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(true)}
+                  className="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-800 border border-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-emerald-600" />
+                  Preview / Print Labels
+                </button>
+
+                <a
+                  href={amazonState.result.url}
+                  download={amazonState.result.filename}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors text-center cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF Again
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {/* ================= UNDER DEVELOPMENT CARD ================= */}
@@ -4279,25 +5074,41 @@ export default function LabelCropper({ showToast }) {
       )}
 
       {/* ================= PREVIEW MODAL ================= */}
-      {showPreviewModal && (selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : (downloadReady && downloadReady.url)) && (
+      {showPreviewModal && (
+        selectedMarketplace === 'ajio'
+          ? ajioState.mergedDownload?.url
+          : selectedMarketplace === 'amazon'
+          ? amazonState.result?.url
+          : (downloadReady && downloadReady.url)
+      ) && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-3xl w-full p-5 shadow-2xl space-y-3 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2">
                 {selectedMarketplace === 'ajio' ? (
                   <Layers className="w-5 h-5 text-indigo-600" />
+                ) : selectedMarketplace === 'amazon' ? (
+                  <Package className="w-5 h-5 text-amber-500" />
                 ) : (
                   <Scissors className="w-5 h-5 text-emerald-600" />
                 )}
                 <h3 className="font-bold text-sm text-slate-900">
                   {selectedMarketplace === 'ajio'
                     ? `Ajio Merged Label & Invoice Preview (${ajioState.mergedDownload?.totalPages || 0} Pages)`
+                    : selectedMarketplace === 'amazon'
+                    ? `Amazon Clean Shipping Labels Preview (${amazonState.result?.totalPages || 0} Labels)`
                     : `Cropped Thermal Label Preview (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : '4x6" Landscape'})`}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url}
+                  href={
+                    selectedMarketplace === 'ajio'
+                      ? ajioState.mergedDownload?.url
+                      : selectedMarketplace === 'amazon'
+                      ? amazonState.result?.url
+                      : downloadReady?.url
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 font-semibold rounded-lg border border-indigo-200 transition-colors"
@@ -4316,7 +5127,13 @@ export default function LabelCropper({ showToast }) {
 
             <div className="flex-1 bg-slate-100 rounded-xl overflow-hidden min-h-[440px] flex items-center justify-center border border-slate-200">
               <iframe
-                src={`${(selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url)}#toolbar=0&navpanes=0`}
+                src={`${(
+                  selectedMarketplace === 'ajio'
+                    ? ajioState.mergedDownload?.url
+                    : selectedMarketplace === 'amazon'
+                    ? amazonState.result?.url
+                    : downloadReady?.url
+                )}#toolbar=0&navpanes=0`}
                 title="PDF Preview"
                 className="w-full h-full min-h-[440px] rounded-xl"
               />
@@ -4326,6 +5143,8 @@ export default function LabelCropper({ showToast }) {
               <span className="text-xs text-slate-400">
                 {selectedMarketplace === 'ajio'
                   ? `Ajio Interleaved Document • Alternating Label and Invoice Pages`
+                  : selectedMarketplace === 'amazon'
+                  ? `Amazon Pure Shipping Labels • ${amazonState.result?.invoicesCount || 0} Invoices Filtered Out`
                   : `${activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : 'LabelMantra Format'})`}
               </span>
               <div className="flex items-center gap-2">
@@ -4337,8 +5156,20 @@ export default function LabelCropper({ showToast }) {
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
                 <a
-                  href={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.url : downloadReady?.url}
-                  download={selectedMarketplace === 'ajio' ? ajioState.mergedDownload?.filename : downloadReady?.filename}
+                  href={
+                    selectedMarketplace === 'ajio'
+                      ? ajioState.mergedDownload?.url
+                      : selectedMarketplace === 'amazon'
+                      ? amazonState.result?.url
+                      : downloadReady?.url
+                  }
+                  download={
+                    selectedMarketplace === 'ajio'
+                      ? ajioState.mergedDownload?.filename
+                      : selectedMarketplace === 'amazon'
+                      ? amazonState.result?.filename
+                      : downloadReady?.filename
+                  }
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" /> Download PDF
