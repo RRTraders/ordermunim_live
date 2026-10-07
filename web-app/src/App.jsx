@@ -289,6 +289,32 @@ export default function App() {
   const [reconnectLoading, setReconnectLoading] = useState(false);
   const [reconnectError, setReconnectError] = useState('');
 
+  // Live Indian Standard Time (IST) Clock for Video Proof & Verification
+  const [currentIstTime, setCurrentIstTime] = useState('');
+  useEffect(() => {
+    const updateTime = () => {
+      try {
+        const now = new Date();
+        const options = {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        };
+        setCurrentIstTime(new Intl.DateTimeFormat('en-IN', options).format(now));
+      } catch (e) {
+        setCurrentIstTime(new Date().toLocaleTimeString());
+      }
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Follow Us Store Profile Links State
   const [newFollowStoreName, setNewFollowStoreName] = useState('');
   const [newFollowStoreUrl, setNewFollowStoreUrl] = useState('');
@@ -3015,20 +3041,31 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center: Welcome User's Name (clickable to open profile) */}
-          <div 
-            onClick={() => setActiveTab('profile')}
-            className="flex-1 text-center px-1 truncate cursor-pointer group"
-            title="Click to open your Profile"
-          >
-            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block group-hover:text-cyan-300 transition-colors">
-              Welcome, <span className="text-cyan-400 group-hover:underline underline-offset-2">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
-            </span>
-            {isSuperAdmin && (
-              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                Super Admin
-              </span>
-            )}
+          {/* Center: Live Indian Date & Time (IST) for Video Proof & Welcome User */}
+          <div className="flex-1 flex flex-col items-center justify-center px-1 text-center min-w-0">
+            {/* Live Indian Date & Time Badge (High visibility for Webcam/Camera unboxing recording) */}
+            <div 
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-emerald-500/40 text-emerald-400 font-mono text-[11px] sm:text-xs font-bold tracking-wider shadow-inner select-none"
+              title="Live Indian Standard Time (IST) for Parcel Unboxing & Video Proof"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+              <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="whitespace-nowrap">{currentIstTime || 'Loading IST...'}</span>
+            </div>
+
+            {/* Welcome User / Profile shortcut */}
+            <div 
+              onClick={() => setActiveTab('profile')}
+              className="mt-0.5 cursor-pointer group flex items-center justify-center gap-1 text-[11px] text-slate-400 hover:text-cyan-300 transition-colors truncate max-w-full"
+              title="Click to open your Profile"
+            >
+              <span className="truncate">Welcome, <span className="text-cyan-400 group-hover:underline">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span></span>
+              {isSuperAdmin && (
+                <span className="text-[9px] text-amber-400 font-bold uppercase px-1 py-0.2 bg-amber-500/15 rounded border border-amber-500/30 shrink-0">
+                  Admin
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Right: Profile & Sound Icons */}
