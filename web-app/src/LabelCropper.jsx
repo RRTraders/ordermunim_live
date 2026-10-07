@@ -2799,6 +2799,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDurationSec, setRecordingDurationSec] = useState(0);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null);
+  const [recordedVideoBlob, setRecordedVideoBlob] = useState(null);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // default to rear camera on mobile for return parcel unboxing!
@@ -2808,24 +2809,40 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
 
-  // Live Timer Update
+  // Live Timer Update formatted exactly as DD.MM.YYYY hh:mm:ssAM/PM (Matching Image 2)
   useEffect(() => {
     const updateTime = () => {
       try {
         const nowMs = Date.now();
         const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
         const targetDate = new Date(effectiveMs);
-        const options = {
+        
+        // Use Indian Standard Time
+        const istFormatter = new Intl.DateTimeFormat('en-IN', {
           timeZone: 'Asia/Kolkata',
           day: '2-digit',
-          month: 'short',
+          month: '2-digit',
           year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
           hour12: true,
-        };
-        setCurrentIstTime(new Intl.DateTimeFormat('en-IN', options).format(targetDate));
+        });
+        
+        const parts = istFormatter.formatToParts(targetDate);
+        let day = '01', month = '01', year = '2026', hour = '12', min = '00', sec = '00', dayPeriod = 'AM';
+        for (const p of parts) {
+          if (p.type === 'day') day = p.value;
+          if (p.type === 'month') month = p.value;
+          if (p.type === 'year') year = p.value;
+          if (p.type === 'hour') hour = p.value;
+          if (p.type === 'minute') min = p.value;
+          if (p.type === 'second') sec = p.value;
+          if (p.type === 'dayPeriod') dayPeriod = p.value.toUpperCase();
+        }
+        
+        // Exact format from Image 2: "19.06.2024 08:22:42AM"
+        setCurrentIstTime(`${day}.${month}.${year} ${hour}:${min}:${sec}${dayPeriod}`);
       } catch (e) {
         setCurrentIstTime(new Date().toLocaleTimeString());
       }
@@ -3021,12 +3038,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       };
       recorder.onstop = () => {
         const blob = new Blob(recordedChunksRef.current, { type: mime });
+        setRecordedVideoBlob(blob);
         if (recordedVideoUrl) {
           try { URL.revokeObjectURL(recordedVideoUrl); } catch {}
         }
         const url = URL.createObjectURL(blob);
         setRecordedVideoUrl(url);
-        if (showToast) showToast('Recording completed! Video proof ready to save.', 'success');
+        if (showToast) showToast('Recording completed! Preview video below and check playback before downloading.', 'success');
       };
       recorder.start(1000);
       mediaRecorderRef.current = recorder;
@@ -3044,6 +3062,33 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         mediaRecorderRef.current.stop();
       } catch {}
       setIsRecording(false);
+    }
+  };
+
+  const handleDownloadRecordedVideo = () => {
+    if (!recordedVideoUrl && !recordedVideoBlob) {
+      if (showToast) showToast('No recorded video available to download', 'error');
+      return;
+    }
+    try {
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const isMp4 = recordedVideoBlob?.type?.includes('mp4');
+      const filename = `Return_Proof_Unboxing_${dateTag}.${isMp4 ? 'mp4' : 'webm'}`;
+      
+      const a = document.createElement('a');
+      a.href = recordedVideoUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try { document.body.removeChild(a); } catch {}
+      }, 500);
+
+      if (showToast) showToast('Downloading video proof...', 'success');
+    } catch (err) {
+      console.error('Download error:', err);
+      // Fallback: open in new window
+      window.open(recordedVideoUrl, '_blank');
     }
   };
 
@@ -6802,23 +6847,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     className="w-full h-full object-cover"
                   />
 
-                  {/* Superimposed Live Timestamp HUD Overlay (High contrast CCTV style for unboxing proof) */}
+                  {/* Superimposed Live Timestamp HUD Overlay (Exact style from Image 2: White font, light background) */}
                   <div className="absolute top-3 left-3 z-20 pointer-events-none">
-                    <div className="bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-xl px-3 py-1.5 shadow-lg space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-rose-500 animate-ping' : 'bg-emerald-400 animate-pulse'}`}></span>
-                        <span className="font-mono text-xs sm:text-sm font-black text-emerald-400 tracking-wider">
-                          {currentIstTime}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-slate-300 font-bold flex items-center gap-2">
-                        <span>ORDERSMUNIM PROOF</span>
-                        {isRecording && (
-                          <span className="text-rose-400 font-mono font-black">
-                            • REC {formatSecs(recordingDurationSec)}
-                          </span>
-                        )}
-                      </div>
+                    <div className="bg-slate-700/60 backdrop-blur-xs border border-white/20 rounded-md px-3 py-1 shadow-md">
+                      <span className="font-mono text-xs sm:text-sm md:text-base font-extrabold text-white tracking-wide drop-shadow-sm select-none">
+                        {currentIstTime}
+                      </span>
                     </div>
                   </div>
 
@@ -6922,30 +6956,62 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               )}
             </div>
 
-            {/* Video Download Ready Card */}
+            {/* Recorded Video Preview & Download Section */}
             {recordedVideoUrl && (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-6 h-6" />
+              <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 text-white shadow-xl space-y-4 mt-4 animate-in fade-in duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                      <Play className="w-5 h-5 fill-emerald-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Video Recorded Successfully!</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                          Ready for Claim
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Play and check the unboxing video below, then click Download to save it to your device.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-950">Recorded Proof Video Ready!</h4>
-                    <p className="text-xs text-emerald-700">
-                      Unboxing video captured with timestamp. Ready to download and submit for claim.
-                    </p>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadRecordedVideo}
+                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 cursor-pointer transition-all active:scale-95 shrink-0"
+                  >
+                    <Download className="w-4 h-4 text-slate-950" />
+                    <span>Download Proof Video</span>
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={recordedVideoUrl}
-                    download={`Return_Proof_${new Date().toISOString().slice(0, 10)}.webm`}
-                    className="py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+                {/* Video Preview Player with native playback controls */}
+                <div className="relative aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl">
+                  <video
+                    src={recordedVideoUrl}
+                    controls
+                    playsInline
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 pt-1">
+                  <span>💡 <strong>Tip:</strong> You can play, pause, and seek the video to verify the unboxing parcel condition and seal.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (recordedVideoUrl) {
+                        try { URL.revokeObjectURL(recordedVideoUrl); } catch {}
+                      }
+                      setRecordedVideoUrl(null);
+                      setRecordedVideoBlob(null);
+                    }}
+                    className="text-rose-400 hover:text-rose-300 font-bold hover:underline cursor-pointer text-left sm:text-right"
                   >
-                    <Download className="w-4 h-4" />
-                    <span>Download Proof Video</span>
-                  </a>
+                    Discard &amp; Record New
+                  </button>
                 </div>
               </div>
             )}
