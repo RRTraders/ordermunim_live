@@ -1,24 +1,63 @@
 {
   "manifest_version": 3,
-  "name": "Meesho Return OTP Auto-Sync",
-  "version": "1.0.0",
-  "description": "Automatically captures Return Handover OTP (Valmo, Shadowfax, Delhivery) from Meesho Supplier panel and syncs to your mobile dashboard in real time.",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://supplier.meesho.com/*"
-  ],
+  "name": "OrdersMunim - Myntra QZ Bypass & Meesho Sync",
+  "version": "2.0.0",
+  "description": "Download Myntra shipping labels and invoices directly without QZ Tray printer errors. Auto-syncs Meesho Return OTPs.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Meesho OTP Sync"
+    "default_title": "OrdersMunim Assistant",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "downloads",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.myntrainfo.com/*",
+    "https://supplier.meesho.com/*",
+    "https://firestore.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*"
+  ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://*.myntrainfo.com/*"
+      ],
+      "js": [
+        "inject_virtual_qz.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://*.myntrainfo.com/*"
+      ],
+      "js": [
+        "content_myntra.js"
+      ],
+      "run_at": "document_start"
+    },
     {
       "matches": [
         "https://supplier.meesho.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content_meesho.js"
+      ],
       "run_at": "document_idle"
     }
   ]

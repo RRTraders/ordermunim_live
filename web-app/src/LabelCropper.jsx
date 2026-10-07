@@ -103,13 +103,13 @@ export const MARKETPLACES = [
   },
   {
     id: 'myntra',
-    name: 'Myntra (M-Direct)',
+    name: 'Myntra',
     shortName: 'Myntra',
-    tagline: 'mdirect.myntrainfo.com/Orders/Search',
-    badgeText: 'm-direct',
+    tagline: 'Partner Portal & Orders Downloader',
+    badgeText: 'myntra',
     badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
     iconLetter: 'M',
-    description: 'Myntra M-Direct Portal (mdirect.myntrainfo.com/Orders/Search). Direct in-app login & 1-click PDF download for shipping labels and invoices without printer drivers or QZ Tray.',
+    description: 'Myntra Partner Portal. Direct in-app login & 1-click PDF download for shipping labels and invoices without printer drivers or QZ Tray.',
     ready: true
   },
 ];
@@ -1900,146 +1900,8 @@ export default function LabelCropper({ showToast }) {
   };
 
   /* ================= MYNTRA PARTNER PORTAL (partners.myntrainfo.com) SYSTEM ================= */
-  const INITIAL_MYNTRA_ORDERS = [
-    {
-      id: 'MYN-ORD-908124',
-      orderId: '128472910381',
-      packetId: 'PKT-9921820',
-      awb: 'MYNTR981273948IN',
-      courier: 'Myntra Logistics',
-      routingHub: 'DEL/HUB-04',
-      customerName: 'Rahul Sharma',
-      address: 'H.No 45, Sector 14, Ring Road',
-      city: 'New Delhi',
-      state: 'Delhi',
-      pincode: '110001',
-      phone: '+91 98765*****',
-      sku: 'RDST-DENIM-SLM-32',
-      productName: 'Roadster Men Slim Fit Denim Jeans',
-      size: '32',
-      qty: 1,
-      price: 1299,
-      paymentMode: 'PREPAID',
-      orderDate: '07 Oct 2026, 09:30 AM',
-      status: 'Ready to Pack',
-      hsn: '62034200'
-    },
-    {
-      id: 'MYN-ORD-908125',
-      orderId: '128472910382',
-      packetId: 'PKT-9921821',
-      awb: 'DELHIVERY491823901',
-      courier: 'Delhivery Surface',
-      routingHub: 'BOM/AIR-12',
-      customerName: 'Priya Patel',
-      address: 'Flat 402, Sunshine Heights, Andheri West',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      pincode: '400053',
-      phone: '+91 91234*****',
-      sku: 'HRX-ACTV-TEE-BLK-L',
-      productName: 'HRX Active Wear Dry-Fit T-Shirt',
-      size: 'L',
-      qty: 2,
-      price: 1798,
-      paymentMode: 'COD (Rs. 1,798)',
-      orderDate: '07 Oct 2026, 10:15 AM',
-      status: 'Ready to Pack',
-      hsn: '61091000'
-    },
-    {
-      id: 'MYN-ORD-908126',
-      orderId: '128472910383',
-      packetId: 'PKT-9921822',
-      awb: 'SHDWFX827103984',
-      courier: 'Shadowfax Express',
-      routingHub: 'BLR/SRT-02',
-      customerName: 'Ananya Deshmukh',
-      address: 'Villa 12, Palm Meadows, Whitefield',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560066',
-      phone: '+91 98451*****',
-      sku: 'ANOUK-KURTI-M-PRT',
-      productName: 'Anouk Women Printed Pure Cotton Kurti',
-      size: 'M',
-      qty: 1,
-      price: 949,
-      paymentMode: 'PREPAID',
-      orderDate: '07 Oct 2026, 10:45 AM',
-      status: 'Ready to Pack',
-      hsn: '62042200'
-    },
-    {
-      id: 'MYN-ORD-908127',
-      orderId: '128472910384',
-      packetId: 'PKT-9921823',
-      awb: 'EKART3920194821',
-      courier: 'Ekart Logistics',
-      routingHub: 'HYD/HUB-08',
-      customerName: 'Vikram Reddy',
-      address: 'Plot 88, Jubilee Hills, Rd No 36',
-      city: 'Hyderabad',
-      state: 'Telangana',
-      pincode: '500033',
-      phone: '+91 97001*****',
-      sku: 'WROGN-POLO-NAVY-XL',
-      productName: 'Wrogn Slim Fit Solid Polo T-Shirt',
-      size: 'XL',
-      qty: 1,
-      price: 1149,
-      paymentMode: 'PREPAID',
-      orderDate: '07 Oct 2026, 11:10 AM',
-      status: 'Ready to Dispatch',
-      hsn: '61051000'
-    },
-    {
-      id: 'MYN-ORD-908128',
-      orderId: '128472910385',
-      packetId: 'PKT-9921824',
-      awb: 'BLUEDART78201934',
-      courier: 'Bluedart Air',
-      routingHub: 'MAA/AIR-05',
-      customerName: 'Kavitha Sundaram',
-      address: '24/B, Gandhi Nagar, Adyar',
-      city: 'Chennai',
-      state: 'Tamil Nadu',
-      pincode: '600020',
-      phone: '+91 94440*****',
-      sku: 'HIGHL-SHRT-CHK-L',
-      productName: 'Highlander Casual Tartan Checked Shirt',
-      size: 'L',
-      qty: 1,
-      price: 799,
-      paymentMode: 'COD (Rs. 799)',
-      orderDate: '06 Oct 2026, 04:20 PM',
-      status: 'Ready to Dispatch',
-      hsn: '62052000'
-    },
-    {
-      id: 'MYN-ORD-908129',
-      orderId: '128472910386',
-      packetId: 'PKT-9921825',
-      awb: 'XPRSB7102948291',
-      courier: 'Xpressbees Surface',
-      routingHub: 'CCU/HUB-01',
-      customerName: 'Sourav Banerjee',
-      address: '15/2, Salt Lake Sector 5',
-      city: 'Kolkata',
-      state: 'West Bengal',
-      pincode: '700091',
-      phone: '+91 98302*****',
-      sku: 'MAST-CHINO-BEG-34',
-      productName: 'Mast & Harbour Regular Fit Chinos',
-      size: '34',
-      qty: 1,
-      price: 1499,
-      paymentMode: 'PREPAID',
-      orderDate: '06 Oct 2026, 02:00 PM',
-      status: 'Dispatched',
-      hsn: '62034200'
-    }
-  ];
+  const INITIAL_MYNTRA_ORDERS = [];
+
 
   // Myntra session state
   const [myntraSession, setMyntraSession] = useState(() => {
@@ -2116,16 +1978,14 @@ export default function LabelCropper({ showToast }) {
       const session = {
         email: emailVal,
         sellerName: emailVal.split('@')[0].toUpperCase(),
-        storeName: 'Myntra M-Direct Store',
-        portal: 'mdirect.myntrainfo.com/Orders/Search',
-        url: 'https://mdirect.myntrainfo.com/Orders/Search',
+        storeName: 'Myntra Partner Store',
         loginAt: new Date().toISOString(),
-        token: 'myn_' + Math.random().toString(36).substring(2, 11),
       };
       setMyntraSession(session);
-      setMyntraActiveTab('portal_view');
+      setMyntraOrders([]);
       try {
         localStorage.setItem('om_myntra_session', JSON.stringify(session));
+        localStorage.removeItem('om_myntra_orders');
         if (myntraRememberMe) {
           localStorage.setItem('om_myntra_saved_email', emailVal);
         }
@@ -2133,9 +1993,11 @@ export default function LabelCropper({ showToast }) {
         console.error('Failed to save Myntra session:', err);
       }
       setMyntraLoggingIn(false);
-      showToast?.('Logged in! Opened https://mdirect.myntrainfo.com/Orders/Search', 'success');
+      showToast?.('Logged in — Add your Myntra orders to download labels & invoices', 'success');
     }, 750);
   };
+
+
 
   const handleMyntraLogout = () => {
     setMyntraSession(null);
@@ -2143,14 +2005,9 @@ export default function LabelCropper({ showToast }) {
       localStorage.removeItem('om_myntra_session');
     } catch {}
     setMyntraPassword('');
-    showToast?.('Logged out of Myntra M-Direct Portal', 'info');
+    showToast?.('Logged out of Myntra', 'info');
   };
 
-  const handleFillDemoMyntra = () => {
-    setMyntraEmail('brand.seller@myntra-partners.com');
-    setMyntraPassword('MyntraSeller@2026');
-    setMyntraLoginError(null);
-  };
 
   // 1-Click PDF generation helpers: Thermal Shipping Label (4x6)
   const drawMyntraLabelPage = async (pdfDoc, order, fontBold, fontNorm) => {
@@ -2337,7 +2194,7 @@ export default function LabelCropper({ showToast }) {
       color: darkSlate
     });
     page.drawText('TAX INVOICE (PPMP)', { x: 35, y: 798, size: 14, font: fontBold, color: white });
-    page.drawText('Myntra M-Direct • mdirect.myntrainfo.com/Orders/Search', { x: 35, y: 784, size: 8.5, font: fontNorm, color: rgb(0.2, 0.8, 1) });
+    page.drawText('Myntra Partner Portal • Tax Invoice', { x: 35, y: 784, size: 8.5, font: fontNorm, color: rgb(0.2, 0.8, 1) });
     page.drawText('ORIGINAL FOR RECIPIENT', { x: 420, y: 795, size: 9, font: fontBold, color: white });
 
     // Invoice & Seller metadata
@@ -2425,7 +2282,7 @@ export default function LabelCropper({ showToast }) {
     page.drawText('[Digitally Signed via OrdersMunim]', { x: 370, y: 255, size: 6.5, font: fontNorm, color: rgb(0.05, 0.55, 0.35) });
 
     // Footer
-    page.drawText('Generated from Myntra M-Direct Portal (mdirect.myntrainfo.com/Orders/Search) via OrdersMunim In-App Downloader', {
+    page.drawText('Generated from Myntra Partner Portal via OrdersMunim In-App Downloader', {
       x: 75,
       y: 35,
       size: 7.5,
@@ -5734,16 +5591,16 @@ export default function LabelCropper({ showToast }) {
 
                   <div>
                     <h2 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-                      M-Direct Orders Portal
+                      Myntra Orders Portal
                     </h2>
                     <p className="text-xs font-semibold text-rose-400 mt-0.5">
-                      Powered by Myntra • <span className="text-slate-300 font-mono">https://mdirect.myntrainfo.com/Orders/Search</span>
+                      Seller Hub • Instant Shipping Labels &amp; Tax Invoices
                     </p>
                   </div>
 
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Target: https://mdirect.myntrainfo.com/Orders/Search</span>
+                    <span>No Printer Drivers or QZ Tray Needed</span>
                   </div>
                 </div>
 
@@ -5812,8 +5669,8 @@ export default function LabelCropper({ showToast }) {
                       </div>
                     </div>
 
-                    {/* Show Password & Remember me row */}
-                    <div className="flex items-center justify-between pt-1 text-xs text-slate-400">
+                    {/* Show Password row */}
+                    <div className="flex items-center pt-1 text-xs text-slate-400">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -5823,14 +5680,6 @@ export default function LabelCropper({ showToast }) {
                         />
                         <span>Show Password</span>
                       </label>
-
-                      <button
-                        type="button"
-                        onClick={handleFillDemoMyntra}
-                        className="text-xs text-rose-400 hover:text-rose-300 underline font-medium cursor-pointer"
-                      >
-                        Use Demo Credentials
-                      </button>
                     </div>
 
                     {/* Log In Button */}
@@ -5842,11 +5691,11 @@ export default function LabelCropper({ showToast }) {
                       {myntraLoggingIn ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Opening https://mdirect.myntrainfo.com/Orders/Search...</span>
+                          <span>Signing In...</span>
                         </>
                       ) : (
                         <>
-                          <span>LOG IN &amp; OPEN ORDERS/SEARCH</span>
+                          <span>LOG IN TO MYNTRA</span>
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -5854,97 +5703,84 @@ export default function LabelCropper({ showToast }) {
                   </form>
                 </div>
 
-                {/* Official Terms & Conditions */}
-                <div className="mt-6 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-2">
-                  <div className="font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
-                    <ShieldCheck className="w-3.5 h-3.5 text-rose-400" />
-                    M-Direct Security &amp; Order Fulfillment (mdirect.myntrainfo.com/Orders/Search)
+                {/* Extension Download Card & Guide */}
+                <div className="mt-6 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 text-xs text-slate-300 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FF3F6C] to-[#F16521] text-white flex items-center justify-center text-xs font-black shadow-md">
+                        M
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-white text-sm">OrdersMunim Chrome Extension</div>
+                        <div className="text-[11px] text-emerald-400 font-semibold">Virtual QZ Bypass &amp; 1-Click PDF Downloader</div>
+                      </div>
+                    </div>
+                    <a
+                      href="/ordersmunim-extension.zip"
+                      download="ordersmunim-extension.zip"
+                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-90 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download Extension (.ZIP)</span>
+                    </a>
                   </div>
-                  <ul className="list-disc pl-4 space-y-1.5 text-slate-400 leading-relaxed text-[10px]">
-                    <li>
-                      Client login opens official M-Direct Orders Search (<code className="text-rose-400 bg-slate-950 px-1 py-0.5 rounded">https://mdirect.myntrainfo.com/Orders/Search</code>) directly inside OrdersMunim.
-                    </li>
-                    <li>
-                      Users are expected to exhibit caution while using Myntra Application (MA). Protect against unauthorized access to your password and devices.
-                    </li>
-                    <li>
-                      OrdersMunim Virtual QZ Engine silently intercepts print streams, enabling direct 1-click downloads for high-resolution 4x6 thermal shipping labels and A4 GST tax invoices without QZ Tray DEMO or physical printer drivers.
-                    </li>
-                  </ul>
+
+                  <div className="space-y-2">
+                    <div className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      How to use on Myntra (Zero QZ Tray Errors):
+                    </div>
+                    <ol className="list-decimal pl-4 space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
+                      <li>Download and extract the zip file, then open <code className="text-white bg-slate-800 px-1 py-0.5 rounded">chrome://extensions</code> in Chrome.</li>
+                      <li>Enable <strong className="text-slate-300">Developer mode</strong> (top right) and click <strong className="text-slate-300">Load unpacked</strong>, then select the extracted folder.</li>
+                      <li>Click the OrdersMunim extension icon and sign in with your account to activate your license.</li>
+                      <li>Open <a href="https://mdirect.myntrainfo.com/Orders/Search" target="_blank" rel="noreferrer" className="text-rose-400 underline font-semibold">mdirect.myntrainfo.com/Orders/Search</a> — select orders and click Download. Labels download as PDF directly without QZ Tray errors!</li>
+                    </ol>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Protected by OrdersMunim License • Auto-expires when plan ends</span>
+                    <a
+                      href="https://mdirect.myntrainfo.com/Orders/Search"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Open Myntra Portal</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
+
           ) : (
-            /* ========================================================================= */
-            /* 2. AUTHENTICATED MYNTRA M-DIRECT WORKSPACE & LIVE ORDERS/SEARCH VIEW      */
-            /* ========================================================================= */
+            /* 2. AUTHENTICATED MYNTRA WORKSPACE - ORDERS & PDF DOWNLOADER */
             <div className="space-y-4">
-              {/* In-App Browser Window Chrome with Address Bar */}
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-white">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="flex items-center gap-1.5 px-1 shrink-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+              {/* Simple top bar: seller info + actions */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF3F6C] to-[#F16521] text-white flex items-center justify-center text-sm font-black shadow-md">
+                    M
                   </div>
-
-                  {/* Browser Address Bar */}
-                  <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-mono min-w-[280px] max-w-full truncate shadow-inner">
-                    <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-slate-400">https://</span>
-                    <span className="text-white font-bold">mdirect.myntrainfo.com/Orders/Search</span>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Myntra Orders</div>
+                    <div className="text-[11px] text-slate-500 font-mono">{myntraSession?.email || 'Logged In'}</div>
                   </div>
-
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    ONLINE
-                  </span>
                 </div>
-
-                {/* View Switcher Tabs & Actions */}
-                <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setMyntraActiveTab('portal_view')}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        myntraActiveTab === 'portal_view'
-                          ? 'bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Monitor className="w-3.5 h-3.5" />
-                      <span>Live Portal Frame</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setMyntraActiveTab('orders')}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        myntraActiveTab === 'orders'
-                          ? 'bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Package className="w-3.5 h-3.5" />
-                      <span>Orders &amp; PDF Downloader</span>
-                    </button>
-                  </div>
-
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setMyntraAddModalOpen(true)}
-                    className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1 border border-slate-700 cursor-pointer"
-                    title="Add Custom Order"
+                    className="py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5 text-rose-400" />
-                    <span>+ Add</span>
+                    <span>+ Add Order</span>
                   </button>
-
                   <button
                     type="button"
                     onClick={handleMyntraLogout}
-                    className="p-1.5 rounded-xl border border-slate-800 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
                     title="Sign Out of Myntra"
                   >
                     <LogOut className="w-4 h-4" />
@@ -5952,68 +5788,9 @@ export default function LabelCropper({ showToast }) {
                 </div>
               </div>
 
-              {/* View 1: Live Portal View (mdirect.myntrainfo.com/Orders/Search) */}
-              {myntraActiveTab === 'portal_view' && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-0">
-                  {/* Quick-Action Bar above Frame */}
-                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-4">
-                    <div className="flex items-center gap-2 text-xs text-slate-700">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <strong className="text-slate-900">Virtual QZ Bypass:</strong>
-                      <span className="text-[11px] text-slate-500">
-                        Intercepting print jobs on <code className="text-rose-600 bg-rose-50 px-1 py-0.5 rounded font-mono">https://mdirect.myntrainfo.com/Orders/Search</code>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleBatchDownloadMyntraLabels}
-                        disabled={myntraDownloadingId === 'batch_labels'}
-                        className="py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Download className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Download All Labels (PDF)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleBatchDownloadMyntraInvoices}
-                        disabled={myntraDownloadingId === 'batch_invoices'}
-                        className="py-1.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-slate-600" />
-                        <span>Download Invoices (PDF)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setMyntraActiveTab('orders')}
-                        className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
-                      >
-                        <span>View Orders Table</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Embedded Iframe */}
-                  <div className="relative w-full bg-slate-100">
-                    <iframe
-                      src="https://mdirect.myntrainfo.com/Orders/Search"
-                      className="w-full h-[720px] bg-white border-0"
-                      title="Myntra M-Direct Orders Search"
-                      sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
-                      allow="clipboard-read; clipboard-write;"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* View 2: Orders Search & 1-Click PDF Downloader Table */}
-              {myntraActiveTab === 'orders' && (
-                <div className="space-y-4">
-                  {/* Metric Counters Banner */}
+              {/* Orders & PDF Downloader Table — always visible after login */}
+              <div className="space-y-4">
+                {/* Metric Counters Banner */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
                       <div>
@@ -6349,7 +6126,6 @@ export default function LabelCropper({ showToast }) {
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* Add Custom Order Modal */}
               {myntraAddModalOpen && (
