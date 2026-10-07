@@ -7,12 +7,14 @@
 
   // State
   let isSubscriptionActive = false;
+  let isPaused = false;
   let licenseErrorMsg = '';
 
-  // Listen for license updates from Content Script
+  // Listen for license & pause updates from Content Script
   window.addEventListener('__ORDERSMUNIM_LICENSE_UPDATE__', function(e) {
     if (e.detail) {
       isSubscriptionActive = !!e.detail.active;
+      isPaused = !!e.detail.paused;
       licenseErrorMsg = e.detail.message || '';
       updateFloatingBadge();
     }
@@ -49,18 +51,7 @@
       document.documentElement.appendChild(badgeEl);
     }
 
-    if (isSubscriptionActive) {
-      badgeEl.style.borderColor = '#10b981';
-      badgeEl.innerHTML = `
-        <div style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></div>
-        <div>
-          <div style="font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 4px;">
-            OrdersMunim Virtual QZ <span style="color: #34d399; font-size: 10px; background: rgba(16,185,129,0.2); padding: 1px 6px; border-radius: 6px;">READY</span>
-          </div>
-          <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Print jobs will download as PDF directly (No QZ Tray needed)</div>
-        </div>
-      `;
-    } else {
+    if (!isSubscriptionActive) {
       badgeEl.style.borderColor = '#ef4444';
       badgeEl.innerHTML = `
         <div style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
@@ -71,16 +62,39 @@
           <div style="font-size: 10px; color: #fca5a5; margin-top: 2px;">${licenseErrorMsg || 'Please log in or renew plan on ordermunim.web.app'}</div>
         </div>
       `;
+    } else if (isPaused) {
+      badgeEl.style.borderColor = '#f59e0b';
+      badgeEl.innerHTML = `
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></div>
+        <div>
+          <div style="font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 4px;">
+            OrdersMunim <span style="color: #fbbf24; font-size: 10px; background: rgba(245,158,11,0.2); padding: 1px 6px; border-radius: 6px;">PAUSED ⏸️</span>
+          </div>
+          <div style="font-size: 10px; color: #cbd5e1; margin-top: 2px;">Testing original Myntra (Expect red error if QZ not installed)</div>
+        </div>
+      `;
+    } else {
+      badgeEl.style.borderColor = '#10b981';
+      badgeEl.innerHTML = `
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></div>
+        <div>
+          <div style="font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 4px;">
+            OrdersMunim Virtual QZ <span style="color: #34d399; font-size: 10px; background: rgba(16,185,129,0.2); padding: 1px 6px; border-radius: 6px;">READY</span>
+          </div>
+          <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Print jobs will download as PDF directly (No QZ Tray needed)</div>
+        </div>
+      `;
     }
   }
 
-  // Hide Myntra QZ Error banners automatically
+  // Hide Myntra QZ Error banners automatically (only when active and NOT paused)
   function suppressQzErrorBanner() {
+    if (isPaused || !isSubscriptionActive) return; // Do not hide if paused or expired
+
     const errorAlerts = document.querySelectorAll('*');
     for (const el of errorAlerts) {
       if (el.innerText && /Failed to establish connection with QZ|Unable to establish connection with QZ/i.test(el.innerText)) {
         if (el.offsetParent !== null && el.id !== 'ordersmunim-floating-badge') {
-          // If container has error class or banner style
           const banner = el.closest('.alert, [role="alert"], .notification, div') || el;
           banner.style.display = 'none';
         }
@@ -88,6 +102,7 @@
     }
   }
   setInterval(suppressQzErrorBanner, 800);
+
 
   // Hook Native WebSocket
   const NativeWebSocket = window.WebSocket;
@@ -222,11 +237,12 @@
 
   // Intercept window.WebSocket
   window.WebSocket = function(url, protocols) {
-    if (isQzTrayUrl(url)) {
+    if (!isPaused && isQzTrayUrl(url)) {
       return new VirtualQzWebSocket(url, protocols);
     }
     return new NativeWebSocket(url, protocols);
   };
+
   window.WebSocket.prototype = NativeWebSocket.prototype;
   window.WebSocket.CONNECTING = NativeWebSocket.CONNECTING;
   window.WebSocket.OPEN = NativeWebSocket.OPEN;

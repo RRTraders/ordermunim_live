@@ -216,7 +216,9 @@
 
     <!-- Features Card -->
     <div class="card">
-      <div class="card-title">Active Integrations</div>
+      <div class="card-title">
+        <span>Active Integrations</span>
+      </div>
       <div class="feature-row">
         <div class="feature-name">
           <span>📦</span>
@@ -224,7 +226,16 @@
         </div>
         <span id="myntraStatus" class="feature-status text-muted">Checking...</span>
       </div>
-      <div class="feature-row">
+
+      <!-- Quick Pause / Resume Control -->
+      <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155;">
+        <button type="button" id="toggleQzBtn" class="btn" style="background: #334155; color: #f8fafc; font-size: 11px; padding: 7px;">
+          <span id="toggleQzIcon">⏸️</span>
+          <span id="toggleQzText">Pause Virtual QZ (Test Red Error)</span>
+        </button>
+      </div>
+
+      <div class="feature-row" style="margin-top: 8px;">
         <div class="feature-name">
           <span>🔄</span>
           <span>Meesho Return OTP</span>

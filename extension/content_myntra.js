@@ -6,20 +6,30 @@
 
   console.log('[OrdersMunim] Content script active on Myntra portal.');
 
-  // Check subscription status with background
+  // Check subscription and pause status
   async function syncLicenseStatus() {
     try {
+      const stored = await chrome.storage.local.get(['virtualQzPaused']);
       const response = await chrome.runtime.sendMessage({ action: 'check_subscription' });
       const active = response && response.active === true;
+      const paused = !!stored.virtualQzPaused;
       const message = response && response.message ? response.message : '';
 
       window.dispatchEvent(new CustomEvent('__ORDERSMUNIM_LICENSE_UPDATE__', {
-        detail: { active, message }
+        detail: { active, paused, message }
       }));
     } catch (err) {
       console.warn('[OrdersMunim] Failed to check subscription status:', err);
     }
   }
+
+  // Listen for toggle_qz message from popup
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'toggle_qz') {
+      syncLicenseStatus();
+    }
+  });
+
 
   // Handle requests from in-page script
   window.addEventListener('__ORDERSMUNIM_REQUEST_LICENSE__', () => {

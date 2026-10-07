@@ -68,6 +68,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('Could not contact background service worker:', e);
     }
 
+    const isPaused = !!stored.virtualQzPaused;
+    const toggleQzBtn = document.getElementById('toggleQzBtn');
+    const toggleQzIcon = document.getElementById('toggleQzIcon');
+    const toggleQzText = document.getElementById('toggleQzText');
+
+    if (isPaused) {
+      toggleQzIcon.textContent = '▶️';
+      toggleQzText.textContent = 'Resume Virtual QZ';
+      toggleQzBtn.style.background = '#059669'; // Emerald
+      toggleQzBtn.style.color = '#fff';
+    } else {
+      toggleQzIcon.textContent = '⏸️';
+      toggleQzText.textContent = 'Pause Virtual QZ (Test Red Error)';
+      toggleQzBtn.style.background = '#334155'; // Slate
+      toggleQzBtn.style.color = '#f8fafc';
+    }
+
     if (status && status.active) {
       subBadge.textContent = 'ACTIVE PLAN';
       subBadge.className = 'badge badge-active';
@@ -78,8 +95,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
       renewBtn.style.display = 'none';
 
-      myntraStatus.textContent = 'Ready (Virtual QZ)';
-      myntraStatus.className = 'feature-status text-emerald';
+      if (isPaused) {
+        myntraStatus.textContent = 'PAUSED ⏸️ (Original QZ)';
+        myntraStatus.className = 'feature-status text-rose';
+      } else {
+        myntraStatus.textContent = 'Ready (Virtual QZ)';
+        myntraStatus.className = 'feature-status text-emerald';
+      }
 
       meeshoStatus.textContent = stored.meeshoSyncKey ? 'Active (Synced)' : 'Ready';
       meeshoStatus.className = 'feature-status text-emerald';
@@ -100,6 +122,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       meeshoStatus.className = 'feature-status text-muted';
     }
   }
+
+  // Handle Pause / Resume Virtual QZ
+  document.getElementById('toggleQzBtn')?.addEventListener('click', async () => {
+    const current = await chrome.storage.local.get(['virtualQzPaused']);
+    const newPaused = !current.virtualQzPaused;
+    await chrome.storage.local.set({ virtualQzPaused: newPaused });
+    
+    // Notify active tabs
+    try {
+      const tabs = await chrome.tabs.query({ url: '*://*.myntrainfo.com/*' });
+      for (const t of tabs) {
+        chrome.tabs.sendMessage(t.id, { action: 'toggle_qz', paused: newPaused }).catch(() => {});
+      }
+    } catch {}
+
+    await refreshUI();
+  });
+
 
   // Handle Login via Firebase Auth REST API
   loginBtn.addEventListener('click', async () => {
