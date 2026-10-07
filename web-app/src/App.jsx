@@ -804,7 +804,7 @@ export default function App() {
       startBackgroundMonitoring();
     } catch (e) {}
 
-    const interval = setInterval(async () => {
+    const pollAllNativeSessions = async () => {
       try {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
         if (!rawSessions) return;
@@ -925,9 +925,6 @@ export default function App() {
           );
 
           if (isSameAsExisting || isSameAsPrev) {
-            // ZERO CHANGE in OTP or Return counts.
-            // SKIP FIRESTORE WRITE COMPLETELY!
-            // This prevents hundreds of unnecessary writes & reads!
             lastSyncedDocRef.current[key] = {
               currentOtp: newOtp,
               courier: newCourier,
@@ -945,7 +942,7 @@ export default function App() {
             otpListJson: newOtpListJson
           };
 
-          // Update Firestore so UI and other devices reflect current OTP & all active OTPs
+          // Update Firestore immediately so UI and all devices reflect current OTP instantly
           await updateDoc(doc(db, 'accounts', key), {
             currentOtp: newOtp,
             courier: newCourier,
@@ -958,10 +955,48 @@ export default function App() {
       } catch (err) {
         console.warn('Native OTP poll error:', err);
       }
-    }, 30000);
+    };
 
-    return () => clearInterval(interval);
+    // 1. Instant zero-delay poll immediately on mount
+    pollAllNativeSessions();
+
+    // 2. Poll every 5 seconds while app is running
+    const interval = setInterval(pollAllNativeSessions, 5000);
+
+    // 3. Instant trigger whenever user clicks notification or returns to app
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollAllNativeSessions();
+      }
+    };
+    const onFocus = () => {
+      pollAllNativeSessions();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+
+    let appStateListener = null;
+    if (typeof Capacitor !== 'undefined' && Capacitor.addListener) {
+      try {
+        appStateListener = Capacitor.addListener('appStateChange', (state) => {
+          if (state && state.isActive) {
+            pollAllNativeSessions();
+          }
+        });
+      } catch (e) {}
+    }
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+      if (appStateListener && appStateListener.remove) {
+        appStateListener.remove();
+      }
+    };
   }, []);
+
 
   // Setup reCAPTCHA for Phone Auth (Real SMS OTP)
   const setupRecaptcha = () => {

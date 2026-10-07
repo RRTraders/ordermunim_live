@@ -458,14 +458,21 @@ async function loginAndExtractMeesho(syncKey, email, password, storeName, userId
 // AUTO-REFRESH — Uses saved cookies, NO browser needed
 // =====================================================================
 
-async function checkReturnsForSession(syncKey) {
-  const session = loadSession(syncKey);
-  if (!session || !session.identifier || !session.cookies) {
-    log(`[Auto-Sync] No valid session for ${syncKey}`);
+async function checkReturnsForSession(syncKey, docFields = null) {
+  let session = loadSession(syncKey);
+  let identifier = session?.identifier;
+  let cookies = session?.cookies;
+
+  // Fallback to Firestore document if local session file is missing
+  if ((!identifier || !cookies) && docFields) {
+    identifier = docFields.identifier?.stringValue;
+    cookies = docFields.cookies?.stringValue;
+  }
+
+  if (!identifier || !cookies) {
     return null;
   }
 
-  const { identifier, cookies } = session;
   log(`[Auto-Sync] Refreshing ${syncKey} (${identifier}) via API...`);
 
   const result = await fetchOTPWithCookies(identifier, cookies);
@@ -489,7 +496,7 @@ async function checkReturnsForSession(syncKey) {
   return result;
 }
 
-// Auto-refresh every 3 minutes
+// Auto-refresh every 20 seconds (Instant sync)
 setInterval(async () => {
   try {
     const res = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts`);
@@ -497,11 +504,13 @@ setInterval(async () => {
     if (data.documents) {
       for (const doc of data.documents) {
         const key = doc.name.split('/').pop();
-        if (key.startsWith('MSH-')) await checkReturnsForSession(key);
+        const fields = doc.fields || {};
+        await checkReturnsForSession(key, fields);
       }
     }
   } catch (e) { log(`[Auto-Sync] Interval error: ${e.message}`); }
-}, 3 * 60 * 1000);
+}, 20 * 1000);
+
 
 // =====================================================================
 // ROUTES
