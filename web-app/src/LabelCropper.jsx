@@ -3022,22 +3022,38 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     }
     try {
       recordedChunksRef.current = [];
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-        ? 'video/webm;codecs=vp8,opus'
-        : MediaRecorder.isTypeSupported('video/webm')
-        ? 'video/webm'
-        : 'video/mp4';
+      let recorder;
+      let usedMime = '';
+      const candidateTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4;codecs=avc1,mp4a',
+        'video/mp4',
+        ''
+      ];
 
-      const recorder = new MediaRecorder(webcamStream, { mimeType: mime });
+      for (const t of candidateTypes) {
+        if (!t || (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t))) {
+          try {
+            recorder = t ? new MediaRecorder(webcamStream, { mimeType: t }) : new MediaRecorder(webcamStream);
+            usedMime = t;
+            break;
+          } catch {}
+        }
+      }
+
+      if (!recorder) {
+        recorder = new MediaRecorder(webcamStream);
+      }
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           recordedChunksRef.current.push(e.data);
         }
       };
       recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: mime });
+        const blobType = usedMime || 'video/webm';
+        const blob = new Blob(recordedChunksRef.current, { type: blobType });
         setRecordedVideoBlob(blob);
         if (recordedVideoUrl) {
           try { URL.revokeObjectURL(recordedVideoUrl); } catch {}
