@@ -2808,6 +2808,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const webcamVideoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  const recordingCanvasRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const currentIstTimeRef = useRef('');
+
+  // Keep ref synchronized with latest time string for canvas burner
+  useEffect(() => {
+    currentIstTimeRef.current = currentIstTime;
+  }, [currentIstTime]);
 
   // Live Timer Update formatted exactly as DD.MM.YYYY hh:mm:ssAM/PM (Matching Image 2)
   useEffect(() => {
@@ -3016,12 +3024,90 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   };
 
   const handleStartRecording = () => {
-    if (!webcamStream) {
+    if (!webcamStream || !webcamVideoRef.current) {
       if (showToast) showToast('Please start webcam first', 'error');
       return;
     }
     try {
       recordedChunksRef.current = [];
+
+      // Set up offscreen/hidden recording canvas that matches video resolution
+      const videoEl = webcamVideoRef.current;
+      const width = videoEl.videoWidth || 1280;
+      const height = videoEl.videoHeight || 720;
+
+      let canvas = recordingCanvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        recordingCanvasRef.current = canvas;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      // Continuous render loop that draws webcam frame + centered timestamp overlay
+      let isRunning = true;
+      const drawFrame = () => {
+        if (!isRunning) return;
+        try {
+          if (videoEl && videoEl.readyState >= 2) {
+            // 1. Draw raw camera video frame
+            ctx.drawImage(videoEl, 0, 0, width, height);
+
+            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER (Matching Image 2 format & style)
+            const timeText = currentIstTimeRef.current || '19.06.2024 08:22:42AM';
+            
+            // Adaptive font size based on video resolution
+            const fontSize = Math.max(16, Math.round(width * 0.026));
+            ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace, sans-serif`;
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+
+            const textMetrics = ctx.measureText(timeText);
+            const textWidth = textMetrics.width;
+            const paddingX = Math.round(fontSize * 0.7);
+            const paddingY = Math.round(fontSize * 0.45);
+            const boxWidth = textWidth + (paddingX * 2);
+            const boxHeight = fontSize + (paddingY * 2);
+            
+            // Centered horizontally, at the top of video frame
+            const boxX = (width - boxWidth) / 2;
+            const boxY = Math.round(height * 0.04); // 4% from top edge
+
+            // Semi-transparent background badge matching Image 2
+            ctx.fillStyle = 'rgba(51, 65, 85, 0.75)'; // slate-700 translucent
+            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+            // Subtle border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.06));
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+            // Crisp white text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(timeText, width / 2, boxY + (boxHeight / 2));
+          }
+        } catch (e) {
+          console.warn('Canvas draw error:', e);
+        }
+        animFrameRef.current = requestAnimationFrame(drawFrame);
+      };
+      drawFrame();
+
+      // Capture stream from canvas with burned-in timestamp at 30 fps
+      let recordStream;
+      try {
+        recordStream = canvas.captureStream(30);
+      } catch (err) {
+        console.warn('Canvas captureStream fallback to direct videoStream:', err);
+        recordStream = webcamStream;
+      }
+
+      // Preserve audio tracks if present
+      if (webcamStream.getAudioTracks().length > 0 && recordStream !== webcamStream) {
+        webcamStream.getAudioTracks().forEach(track => recordStream.addTrack(track));
+      }
+
       let recorder;
       let usedMime = '';
       const candidateTypes = [
@@ -3036,7 +3122,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       for (const t of candidateTypes) {
         if (!t || (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t))) {
           try {
-            recorder = t ? new MediaRecorder(webcamStream, { mimeType: t }) : new MediaRecorder(webcamStream);
+            recorder = t ? new MediaRecorder(recordStream, { mimeType: t }) : new MediaRecorder(recordStream);
             usedMime = t;
             break;
           } catch {}
@@ -3044,14 +3130,21 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
 
       if (!recorder) {
-        recorder = new MediaRecorder(webcamStream);
+        recorder = new MediaRecorder(recordStream);
       }
+
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           recordedChunksRef.current.push(e.data);
         }
       };
+
       recorder.onstop = () => {
+        isRunning = false;
+        if (animFrameRef.current) {
+          cancelAnimationFrame(animFrameRef.current);
+          animFrameRef.current = null;
+        }
         const blobType = usedMime || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, { type: blobType });
         setRecordedVideoBlob(blob);
@@ -3062,17 +3155,26 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         setRecordedVideoUrl(url);
         if (showToast) showToast('Recording completed! Preview video below and check playback before downloading.', 'success');
       };
+
       recorder.start(1000);
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingDurationSec(0);
-      if (showToast) showToast('Recording started with live timer!', 'info');
+      if (showToast) showToast('Recording started with live timer burned into video!', 'info');
     } catch (err) {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
       if (showToast) showToast(`Recording failed: ${err.message}`, 'error');
     }
   };
 
   const handleStopRecording = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecording) {
       try {
         mediaRecorderRef.current.stop();
@@ -6863,10 +6965,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     className="w-full h-full object-cover"
                   />
 
-                  {/* Superimposed Live Timestamp HUD Overlay (Exact style from Image 2: White font, light background) */}
-                  <div className="absolute top-3 left-3 z-20 pointer-events-none">
-                    <div className="bg-slate-700/60 backdrop-blur-xs border border-white/20 rounded-md px-3 py-1 shadow-md">
-                      <span className="font-mono text-xs sm:text-sm md:text-base font-extrabold text-white tracking-wide drop-shadow-sm select-none">
+                  {/* Superimposed Live Timestamp HUD Overlay (Exact style from Image 2: Center Top, White font, light background) */}
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                    <div className="bg-slate-700/60 backdrop-blur-xs border border-white/20 rounded-md px-3.5 py-1.5 shadow-md flex items-center justify-center">
+                      <span className="font-mono text-xs sm:text-sm md:text-base font-extrabold text-white tracking-wide drop-shadow-sm select-none whitespace-nowrap">
                         {currentIstTime}
                       </span>
                     </div>
