@@ -79,7 +79,9 @@ import {
   Rocket,
   AlertTriangle,
   Smartphone,
-  Globe
+  Globe,
+  QrCode,
+  Store
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
@@ -656,7 +658,7 @@ export default function App() {
         try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
         if (isSuper || profData.role === 'super_admin') {
           setAdminAuthenticated(true);
-          setActiveTab('admin');
+          setActiveTab(prev => (prev === 'cropper' || prev === 'profile' ? prev : 'admin'));
         }
       } else {
         const currentDeviceId = getDeviceId();
@@ -3013,10 +3015,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center: Welcome User's Name */}
-          <div className="flex-1 text-center px-1 truncate">
-            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block">
-              Welcome, <span className="text-cyan-400">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
+          {/* Center: Welcome User's Name (clickable to open profile) */}
+          <div 
+            onClick={() => setActiveTab('profile')}
+            className="flex-1 text-center px-1 truncate cursor-pointer group"
+            title="Click to open your Profile"
+          >
+            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block group-hover:text-cyan-300 transition-colors">
+              Welcome, <span className="text-cyan-400 group-hover:underline underline-offset-2">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
             </span>
             {isSuperAdmin && (
               <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
@@ -3025,13 +3031,25 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: Sound Icon */}
+          {/* Right: Profile & Sound Icons */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setActiveTab('profile')}
+              title="Open Profile"
+              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'profile'
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm'
+                  : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300'
+              }`}
+            >
+              <User className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline text-xs font-bold">Profile</span>
+            </button>
             {!isSuperAdmin && (
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 title={soundEnabled ? "Mute OTP Audio" : "Enable OTP Audio"}
-                className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 transition-colors"
+                className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
               >
                 {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
               </button>

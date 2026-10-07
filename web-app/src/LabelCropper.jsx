@@ -4629,7 +4629,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     {onNavigateTab && (
                       <button
                         type="button"
-                        onClick={() => onNavigateTab('profile')}
+                        onClick={() => {
+                          onNavigateTab('profile');
+                          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+                        }}
                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
                         title="Add or manage store links in Profile"
                       >
@@ -4680,7 +4683,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                         {onNavigateTab && (
                           <button
                             type="button"
-                            onClick={() => onNavigateTab('profile')}
+                            onClick={() => {
+                              onNavigateTab('profile');
+                              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+                            }}
                             className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer ml-2"
                           >
                             + Add in Profile
