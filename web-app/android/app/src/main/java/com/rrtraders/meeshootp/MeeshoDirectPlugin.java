@@ -719,7 +719,7 @@ public class MeeshoDirectPlugin extends Plugin {
             } else {
                 versionCode = pInfo.versionCode;
             }
-            String versionName = pInfo.versionName != null ? pInfo.versionName : "2.5";
+            String versionName = pInfo.versionName != null ? pInfo.versionName : "2.6";
             JSObject ret = new JSObject();
             ret.put("versionCode", versionCode);
             ret.put("versionName", versionName);

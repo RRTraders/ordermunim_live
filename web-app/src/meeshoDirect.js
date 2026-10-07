@@ -178,7 +178,7 @@ export async function getAppVersionInfo() {
       if (info && info.versionCode) {
         return {
           versionCode: Number(info.versionCode),
-          versionName: String(info.versionName || '2.5'),
+          versionName: String(info.versionName || '2.6'),
           packageName: String(info.packageName || 'com.rrtraders.meeshootp'),
           isNative: true,
           platform: 'android'
@@ -188,16 +188,16 @@ export async function getAppVersionInfo() {
       console.warn('[Native Meesho] getAppInfo error:', err);
     }
     return {
-      versionCode: 15,
-      versionName: '2.5',
+      versionCode: 16,
+      versionName: '2.6',
       packageName: 'com.rrtraders.meeshootp',
       isNative: true,
       platform: 'android'
     };
   }
   return {
-    versionCode: 15,
-    versionName: '2.5',
+    versionCode: 16,
+    versionName: '2.6',
     packageName: null,
     isNative: false,
     platform: 'web'

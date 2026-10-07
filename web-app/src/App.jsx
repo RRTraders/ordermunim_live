@@ -83,8 +83,8 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
-const CURRENT_APP_VERSION_CODE = 15;
-const CURRENT_APP_VERSION_NAME = "2.5";
+const CURRENT_APP_VERSION_CODE = 16;
+const CURRENT_APP_VERSION_NAME = "2.6";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -266,12 +266,12 @@ export default function App() {
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastVersionCode, setBroadcastVersionCode] = useState(2);
-  const [broadcastVersionName, setBroadcastVersionName] = useState('1.1');
-  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available!');
-  const [broadcastMessage, setBroadcastMessage] = useState('We redesigned the app with bottom navigation, mobile toolbar, and faster OTP syncing. Please update your app.');
+  const [broadcastVersionCode, setBroadcastVersionCode] = useState(16);
+  const [broadcastVersionName, setBroadcastVersionName] = useState('2.6');
+  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.6)!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.6 brings real-time Webview Cloud Sync, Ajio multi-file label merger & Amazon label extractor. Please update your app.');
   const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk');
-  const [broadcastMode, setBroadcastMode] = useState('grace_period'); // 'grace_period' | 'force_immediate' | 'optional'
+  const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
 
@@ -1920,27 +1920,24 @@ export default function App() {
       return { shouldPrompt: false };
     }
 
-    if (!appUpdateConfig || !appUpdateConfig.active) {
-      return { shouldPrompt: false };
-    }
-
-    const targetVersion = Number(appUpdateConfig.versionCode) || 1;
+    const remoteTarget = (appUpdateConfig && appUpdateConfig.active) ? (Number(appUpdateConfig.versionCode) || 0) : 0;
+    const targetVersion = Math.max(remoteTarget, CURRENT_APP_VERSION_CODE);
     const isOlder = installedVersionCode < targetVersion;
     if (!isOlder) {
       return { shouldPrompt: false };
     }
 
-    const mode = appUpdateConfig.updateMode || 'grace_period';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
-    const versionName = appUpdateConfig.versionName || `v${targetVersion}`;
+    const mode = appUpdateConfig?.updateMode || 'optional';
+    const downloadUrl = appUpdateConfig?.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
+    const versionName = appUpdateConfig?.versionName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
       return {
         shouldPrompt: true,
         isForce: true,
         downloadUrl,
-        title: appUpdateConfig.title || 'Mandatory App Update',
-        message: appUpdateConfig.message || 'A required update is available. You must update to continue using Meesho OTP.',
+        title: appUpdateConfig?.title || 'Mandatory App Update (v2.6)',
+        message: appUpdateConfig?.message || 'A required update is available with live Webview sync, Ajio label merger & Amazon extractor. You must update to continue using OrderMunim.',
         versionName
       };
     }
@@ -1954,8 +1951,8 @@ export default function App() {
         isForce: false,
         isGrace: false,
         downloadUrl,
-        title: appUpdateConfig.title || 'New Update Available',
-        message: appUpdateConfig.message || 'A new update is available for Meesho OTP.',
+        title: appUpdateConfig?.title || 'New Update Available (v2.6)!',
+        message: appUpdateConfig?.message || 'Please update your OrderMunim app to access live Webview cloud sync, Ajio multi-file label merger & Amazon label extractor.',
         versionName
       };
     }
