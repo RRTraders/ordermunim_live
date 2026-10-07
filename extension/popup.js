@@ -16,11 +16,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const passwordInput = document.getElementById('passwordInput');
   const loginBtn = document.getElementById('loginBtn');
   const userEmailDisplay = document.getElementById('userEmailDisplay');
-  const syncKeyInput = document.getElementById('syncKeyInput');
-  const saveKeyBtn = document.getElementById('saveKeyBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const authError = document.getElementById('authError');
   const authSuccess = document.getElementById('authSuccess');
+
 
   function showError(msg) {
     authError.textContent = msg;
@@ -45,20 +44,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stored = await chrome.storage.local.get([
       'userUid',
       'userEmail',
-      'meeshoSyncKey',
+      'userAccounts',
       'subscriptionStatus'
     ]);
 
     // Check auth status
+    const userStoresDisplay = document.getElementById('userStoresDisplay');
     if (stored.userUid && stored.userEmail) {
       loggedOutSection.style.display = 'none';
       loggedInSection.style.display = 'block';
       userEmailDisplay.textContent = stored.userEmail;
-      syncKeyInput.value = stored.meeshoSyncKey || '';
+
+      if (Array.isArray(stored.userAccounts) && stored.userAccounts.length > 0) {
+        const storeNames = stored.userAccounts.map(s => s.storeName).filter(Boolean).join(', ');
+        userStoresDisplay.textContent = `Auto-Synced: ${storeNames || 'Active'}`;
+      } else {
+        userStoresDisplay.textContent = 'Auto-Synced with OrdersMunim';
+      }
     } else {
       loggedOutSection.style.display = 'block';
       loggedInSection.style.display = 'none';
     }
+
 
     // Request latest status from background
     let status = stored.subscriptionStatus;
@@ -198,13 +205,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Handle Save Sync Key
-  saveKeyBtn.addEventListener('click', async () => {
-    const key = syncKeyInput.value.trim().toUpperCase();
-    await chrome.storage.local.set({ meeshoSyncKey: key });
-    showSuccess('Account key updated successfully!');
-    setTimeout(refreshUI, 600);
-  });
 
   // Handle Sign Out
   logoutBtn.addEventListener('click', async () => {

@@ -110,7 +110,52 @@ async function verifySubscription() {
       lastVerified: Date.now()
     };
     await chrome.storage.local.set({ subscriptionStatus: status });
+
+    // Auto-fetch user's Meesho store accounts from Firestore
+    if (uid) {
+      try {
+        const qUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery`;
+        const qRes = await fetch(qUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            structuredQuery: {
+              from: [{ collectionId: 'accounts' }],
+              where: {
+                fieldFilter: {
+                  field: { fieldPath: 'userId' },
+                  op: 'EQUAL',
+                  value: { stringValue: uid }
+                }
+              }
+            }
+          })
+        });
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          const userAccounts = [];
+          for (const item of qData) {
+            if (item.document) {
+              const docName = item.document.name;
+              const docId = docName.split('/').pop();
+              const f = item.document.fields || {};
+              userAccounts.push({
+                id: docId,
+                storeName: f.storeName?.stringValue || f.supplierName?.stringValue || 'Meesho Store',
+                currentOtp: f.currentOtp?.stringValue || '',
+                phone: f.phone?.stringValue || f.mobile?.stringValue || ''
+              });
+            }
+          }
+          await chrome.storage.local.set({ userAccounts });
+        }
+      } catch (accErr) {
+        console.warn('[OrdersMunim Background] Failed to auto-fetch stores:', accErr);
+      }
+    }
+
     return status;
+
 
   } catch (err) {
     console.warn('[OrdersMunim Background] Network error during verification:', err);

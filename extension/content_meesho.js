@@ -53,27 +53,49 @@ function extractReturnDetails() {
 }
 
 async function syncToFirebase(details) {
-  chrome.storage.local.get(["meeshoSyncKey", "subscriptionStatus"], async (result) => {
+  chrome.storage.local.get(["meeshoSyncKey", "userAccounts", "subscriptionStatus"], async (result) => {
     // Check if account is expired
     if (result.subscriptionStatus && result.subscriptionStatus.active === false) {
       console.warn("[OrdersMunim] Subscription expired. OTP Sync paused.");
       return;
     }
 
-    const syncKey = result.meeshoSyncKey;
+    // Auto-resolve account ID: prefer userAccounts if available, else meeshoSyncKey
+    let targetAccount = null;
+    if (Array.isArray(result.userAccounts) && result.userAccounts.length > 0) {
+      targetAccount = result.userAccounts[0]; // Primary store
+    }
+
+    const syncKey = targetAccount ? targetAccount.id : result.meeshoSyncKey;
     if (!syncKey) {
       return;
     }
 
+    // Local in-memory deduplication
     if (lastPushedOtp === details.otp && lastPushedCount === details.handoverCount) {
       return;
     }
 
-    console.log(`[OrdersMunim] New Return OTP: ${details.otp} (${details.courier}). Pushing to Firebase for key: ${syncKey}...`);
-
     try {
-      const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=lastUpdated&updateMask.fieldPaths=status&updateMask.fieldPaths=fulfillmentId`;
-      
+      // 1. Fetch current remote document to check if Mobile app already pushed this OTP
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}`;
+      const checkRes = await fetch(docUrl);
+      if (checkRes.ok) {
+        const docData = await checkRes.json();
+        const existingOtp = docData.fields?.currentOtp?.stringValue || '';
+        if (existingOtp && existingOtp === details.otp) {
+          // Mobile already pushed this exact OTP! Do not overwrite.
+          console.log(`[OrdersMunim Meesho Sync] OTP (${details.otp}) already present in Firebase (pushed by mobile or previous cycle). Skipping update.`);
+          lastPushedOtp = details.otp;
+          lastPushedCount = details.handoverCount;
+          return;
+        }
+      }
+
+      console.log(`[OrdersMunim] New Return OTP: ${details.otp} (${details.courier}). Updating Firebase for account: ${syncKey}...`);
+
+      const updateUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=lastUpdated&updateMask.fieldPaths=status&updateMask.fieldPaths=fulfillmentId`;
+
       const payload = {
         fields: {
           currentOtp: { stringValue: details.otp },
@@ -86,7 +108,7 @@ async function syncToFirebase(details) {
         }
       };
 
-      const res = await fetch(url, {
+      const res = await fetch(updateUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -110,6 +132,7 @@ async function syncToFirebase(details) {
     }
   });
 }
+
 
 function scan() {
   const details = extractReturnDetails();
