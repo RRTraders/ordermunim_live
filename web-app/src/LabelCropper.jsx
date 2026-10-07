@@ -55,7 +55,8 @@ import {
   Calendar,
   Play,
   Square,
-  Circle
+  Circle,
+  RotateCcw
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -2800,6 +2801,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [facingMode, setFacingMode] = useState('environment'); // default to rear camera on mobile for return parcel unboxing!
   const [webcamError, setWebcamError] = useState(null);
 
   const webcamVideoRef = useRef(null);
@@ -2903,41 +2905,81 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     if (showToast) showToast('Reset to Live Real-Time Indian Standard Time (IST)', 'info');
   };
 
-  const handleStartWebcam = async (cameraId = selectedCameraId) => {
+  const handleStartWebcam = async (cameraId = selectedCameraId, mode = facingMode) => {
     setWebcamError(null);
     try {
       if (webcamStream) {
         webcamStream.getTracks().forEach(t => t.stop());
       }
-      const constraints = {
-        video: cameraId ? { deviceId: { exact: cameraId } } : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: true
-      };
-      let stream;
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera is not supported on this device/browser. Please open in Chrome or ensure HTTPS.');
+      }
+
+      // Try multiple constraint variations:
+      // 1. With deviceId or mobile facingMode (ideal 1280x720) without audio (audio often causes Permission Denied on mobile if mic denied)
+      // 2. Simplest video: true
+      let stream = null;
+      const videoConstraint = cameraId 
+        ? { deviceId: { exact: cameraId } } 
+        : { facingMode: { ideal: mode } };
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: cameraId ? { deviceId: { exact: cameraId } } : true,
+          video: videoConstraint,
           audio: false
         });
+      } catch (e1) {
+        console.warn('Attempt 1 failed, trying fallback video: true', e1);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (e2) {
+          console.warn('Attempt 2 failed, trying with user facing', e2);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false
+          });
+        }
       }
+
       setWebcamStream(stream);
       setIsWebcamActive(true);
       if (webcamVideoRef.current) {
         webcamVideoRef.current.srcObject = stream;
-        webcamVideoRef.current.play().catch(() => {});
+        try {
+          await webcamVideoRef.current.play();
+        } catch {}
       }
+
+      // Enumerate cameras once permission is granted
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevs = devices.filter(d => d.kind === 'videoinput');
         setAvailableCameras(videoDevs);
       } catch {}
-      if (showToast) showToast('Webcam started! Timer is running live.', 'success');
+
+      if (showToast) showToast('Camera started! Timer is ticking live.', 'success');
     } catch (err) {
-      console.error(err);
-      setWebcamError(err.message || 'Could not access camera. Please allow camera permissions in your browser.');
-      if (showToast) showToast('Camera access denied or unavailable', 'error');
+      console.error('Camera access error:', err);
+      let errMsg = 'Camera permission denied or camera not found.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errMsg = 'Camera permission denied. On mobile, please tap the lock icon in the browser address bar (or App Settings) and allow Camera permission.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errMsg = 'No camera device detected on this device.';
+      } else if (err.message) {
+        errMsg = err.message;
+      }
+      setWebcamError(errMsg);
+      if (showToast) showToast(errMsg, 'error');
+    }
+  };
+
+  const handleToggleFacingMode = async () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+    setSelectedCameraId('');
+    if (isWebcamActive) {
+      await handleStartWebcam('', nextMode);
     }
   };
 
@@ -6715,10 +6757,19 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 )}
               </div>
 
-              {/* Camera Selector (if multiple cameras available) */}
-              {availableCameras.length > 1 && (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-600">Camera:</label>
+              {/* Camera Selector & Flip Front/Back Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleFacingMode}
+                  className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+                  title="Switch between Rear (Back) and Front Camera"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
+                </button>
+
+                {availableCameras.length > 1 && (
                   <select
                     value={selectedCameraId}
                     onChange={(e) => {
@@ -6735,8 +6786,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Video Viewport Container */}
@@ -6788,14 +6839,21 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     <Camera className="w-8 h-8 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Webcam Ready</h3>
+                    <h3 className="text-base font-bold text-white">Camera Ready</h3>
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Tap below to start your PC webcam. The live Indian Date &amp; Time timer will run directly on the video screen.
+                      Tap below to start your PC Webcam or Phone Camera. The live Indian Date &amp; Time timer will run directly on the video screen.
                     </p>
                   </div>
                   {webcamError && (
-                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-                      {webcamError}
+                    <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-left space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 text-rose-200">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Camera Access Notice:</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{webcamError}</p>
+                      <p className="text-[10px] text-amber-300/90 pt-1 border-t border-rose-500/20">
+                        📱 <strong>On Mobile Phone / App:</strong> Open Phone <em>Settings &gt; Apps &gt; OrdersMunim (or Chrome) &gt; Permissions &gt; Camera</em> &rarr; Set to <strong>&quot;Allow&quot;</strong>.
+                      </p>
                     </div>
                   )}
                   <button
@@ -6804,7 +6862,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     className="py-3 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mx-auto cursor-pointer transition-all active:scale-95"
                   >
                     <Play className="w-4 h-4 fill-slate-950 text-slate-950" />
-                    <span>Start Web Cam &amp; Timer</span>
+                    <span>Start Camera &amp; Live Timer</span>
                   </button>
                 </div>
               )}
