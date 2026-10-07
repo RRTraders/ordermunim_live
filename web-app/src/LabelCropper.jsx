@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 import QRCode from 'qrcode';
@@ -424,7 +424,7 @@ const createInitialMarketplaceState = () => ({
   addPackingSlip: false,
 });
 
-export default function LabelCropper({ showToast }) {
+export default function LabelCropper({ showToast, followStores = [], onNavigateTab }) {
   // Selected marketplace state (default Meesho as developed)
   const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
     return localStorage.getItem('om_selected_marketplace') || 'meesho';
@@ -2682,6 +2682,25 @@ export default function LabelCropper({ showToast }) {
     }
   };
 
+  // Resolve stores list from prop or localStorage cache
+  const allFollowStores = useMemo(() => {
+    if (Array.isArray(followStores) && followStores.length > 0) return followStores;
+    try {
+      const raw = localStorage.getItem('om_follow_stores');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }, [followStores]);
+
+  const [selectedFollowStoreName, setSelectedFollowStoreName] = useState(() => {
+    try {
+      return localStorage.getItem('label_follow_us_store_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
   // Follow Us Page Option (Matching User Request)
   const [printFollowUs, setPrintFollowUs] = useState(() => {
     try {
@@ -2697,17 +2716,32 @@ export default function LabelCropper({ showToast }) {
       return '';
     }
   });
-  const [isFollowUsSaved, setIsFollowUsSaved] = useState(false);
 
-  const handleSaveFollowUs = () => {
+  const handleSelectFollowStore = (storeName) => {
+    setSelectedFollowStoreName(storeName);
     try {
-      localStorage.setItem('label_follow_us_link', followUsLink.trim());
-      localStorage.setItem('label_follow_us_enabled', String(printFollowUs));
-      setIsFollowUsSaved(true);
-      if (showToast) showToast('Follow Us link saved successfully!', 'success');
-      setTimeout(() => setIsFollowUsSaved(false), 2500);
-    } catch (err) {
-      console.error(err);
+      localStorage.setItem('label_follow_us_store_name', storeName);
+    } catch {}
+
+    if (!storeName) {
+      setFollowUsLink('');
+      setPrintFollowUs(false);
+      try {
+        localStorage.setItem('label_follow_us_link', '');
+        localStorage.setItem('label_follow_us_enabled', 'false');
+      } catch {}
+      return;
+    }
+
+    const matched = allFollowStores.find(s => s.name === storeName);
+    if (matched) {
+      setFollowUsLink(matched.url);
+      setPrintFollowUs(true);
+      try {
+        localStorage.setItem('label_follow_us_link', matched.url);
+        localStorage.setItem('label_follow_us_enabled', 'true');
+      } catch {}
+      if (showToast) showToast(`Selected "${matched.name}" for Follow Us panel`, 'success');
     }
   };
 
@@ -3309,7 +3343,7 @@ export default function LabelCropper({ showToast }) {
                 const cardX = (targetW - cardW) / 2;
                 const cardY = padding + footerH - cardH - 2;
 
-                const badgeImg = await getBadgeImage(item.storeName, false);
+                const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, false);
                 if (badgeImg) {
                   targetPage.drawImage(badgeImg, {
                     x: cardX,
@@ -3403,7 +3437,7 @@ export default function LabelCropper({ showToast }) {
                 const cardX = (pW - cardW) / 2;
                 const cardY = extraH - cardH - 4;
 
-                const badgeImg = await getBadgeImage(item.storeName, false);
+                const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, false);
                 if (badgeImg) {
                   targetPage.drawImage(badgeImg, {
                     x: cardX,
@@ -3509,7 +3543,7 @@ export default function LabelCropper({ showToast }) {
               const cardW = Math.min(470, pW - 28);
               const cardX = (pW - cardW) / 2;
 
-              const badgeImg = await getBadgeImage(item.storeName, true);
+              const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, true);
               if (badgeImg) {
                 targetPage.drawImage(badgeImg, {
                   x: cardX,
@@ -4585,13 +4619,24 @@ export default function LabelCropper({ showToast }) {
                   </p>
                 </div>
 
-                {/* 3. Follow Us Page Setting (Matching Image 2) */}
+                {/* 3. Follow Us Page Setting (Matching User Request - Dropdown with Store Name Only) */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
                       <QrCode className="w-3.5 h-3.5 text-blue-600" />
                       Follow Us Page
                     </label>
+                    {onNavigateTab && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateTab('profile')}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Add or manage store links in Profile"
+                      >
+                        <Store className="w-3 h-3" />
+                        <span>Manage Stores</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 w-full">
@@ -4606,43 +4651,48 @@ export default function LabelCropper({ showToast }) {
                         type="checkbox"
                         checked={printFollowUs}
                         onChange={(e) => {
-                          setPrintFollowUs(e.target.checked);
-                          localStorage.setItem('label_follow_us_enabled', String(e.target.checked));
-                          if (showToast) showToast(e.target.checked ? 'Follow Us panel enabled' : 'Follow Us panel disabled', 'info');
+                          const val = e.target.checked;
+                          setPrintFollowUs(val);
+                          localStorage.setItem('label_follow_us_enabled', String(val));
+                          if (showToast) showToast(val ? 'Follow Us panel enabled' : 'Follow Us panel disabled', 'info');
                         }}
                         className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
                       />
                     </label>
 
-                    {/* Edit box for client to paste profile link */}
-                    <input
-                      type="text"
-                      value={followUsLink}
-                      onChange={(e) => {
-                        setFollowUsLink(e.target.value);
-                        setIsFollowUsSaved(false);
-                      }}
-                      placeholder="Paste your profile / store link here"
-                      className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm"
-                    />
-
-                    {/* Beside Save button with tick mark */}
-                    <button
-                      type="button"
-                      onClick={handleSaveFollowUs}
-                      className={`shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-sm cursor-pointer whitespace-nowrap ${
-                        isFollowUsSaved 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-                      }`}
-                      title="Save profile link"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>{isFollowUsSaved ? 'Saved' : 'Save'}</span>
-                    </button>
+                    {/* Dropdown showing ONLY Store Names */}
+                    {allFollowStores.length > 0 ? (
+                      <select
+                        value={selectedFollowStoreName}
+                        onChange={(e) => handleSelectFollowStore(e.target.value)}
+                        className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm cursor-pointer"
+                      >
+                        <option value="">-- Select Store Name --</option>
+                        {allFollowStores.map((st) => (
+                          <option key={st.id || st.name} value={st.name}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                        <span className="text-[11px] text-slate-500 italic">No stores added yet</span>
+                        {onNavigateTab && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateTab('profile')}
+                            className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer ml-2"
+                          >
+                            + Add in Profile
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1.5 pl-0.5">
-                    Prints store name & QR code on label until changed.
+                    {selectedFollowStoreName 
+                      ? `Selected store: "${selectedFollowStoreName}" — QR & name will print on labels.`
+                      : 'Select a store from dropdown to print its QR badge on label footer.'}
                   </p>
                 </div>
 

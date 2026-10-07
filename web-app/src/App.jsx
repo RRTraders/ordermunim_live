@@ -287,6 +287,81 @@ export default function App() {
   const [reconnectLoading, setReconnectLoading] = useState(false);
   const [reconnectError, setReconnectError] = useState('');
 
+  // Follow Us Store Profile Links State
+  const [newFollowStoreName, setNewFollowStoreName] = useState('');
+  const [newFollowStoreUrl, setNewFollowStoreUrl] = useState('');
+  const [addingFollowStore, setAddingFollowStore] = useState(false);
+
+  const handleAddFollowStore = async (e) => {
+    e.preventDefault();
+    if (!newFollowStoreName.trim()) {
+      showToast('Please enter a Store Name', 'error');
+      return;
+    }
+    if (!newFollowStoreUrl.trim()) {
+      showToast('Please enter a Store / Profile URL', 'error');
+      return;
+    }
+
+    const currentList = Array.isArray(profile?.followStores) ? profile.followStores : [];
+    const maxPermitted = isSuperAdmin ? 999 : (Number(profile?.maxAccounts) || 1);
+
+    if (currentList.length >= maxPermitted) {
+      showToast(`Store limit reached (${maxPermitted} stores permitted). Upgrade plan to add more.`, 'error');
+      return;
+    }
+
+    setAddingFollowStore(true);
+    try {
+      const updatedList = [
+        ...currentList,
+        {
+          id: Date.now().toString(),
+          name: newFollowStoreName.trim(),
+          url: newFollowStoreUrl.trim()
+        }
+      ];
+
+      await updateDoc(doc(db, 'users', user.uid), {
+        followStores: updatedList
+      });
+
+      setProfile(prev => ({ ...prev, followStores: updatedList }));
+      try {
+        localStorage.setItem('cached_user_profile', JSON.stringify({ ...profile, followStores: updatedList }));
+        localStorage.setItem('om_follow_stores', JSON.stringify(updatedList));
+      } catch {}
+
+      setNewFollowStoreName('');
+      setNewFollowStoreUrl('');
+      showToast('Store profile added successfully!', 'success');
+    } catch (err) {
+      showToast(`Error adding store: ${err.message}`, 'error');
+    } finally {
+      setAddingFollowStore(false);
+    }
+  };
+
+  const handleDeleteFollowStore = async (storeId) => {
+    const currentList = Array.isArray(profile?.followStores) ? profile.followStores : [];
+    const updatedList = currentList.filter(s => s.id !== storeId);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        followStores: updatedList
+      });
+      setProfile(prev => ({ ...prev, followStores: updatedList }));
+      try {
+        localStorage.setItem('cached_user_profile', JSON.stringify({ ...profile, followStores: updatedList }));
+        localStorage.setItem('om_follow_stores', JSON.stringify(updatedList));
+      } catch {}
+      showToast('Store profile removed', 'info');
+    } catch (err) {
+      showToast(`Error deleting store: ${err.message}`, 'error');
+    }
+  };
+
+
   // Admin Panel State
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminInputPass, setAdminInputPass] = useState('');
@@ -3015,7 +3090,78 @@ export default function App() {
               </div>
             </div>
 
+            {/* Follow Us Page Store Profiles (QR & Labels) */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3.5 shadow-md">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <QrCode className="w-4 h-4 text-cyan-400" />
+                  <span className="font-bold text-sm text-white">Follow Us Store Profiles</span>
+                </div>
+                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                  {(profile?.followStores || []).length} / {isSuperAdmin ? '∞' : (Number(profile?.maxAccounts) || 1)} Stores Added
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Add your store names &amp; links here. They will automatically appear in the <strong className="text-white">Follow Us dropdown</strong> on the Label Cropper page!
+              </p>
+
+              {/* Existing Stores List */}
+              <div className="space-y-2">
+                {(profile?.followStores || []).map((store) => (
+                  <div key={store.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <div className="font-bold text-white text-xs truncate">{store.name}</div>
+                      <div className="text-[10px] text-cyan-400 font-mono truncate">{store.url}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFollowStore(store.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      title="Remove store profile"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Store Form */}
+              {(profile?.followStores || []).length < (isSuperAdmin ? 999 : (Number(profile?.maxAccounts) || 1)) ? (
+                <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-800/60 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-300">Add New Store Profile:</div>
+                  <input
+                    type="text"
+                    value={newFollowStoreName}
+                    onChange={(e) => setNewFollowStoreName(e.target.value)}
+                    placeholder="Store Name (e.g. RR Traders)"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <input
+                    type="url"
+                    value={newFollowStoreUrl}
+                    onChange={(e) => setNewFollowStoreUrl(e.target.value)}
+                    placeholder="Profile URL (e.g. https://meesho.com/...)"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={addingFollowStore}
+                    className="w-full py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{addingFollowStore ? 'Saving...' : 'Add Store Profile'}</span>
+                  </button>
+                </form>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300">
+                  Store slot quota reached ({Number(profile?.maxAccounts) || 1} permitted). Upgrade your plan or contact admin to add more stores.
+                </div>
+              )}
+            </div>
+
             {/* Account Details Box */}
+
             <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-2.5">
               <div className="flex items-center justify-between text-slate-400">
                 <span>Account Role</span>
@@ -3158,8 +3304,13 @@ export default function App() {
           </div>
         ) : activeTab === 'cropper' ? (
           <CropperErrorBoundary>
-            <LabelCropper showToast={showToast} />
+            <LabelCropper
+              showToast={showToast}
+              followStores={profile?.followStores || []}
+              onNavigateTab={setActiveTab}
+            />
           </CropperErrorBoundary>
+
         ) : (
           <>
             {/* ================= ADMIN VIEW (SUPER ADMIN ONLY - ZERO OTPs) ================= */}
