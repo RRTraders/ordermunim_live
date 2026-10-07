@@ -2857,15 +2857,6 @@ export default function App() {
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
               <span className="text-xs font-bold text-white">OrdersMunim</span>
-              {isMobileApp ? (
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                  <Smartphone className="w-2.5 h-2.5" /> App v{installedVersionName}
-                </span>
-              ) : (
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
-                  <Globe className="w-2.5 h-2.5" /> Web v{CURRENT_APP_VERSION_NAME}
-                </span>
-              )}
             </div>
           </div>
 
@@ -2958,126 +2949,36 @@ export default function App() {
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                 </strong>
               </div>
-            </div>
-
-            {/* Platform & Environment Detection Box */}
-            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3 shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {isMobileApp ? (
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Globe className="w-4 h-4 text-cyan-400" />
-                  )}
-                  <span className="font-bold text-white text-sm">App Environment</span>
+              {isMobileApp && (
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>App Version</span>
+                  <div className="flex items-center gap-2">
+                    <strong className="text-white font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
+                    {installedVersionCode >= (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <Check className="w-2.5 h-2.5" /> Up to date
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                        Update Available
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {isMobileApp ? (
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                    <Smartphone className="w-3 h-3 text-emerald-400" /> Mobile App (APK)
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
-                    <Globe className="w-3 h-3 text-cyan-400" /> Web Browser (Website)
-                  </span>
-                )}
-              </div>
-
-              <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800/90 space-y-2.5">
-                {isMobileApp ? (
-                  <>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Running On</span>
-                      <strong className="text-emerald-400 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Android Mobile App
-                      </strong>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Installed APK Version</span>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-white font-mono font-bold">v{installedVersionName}</strong>
-                        <span className="text-[10px] text-slate-400 font-mono">(Build {installedVersionCode})</span>
-                        {installedVersionCode >= (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                            <Check className="w-2.5 h-2.5" /> Up to date
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                            Update Available
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Live Web Engine</span>
-                      <div className="flex items-center gap-1.5">
-                        <strong className="text-cyan-300 font-mono font-bold">v{CURRENT_APP_VERSION_NAME}</strong>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" /> Cloud Sync
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Package ID</span>
-                      <strong className="text-slate-300 font-mono text-[11px]">{appPlatformInfo.packageName || 'com.rrtraders.meeshootp'}</strong>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Running On</span>
-                      <strong className="text-cyan-400 flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                        Website / Web Browser
-                      </strong>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Website Version</span>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-white font-mono font-bold">v{CURRENT_APP_VERSION_NAME}</strong>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                          <Check className="w-2.5 h-2.5" /> Up to date
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Android Mobile App</span>
-                      <div className="flex items-center gap-1.5">
-                        <strong className="text-slate-300 font-mono">v{CURRENT_APP_VERSION_NAME}</strong>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 border border-slate-700">
-                          Ready for Download
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Action Button */}
-              {isMobileApp ? (
-                installedVersionCode < (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) && (
-                  <button
-                    type="button"
-                    onClick={() => handleInstallAppUpdate(appUpdateConfig?.downloadUrl)}
-                    className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
-                  >
-                    <DownloadCloud className="w-3.5 h-3.5" />
-                    Update APK to v{appUpdateConfig?.versionName || CURRENT_APP_VERSION_NAME}
-                  </button>
-                )
-              ) : (
-                <a
-                  href="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
-                  download="meesho_otp.apk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer no-underline"
-                >
-                  <DownloadCloud className="w-3.5 h-3.5" />
-                  Download Android Mobile App (v2.5 APK)
-                </a>
               )}
             </div>
+
+            {/* In-App APK Update Action Button if update is available */}
+            {isMobileApp && installedVersionCode < (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) && (
+              <button
+                type="button"
+                onClick={() => handleInstallAppUpdate(appUpdateConfig?.downloadUrl)}
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              >
+                <DownloadCloud className="w-3.5 h-3.5" />
+                Update App to v{appUpdateConfig?.versionName || CURRENT_APP_VERSION_NAME}
+              </button>
+            )}
 
             {/* App Update Broadcast Section (Super Admin Only) */}
             {isSuperAdmin && (
@@ -3116,7 +3017,7 @@ export default function App() {
             )}
 
             {/* Background Sync & Battery Optimization Card (Mobile App Only) */}
-            {isMobileApp ? (
+            {isMobileApp && (
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-white flex items-center gap-1.5">
@@ -3148,31 +3049,6 @@ export default function App() {
                     App Settings / Permissions
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Smartphone className="w-4 h-4 text-cyan-400" />
-                    OrderMunim Android App (v2.5)
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                    Recommended
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  For 24/7 background Meesho OTP sound alerts, client-side store encryption, and seamless single-click label printing, install our Android Mobile App on your device.
-                </p>
-                <a
-                  href="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
-                  download="meesho_otp.apk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer no-underline"
-                >
-                  <DownloadCloud className="w-3.5 h-3.5 text-cyan-400" />
-                  Download meesho_otp.apk (v2.5)
-                </a>
               </div>
             )}
 
