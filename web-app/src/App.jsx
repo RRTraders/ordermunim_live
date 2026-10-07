@@ -103,9 +103,56 @@ export const getDeviceId = () => {
   }
 };
 
+// Persistent Auth Session Backup — guarantees user stays logged in across updates & webview refreshes
+export const savePersistentAuth = (email, password, role = 'customer') => {
+  try {
+    if (!email || !password) return;
+    const payload = JSON.stringify({ email: email.trim(), password, role, savedAt: Date.now() });
+    const encoded = btoa(encodeURIComponent(payload));
+    localStorage.setItem('om_persistent_auth_token', encoded);
+    if (typeof document !== 'undefined') {
+      document.cookie = `om_persistent_auth_token=${encoded}; max-age=31536000; path=/; SameSite=Lax`;
+    }
+  } catch (err) {
+    console.warn('[Persistent Auth] Save error:', err);
+  }
+};
+
+export const getPersistentAuth = () => {
+  try {
+    let encoded = localStorage.getItem('om_persistent_auth_token');
+    if (!encoded && typeof document !== 'undefined') {
+      const match = document.cookie.match(/om_persistent_auth_token=([^;]+)/);
+      if (match) {
+        encoded = match[1];
+        try { localStorage.setItem('om_persistent_auth_token', encoded); } catch {}
+      }
+    }
+    if (!encoded) return null;
+    const jsonStr = decodeURIComponent(atob(encoded));
+    const data = JSON.parse(jsonStr);
+    if (data && data.email && data.password) {
+      return data;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+};
+
+export const clearPersistentAuth = () => {
+  try {
+    localStorage.removeItem('om_persistent_auth_token');
+    if (typeof document !== 'undefined') {
+      document.cookie = 'om_persistent_auth_token=; max-age=0; path=/; SameSite=Lax';
+    }
+  } catch {}
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const authRestoringRef = useRef(false);
 
   // Fancy Dialog & Toast Notifications state
   const [modalError, setModalError] = useState('');
@@ -368,6 +415,28 @@ export default function App() {
       cleanupProfile();
 
       if (!currentUser) {
+        // Auto-login restoration check:
+        const savedAuth = getPersistentAuth();
+        if (savedAuth && savedAuth.email && savedAuth.password && !authRestoringRef.current) {
+          authRestoringRef.current = true;
+          try {
+            console.log('[Persistent Auth] Silently restoring session for:', savedAuth.email);
+            setLoading(true);
+            const cred = await signInWithEmailAndPassword(auth, savedAuth.email, savedAuth.password);
+            if (cred && cred.user) {
+              authRestoringRef.current = false;
+              // onAuthStateChanged will automatically fire with cred.user!
+              return;
+            }
+          } catch (autoErr) {
+            console.warn('[Persistent Auth] Auto-restore session error:', autoErr);
+            authRestoringRef.current = false;
+            if (autoErr.code === 'auth/wrong-password' || autoErr.code === 'auth/user-not-found') {
+              clearPersistentAuth();
+            }
+          }
+        }
+
         setUser(null);
         setEmailNeedsVerification(false);
         setLoading(false);
@@ -379,13 +448,6 @@ export default function App() {
             syncBackgroundSessions({});
           } catch {}
         }
-        try {
-          localStorage.removeItem('om_active_user_uid');
-          localStorage.removeItem('native_meesho_sessions');
-          localStorage.removeItem('cached_user_accounts');
-          localStorage.removeItem('cached_user_profile');
-          clearVault();
-        } catch {}
         return;
       }
 
@@ -998,11 +1060,13 @@ export default function App() {
 
       setEmailNeedsVerification(false);
       setUser(currentUser);
+      savePersistentAuth(customerEmail.trim(), customerPassword, 'customer');
       await loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
     } catch (err) {
       console.error("Customer login error:", err);
       // Fallback matching Super Admin credentials
       if (customerEmail.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && customerPassword === '@rrt123') {
+        savePersistentAuth(SUPER_ADMIN_EMAIL, '@rrt123', 'admin');
         const localAdmin = {
           uid: 'vJID6QrALTf4ybiDP5TuLvNkyN63',
           email: 'rrtradersofficials@gmail.com',
@@ -1165,11 +1229,13 @@ export default function App() {
     try {
       const userCred = await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPassword);
       setUser(userCred.user);
+      savePersistentAuth(adminEmail.trim(), adminPassword, 'admin');
       await loadUserProfile(userCred.user.uid, '', userCred.user.email);
     } catch (err) {
       console.error("Firebase admin login error:", err);
       // Fallback matching credentials
       if (adminEmail.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && adminPassword === '@rrt123') {
+        savePersistentAuth(SUPER_ADMIN_EMAIL, '@rrt123', 'admin');
         const localAdmin = {
           uid: 'vJID6QrALTf4ybiDP5TuLvNkyN63',
           email: 'rrtradersofficials@gmail.com',
@@ -1186,6 +1252,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    clearPersistentAuth();
     if (isNativeMobile()) {
       try {
         await stopBackgroundMonitoring();
@@ -1193,6 +1260,7 @@ export default function App() {
       } catch {}
     }
     try {
+      localStorage.removeItem('om_active_user_uid');
       localStorage.removeItem('native_meesho_sessions');
       localStorage.removeItem('cached_user_profile');
       localStorage.removeItem('cached_user_accounts');
