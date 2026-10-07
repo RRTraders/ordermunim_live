@@ -81,7 +81,9 @@ import {
   Smartphone,
   Globe,
   QrCode,
-  Store
+  Store,
+  Edit3,
+  Calendar
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
@@ -289,12 +291,39 @@ export default function App() {
   const [reconnectLoading, setReconnectLoading] = useState(false);
   const [reconnectError, setReconnectError] = useState('');
 
-  // Live Indian Standard Time (IST) Clock for Video Proof & Verification
+  // Live / Custom Indian Standard Time (IST) Clock for Video Proof & Verification
+  const [clockMode, setClockMode] = useState(() => {
+    try {
+      return localStorage.getItem('om_clock_mode') || 'live';
+    } catch {
+      return 'live';
+    }
+  });
+  const [customClockOffsetMs, setCustomClockOffsetMs] = useState(() => {
+    try {
+      const stored = localStorage.getItem('om_clock_offset_ms');
+      return stored ? Number(stored) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [showClockModal, setShowClockModal] = useState(false);
+  const [editDateStr, setEditDateStr] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
+  const [editTimeStr, setEditTimeStr] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+
   const [currentIstTime, setCurrentIstTime] = useState('');
   useEffect(() => {
     const updateTime = () => {
       try {
-        const now = new Date();
+        const nowMs = Date.now();
+        const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
+        const targetDate = new Date(effectiveMs);
         const options = {
           timeZone: 'Asia/Kolkata',
           day: '2-digit',
@@ -305,7 +334,7 @@ export default function App() {
           second: '2-digit',
           hour12: true,
         };
-        setCurrentIstTime(new Intl.DateTimeFormat('en-IN', options).format(now));
+        setCurrentIstTime(new Intl.DateTimeFormat('en-IN', options).format(targetDate));
       } catch (e) {
         setCurrentIstTime(new Date().toLocaleTimeString());
       }
@@ -313,7 +342,55 @@ export default function App() {
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [clockMode, customClockOffsetMs]);
+
+  const handleOpenClockModal = () => {
+    try {
+      const nowMs = Date.now();
+      const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
+      const d = new Date(effectiveMs);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      setEditDateStr(`${yyyy}-${mm}-${dd}`);
+      setEditTimeStr(`${hh}:${min}`);
+    } catch {}
+    setShowClockModal(true);
+  };
+
+  const handleApplyCustomTime = (e) => {
+    e.preventDefault();
+    if (!editDateStr || !editTimeStr) {
+      showToast('Please select valid date and time', 'error');
+      return;
+    }
+    try {
+      const [year, month, day] = editDateStr.split('-').map(Number);
+      const [hour, minute] = editTimeStr.split(':').map(Number);
+      const chosen = new Date(year, month - 1, day, hour, minute, 0);
+      const offset = chosen.getTime() - Date.now();
+      
+      setCustomClockOffsetMs(offset);
+      setClockMode('custom');
+      localStorage.setItem('om_clock_mode', 'custom');
+      localStorage.setItem('om_clock_offset_ms', String(offset));
+      setShowClockModal(false);
+      showToast('Custom Date & Time applied! Clock is ticking live from this time.', 'success');
+    } catch (err) {
+      showToast(`Error applying custom time: ${err.message}`, 'error');
+    }
+  };
+
+  const handleResetToLiveTime = () => {
+    setClockMode('live');
+    setCustomClockOffsetMs(0);
+    localStorage.setItem('om_clock_mode', 'live');
+    localStorage.removeItem('om_clock_offset_ms');
+    setShowClockModal(false);
+    showToast('Reset to Live Real-Time Indian Standard Time (IST)', 'info');
+  };
 
   // Follow Us Store Profile Links State
   const [newFollowStoreName, setNewFollowStoreName] = useState('');
@@ -3041,17 +3118,31 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center: Live Indian Date & Time (IST) for Video Proof & Welcome User */}
+          {/* Center: Live / Custom Indian Date & Time (IST) for Video Proof & Welcome User */}
           <div className="flex-1 flex flex-col items-center justify-center px-1 text-center min-w-0">
-            {/* Live Indian Date & Time Badge (High visibility for Webcam/Camera unboxing recording) */}
-            <div 
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-emerald-500/40 text-emerald-400 font-mono text-[11px] sm:text-xs font-bold tracking-wider shadow-inner select-none"
-              title="Live Indian Standard Time (IST) for Parcel Unboxing & Video Proof"
+            {/* Live Indian Date & Time Badge (Click to Edit Date & Time) */}
+            <button
+              type="button"
+              onClick={handleOpenClockModal}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border transition-all text-mono text-[11px] sm:text-xs font-bold tracking-wider shadow-inner cursor-pointer group ${
+                clockMode === 'custom'
+                  ? 'border-amber-500/50 text-amber-300 hover:border-amber-400'
+                  : 'border-emerald-500/40 text-emerald-400 hover:border-emerald-400'
+              }`}
+              title="Click to edit / customize Date & Time for webcam video proof"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-              <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="whitespace-nowrap">{currentIstTime || 'Loading IST...'}</span>
-            </div>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                clockMode === 'custom' ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'
+              }`}></span>
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap font-mono">{currentIstTime || 'Loading IST...'}</span>
+              <Edit3 className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity shrink-0 ml-0.5 text-cyan-400" />
+              {clockMode === 'custom' && (
+                <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded uppercase font-sans font-bold">
+                  Custom
+                </span>
+              )}
+            </button>
 
             {/* Welcome User / Profile shortcut */}
             <div 
@@ -4499,6 +4590,102 @@ export default function App() {
         >
           <Plus className="w-7 h-7 stroke-[2.5]" />
         </button>
+      )}
+
+      {/* ================= EDIT DATE & TIME MODAL (FOR VIDEO PROOF & UNBOXING) ================= */}
+      {showClockModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Edit Date & Time</h3>
+                  <p className="text-[11px] text-slate-400">Webcam Proof & Unboxing Timestamp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowClockModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Display Status */}
+            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 text-center space-y-1">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Currently Showing on Screen:</span>
+              <div className="font-mono text-sm font-bold text-emerald-400 tracking-wider">
+                {currentIstTime}
+              </div>
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                <span className={`w-2 h-2 rounded-full ${clockMode === 'custom' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                <span className="text-[10px] text-slate-300 font-semibold">
+                  Mode: <strong className={clockMode === 'custom' ? 'text-amber-400' : 'text-emerald-400'}>
+                    {clockMode === 'custom' ? 'Custom / Edited (Ticking Live)' : 'Live Real-Time IST'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Form to Set Custom Date & Time */}
+            <form onSubmit={handleApplyCustomTime} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                  Select Date
+                </label>
+                <input
+                  type="date"
+                  value={editDateStr}
+                  onChange={(e) => setEditDateStr(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  Select Time
+                </label>
+                <input
+                  type="time"
+                  step="1"
+                  value={editTimeStr}
+                  onChange={(e) => setEditTimeStr(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+                💡 <strong>Tip for webcam recording:</strong> The clock will continuously tick forward second-by-second from this edited time, making the unboxing video look 100% natural and convincing!
+              </p>
+
+              <div className="flex items-center gap-2 pt-1">
+                {clockMode === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={handleResetToLiveTime}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-colors cursor-pointer border border-slate-700"
+                  >
+                    Reset to Live IST
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+                >
+                  Set Custom Time
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ================= FANCY CONFIRMATION DIALOG ================= */}
