@@ -20,11 +20,21 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshoDirectPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // 1. Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
+        // 1. Request Runtime Permissions (Notifications, Camera, and Audio)
+        java.util.List<String> permissionsToRequest = new java.util.ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS);
             }
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.CAMERA);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (!permissionsToRequest.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest.toArray(new String[0]), 101);
         }
 
         // 2. Request Battery Optimization Exemption so Android never kills the 24/7 OTP service
