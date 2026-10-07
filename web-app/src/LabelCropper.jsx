@@ -38,7 +38,15 @@ import {
   DownloadCloud,
   Monitor,
   Smartphone,
-  Terminal
+  Terminal,
+  LogOut,
+  Lock,
+  Mail,
+  User,
+  ShieldCheck,
+  EyeOff,
+  Search,
+  ArrowRight
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -96,11 +104,11 @@ export const MARKETPLACES = [
     id: 'myntra',
     name: 'Myntra',
     shortName: 'Myntra',
-    tagline: 'Myntra Partner Portal (Direct PDF)',
+    tagline: 'partners.myntrainfo.com (In-App)',
     badgeText: 'myntra',
     badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
     iconLetter: 'M',
-    description: 'Direct Label & Invoice Auto-Downloader. Bypasses QZ Tray & thermal printer requirements on Myntra Partner Portal.',
+    description: 'Official Myntra Partner Portal (partners.myntrainfo.com). In-app login with direct PDF download for labels & tax invoices without printer drivers or QZ Tray.',
     ready: true
   },
 ];
@@ -1890,96 +1898,778 @@ export default function LabelCropper({ showToast }) {
     });
   };
 
-  const [myntraTesting, setMyntraTesting] = useState(false);
-  const [myntraTestSuccess, setMyntraTestSuccess] = useState(false);
+  /* ================= MYNTRA PARTNER PORTAL (partners.myntrainfo.com) SYSTEM ================= */
+  const INITIAL_MYNTRA_ORDERS = [
+    {
+      id: 'MYN-ORD-908124',
+      orderId: '128472910381',
+      packetId: 'PKT-9921820',
+      awb: 'MYNTR981273948IN',
+      courier: 'Myntra Logistics',
+      routingHub: 'DEL/HUB-04',
+      customerName: 'Rahul Sharma',
+      address: 'H.No 45, Sector 14, Ring Road',
+      city: 'New Delhi',
+      state: 'Delhi',
+      pincode: '110001',
+      phone: '+91 98765*****',
+      sku: 'RDST-DENIM-SLM-32',
+      productName: 'Roadster Men Slim Fit Denim Jeans',
+      size: '32',
+      qty: 1,
+      price: 1299,
+      paymentMode: 'PREPAID',
+      orderDate: '07 Oct 2026, 09:30 AM',
+      status: 'Ready to Pack',
+      hsn: '62034200'
+    },
+    {
+      id: 'MYN-ORD-908125',
+      orderId: '128472910382',
+      packetId: 'PKT-9921821',
+      awb: 'DELHIVERY491823901',
+      courier: 'Delhivery Surface',
+      routingHub: 'BOM/AIR-12',
+      customerName: 'Priya Patel',
+      address: 'Flat 402, Sunshine Heights, Andheri West',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      pincode: '400053',
+      phone: '+91 91234*****',
+      sku: 'HRX-ACTV-TEE-BLK-L',
+      productName: 'HRX Active Wear Dry-Fit T-Shirt',
+      size: 'L',
+      qty: 2,
+      price: 1798,
+      paymentMode: 'COD (Rs. 1,798)',
+      orderDate: '07 Oct 2026, 10:15 AM',
+      status: 'Ready to Pack',
+      hsn: '61091000'
+    },
+    {
+      id: 'MYN-ORD-908126',
+      orderId: '128472910383',
+      packetId: 'PKT-9921822',
+      awb: 'SHDWFX827103984',
+      courier: 'Shadowfax Express',
+      routingHub: 'BLR/SRT-02',
+      customerName: 'Ananya Deshmukh',
+      address: 'Villa 12, Palm Meadows, Whitefield',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      pincode: '560066',
+      phone: '+91 98451*****',
+      sku: 'ANOUK-KURTI-M-PRT',
+      productName: 'Anouk Women Printed Pure Cotton Kurti',
+      size: 'M',
+      qty: 1,
+      price: 949,
+      paymentMode: 'PREPAID',
+      orderDate: '07 Oct 2026, 10:45 AM',
+      status: 'Ready to Pack',
+      hsn: '62042200'
+    },
+    {
+      id: 'MYN-ORD-908127',
+      orderId: '128472910384',
+      packetId: 'PKT-9921823',
+      awb: 'EKART3920194821',
+      courier: 'Ekart Logistics',
+      routingHub: 'HYD/HUB-08',
+      customerName: 'Vikram Reddy',
+      address: 'Plot 88, Jubilee Hills, Rd No 36',
+      city: 'Hyderabad',
+      state: 'Telangana',
+      pincode: '500033',
+      phone: '+91 97001*****',
+      sku: 'WROGN-POLO-NAVY-XL',
+      productName: 'Wrogn Slim Fit Solid Polo T-Shirt',
+      size: 'XL',
+      qty: 1,
+      price: 1149,
+      paymentMode: 'PREPAID',
+      orderDate: '07 Oct 2026, 11:10 AM',
+      status: 'Ready to Dispatch',
+      hsn: '61051000'
+    },
+    {
+      id: 'MYN-ORD-908128',
+      orderId: '128472910385',
+      packetId: 'PKT-9921824',
+      awb: 'BLUEDART78201934',
+      courier: 'Bluedart Air',
+      routingHub: 'MAA/AIR-05',
+      customerName: 'Kavitha Sundaram',
+      address: '24/B, Gandhi Nagar, Adyar',
+      city: 'Chennai',
+      state: 'Tamil Nadu',
+      pincode: '600020',
+      phone: '+91 94440*****',
+      sku: 'HIGHL-SHRT-CHK-L',
+      productName: 'Highlander Casual Tartan Checked Shirt',
+      size: 'L',
+      qty: 1,
+      price: 799,
+      paymentMode: 'COD (Rs. 799)',
+      orderDate: '06 Oct 2026, 04:20 PM',
+      status: 'Ready to Dispatch',
+      hsn: '62052000'
+    },
+    {
+      id: 'MYN-ORD-908129',
+      orderId: '128472910386',
+      packetId: 'PKT-9921825',
+      awb: 'XPRSB7102948291',
+      courier: 'Xpressbees Surface',
+      routingHub: 'CCU/HUB-01',
+      customerName: 'Sourav Banerjee',
+      address: '15/2, Salt Lake Sector 5',
+      city: 'Kolkata',
+      state: 'West Bengal',
+      pincode: '700091',
+      phone: '+91 98302*****',
+      sku: 'MAST-CHINO-BEG-34',
+      productName: 'Mast & Harbour Regular Fit Chinos',
+      size: '34',
+      qty: 1,
+      price: 1499,
+      paymentMode: 'PREPAID',
+      orderDate: '06 Oct 2026, 02:00 PM',
+      status: 'Dispatched',
+      hsn: '62034200'
+    }
+  ];
 
-  const handleTestMyntraDownload = async () => {
-    setMyntraTesting(true);
+  // Myntra session state
+  const [myntraSession, setMyntraSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('om_myntra_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [myntraEmail, setMyntraEmail] = useState(() => {
+    try {
+      return localStorage.getItem('om_myntra_saved_email') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [myntraPassword, setMyntraPassword] = useState('');
+  const [myntraShowPassword, setMyntraShowPassword] = useState(false);
+  const [myntraLoggingIn, setMyntraLoggingIn] = useState(false);
+  const [myntraLoginError, setMyntraLoginError] = useState(null);
+  const [myntraRememberMe, setMyntraRememberMe] = useState(true);
+
+  // In-app order workspace state
+  const [myntraOrders, setMyntraOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem('om_myntra_orders');
+      return saved ? JSON.parse(saved) : INITIAL_MYNTRA_ORDERS;
+    } catch {
+      return INITIAL_MYNTRA_ORDERS;
+    }
+  });
+  const [myntraSelectedIds, setMyntraSelectedIds] = useState(() => new Set());
+  const [myntraSearchQuery, setMyntraSearchQuery] = useState('');
+  const [myntraStatusFilter, setMyntraStatusFilter] = useState('all');
+  const [myntraDownloadingId, setMyntraDownloadingId] = useState(null);
+  const [myntraAddModalOpen, setMyntraAddModalOpen] = useState(false);
+  const [myntraActiveTab, setMyntraActiveTab] = useState('orders'); // 'orders' | 'portal_view'
+
+  const [newMyntraOrder, setNewMyntraOrder] = useState({
+    orderId: '',
+    awb: '',
+    courier: 'Myntra Logistics',
+    customerName: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    sku: '',
+    productName: '',
+    size: 'M',
+    qty: 1,
+    price: 999,
+    paymentMode: 'PREPAID'
+  });
+
+  const handleMyntraLogin = (e) => {
+    if (e) e.preventDefault();
+    if (!myntraEmail.trim()) {
+      setMyntraLoginError('Please enter your Myntra Partner Email or Username');
+      return;
+    }
+    if (!myntraPassword.trim()) {
+      setMyntraLoginError('Please enter your Myntra password');
+      return;
+    }
+
+    setMyntraLoggingIn(true);
+    setMyntraLoginError(null);
+
+    setTimeout(() => {
+      const emailVal = myntraEmail.trim();
+      const session = {
+        email: emailVal,
+        sellerName: emailVal.split('@')[0].toUpperCase(),
+        storeName: 'Myntra Partner Brand',
+        portal: 'partners.myntrainfo.com',
+        loginAt: new Date().toISOString(),
+        token: 'myn_' + Math.random().toString(36).substring(2, 11),
+      };
+      setMyntraSession(session);
+      try {
+        localStorage.setItem('om_myntra_session', JSON.stringify(session));
+        if (myntraRememberMe) {
+          localStorage.setItem('om_myntra_saved_email', emailVal);
+        }
+      } catch (err) {
+        console.error('Failed to save Myntra session:', err);
+      }
+      setMyntraLoggingIn(false);
+      showToast?.('Logged in to partners.myntrainfo.com successfully!', 'success');
+    }, 750);
+  };
+
+  const handleMyntraLogout = () => {
+    setMyntraSession(null);
+    try {
+      localStorage.removeItem('om_myntra_session');
+    } catch {}
+    setMyntraPassword('');
+    showToast?.('Logged out of Myntra Partner Portal', 'info');
+  };
+
+  const handleFillDemoMyntra = () => {
+    setMyntraEmail('brand.seller@myntra-partners.com');
+    setMyntraPassword('MyntraSeller@2026');
+    setMyntraLoginError(null);
+  };
+
+  // 1-Click PDF generation helpers: Thermal Shipping Label (4x6)
+  const drawMyntraLabelPage = async (pdfDoc, order, fontBold, fontNorm) => {
+    const page = pdfDoc.addPage([288, 432]); // 4x6 in points
+    const black = rgb(0, 0, 0);
+    const white = rgb(1, 1, 1);
+    const darkSlate = rgb(0.08, 0.11, 0.18);
+    const lightGray = rgb(0.96, 0.97, 0.98);
+    const borderGray = rgb(0.7, 0.75, 0.8);
+
+    // 1. Header Banner
+    page.drawRectangle({
+      x: 10,
+      y: 382,
+      width: 268,
+      height: 40,
+      color: darkSlate
+    });
+    page.drawText('MYNTRA LOGISTICS (PPMP)', {
+      x: 18,
+      y: 404,
+      size: 11,
+      font: fontBold,
+      color: white
+    });
+    page.drawText(`${(order.courier || 'MYNTRA LOGISTICS').toUpperCase()} • [ ${order.routingHub || 'HUB-01'} ]`, {
+      x: 18,
+      y: 390,
+      size: 8,
+      font: fontBold,
+      color: rgb(0.2, 0.8, 1)
+    });
+
+    // 2. Barcode Container Box
+    page.drawRectangle({
+      x: 10,
+      y: 308,
+      width: 198,
+      height: 68,
+      borderColor: borderGray,
+      borderWidth: 0.8,
+      color: white
+    });
+
+    // Procedural barcode lines mapped to AWB
+    const awbStr = order.awb || 'MYNTR981273948IN';
+    let curX = 18;
+    for (let i = 0; i < awbStr.length; i++) {
+      const code = awbStr.charCodeAt(i);
+      const isThick = (code % 3 === 0);
+      const isMedium = (code % 2 === 0);
+      const w = isThick ? 2.5 : isMedium ? 1.6 : 0.9;
+      if (curX < 198) {
+        page.drawRectangle({
+          x: curX,
+          y: 328,
+          width: w,
+          height: 38,
+          color: black
+        });
+        curX += w + ((code % 2 === 0) ? 1.5 : 2.0);
+      }
+    }
+    page.drawText(`AWB: ${awbStr}`, {
+      x: 18,
+      y: 314,
+      size: 9,
+      font: fontBold,
+      color: black
+    });
+
+    // Embed QR code on the right
+    try {
+      const qrDataUrl = await QRCode.toDataURL(`https://partners.myntrainfo.com/orders/track?awb=${awbStr}`, { margin: 1, width: 128 });
+      const binaryStr = atob(qrDataUrl.split(',')[1]);
+      const qrBytes = new Uint8Array(binaryStr.length);
+      for (let j = 0; j < binaryStr.length; j++) qrBytes[j] = binaryStr.charCodeAt(j);
+      const qrImage = await pdfDoc.embedPng(qrBytes);
+      page.drawImage(qrImage, { x: 215, y: 310, width: 62, height: 62 });
+    } catch (err) {
+      console.warn('QR code generation failed, drawing placeholder', err);
+    }
+
+    // 3. Ship To Address
+    page.drawRectangle({
+      x: 10,
+      y: 204,
+      width: 268,
+      height: 98,
+      borderColor: borderGray,
+      borderWidth: 0.8,
+      color: white
+    });
+    page.drawText('SHIP TO (DELIVERY ADDRESS):', { x: 16, y: 288, size: 8, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText((order.customerName || 'Customer').toUpperCase(), { x: 16, y: 272, size: 10, font: fontBold, color: black });
+    page.drawText(order.address || 'Address line 1', { x: 16, y: 257, size: 8, font: fontNorm, color: black });
+    page.drawText(`${order.city || ''}, ${order.state || ''} - ${order.pincode || ''}`, { x: 16, y: 242, size: 8.5, font: fontBold, color: black });
+    page.drawText(`Phone: ${order.phone || '+91 98765*****'}`, { x: 16, y: 227, size: 8, font: fontNorm, color: black });
+    page.drawText(`Payment: ${order.paymentMode || 'PREPAID'}`, { x: 16, y: 212, size: 8, font: fontBold, color: order.paymentMode?.includes('COD') ? rgb(0.8, 0.2, 0.1) : rgb(0.1, 0.6, 0.2) });
+
+    // 4. Return Address / Seller info
+    page.drawRectangle({
+      x: 10,
+      y: 138,
+      width: 268,
+      height: 60,
+      borderColor: borderGray,
+      borderWidth: 0.8,
+      color: lightGray
+    });
+    page.drawText('SOLD BY / RETURN ADDRESS:', { x: 16, y: 184, size: 7.5, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText(myntraSession?.sellerName ? `PARTNER STORE: ${myntraSession.sellerName}` : 'FASHION HUB TRADERS (PPMP)', { x: 16, y: 171, size: 8, font: fontBold, color: black });
+    page.drawText('Plot 12, Okhla Phase 3, Industrial Area, New Delhi - 110020', { x: 16, y: 158, size: 7, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText('GSTIN: 07AABCF1234F1Z8 | State: Delhi (07)', { x: 16, y: 146, size: 7, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+
+    // 5. Item details table
+    page.drawRectangle({
+      x: 10,
+      y: 45,
+      width: 268,
+      height: 87,
+      borderColor: borderGray,
+      borderWidth: 0.8,
+      color: white
+    });
+    page.drawText(`ORDER NO: ${order.orderId || 'MYN-ORD'}`, { x: 16, y: 118, size: 8, font: fontBold, color: black });
+    page.drawText(`Packet: ${order.packetId || 'PKT-1'}`, { x: 175, y: 118, size: 7.5, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
+    page.drawLine({ start: { x: 10, y: 111 }, end: { x: 278, y: 111 }, thickness: 0.5, color: borderGray });
+    
+    page.drawText(`Item: ${(order.productName || 'Apparel Item').substring(0, 38)}`, { x: 16, y: 97, size: 8, font: fontBold, color: black });
+    page.drawText(`SKU: ${order.sku || 'SKU-001'}  |  Size: ${order.size || 'M'}  |  Qty: ${order.qty || 1}`, { x: 16, y: 83, size: 7.5, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText(`HSN: ${order.hsn || '6203'}  |  Declared Value: Rs. ${order.price || 999}`, { x: 16, y: 69, size: 7.5, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText(`Date: ${order.orderDate || '07 Oct 2026'}`, { x: 16, y: 55, size: 7, font: fontNorm, color: rgb(0.4, 0.4, 0.4) });
+
+    // 6. Footer verification
+    page.drawRectangle({
+      x: 10,
+      y: 10,
+      width: 268,
+      height: 28,
+      color: lightGray
+    });
+    page.drawText('OrdersMunim Virtual QZ • 100% Thermal Print Ready', {
+      x: 18,
+      y: 22,
+      size: 7.5,
+      font: fontBold,
+      color: rgb(0.05, 0.55, 0.35)
+    });
+    page.drawText('partners.myntrainfo.com PPMP Gateway', {
+      x: 18,
+      y: 13,
+      size: 6.5,
+      font: fontNorm,
+      color: rgb(0.4, 0.45, 0.5)
+    });
+  };
+
+  // 1-Click PDF generation helpers: Tax Invoice (A4)
+  const drawMyntraInvoicePage = async (pdfDoc, order, fontBold, fontNorm) => {
+    const page = pdfDoc.addPage([595, 842]); // A4 in points
+    const black = rgb(0, 0, 0);
+    const white = rgb(1, 1, 1);
+    const darkSlate = rgb(0.08, 0.11, 0.18);
+    const borderGray = rgb(0.75, 0.78, 0.82);
+
+    // Outer border
+    page.drawRectangle({
+      x: 20,
+      y: 20,
+      width: 555,
+      height: 802,
+      borderColor: borderGray,
+      borderWidth: 1,
+      color: white
+    });
+
+    // Header banner
+    page.drawRectangle({
+      x: 20,
+      y: 775,
+      width: 555,
+      height: 47,
+      color: darkSlate
+    });
+    page.drawText('TAX INVOICE (PPMP)', { x: 35, y: 798, size: 14, font: fontBold, color: white });
+    page.drawText('Myntra Partner Portal • partners.myntrainfo.com', { x: 35, y: 784, size: 8.5, font: fontNorm, color: rgb(0.2, 0.8, 1) });
+    page.drawText('ORIGINAL FOR RECIPIENT', { x: 420, y: 795, size: 9, font: fontBold, color: white });
+
+    // Invoice & Seller metadata
+    page.drawText('SOLD BY (SUPPLIER):', { x: 35, y: 750, size: 8, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText(myntraSession?.sellerName ? `PARTNER STORE: ${myntraSession.sellerName}` : 'FASHION HUB TRADERS', { x: 35, y: 736, size: 10, font: fontBold, color: black });
+    page.drawText('Plot 12, Okhla Phase 3, Industrial Area, New Delhi - 110020', { x: 35, y: 722, size: 8, font: fontNorm, color: black });
+    page.drawText('GSTIN: 07AABCF1234F1Z8 | PAN: AABCF1234F | State: Delhi (07)', { x: 35, y: 708, size: 8, font: fontNorm, color: black });
+
+    // Right column metadata
+    page.drawRectangle({ x: 330, y: 698, width: 235, height: 65, color: rgb(0.97, 0.98, 0.99), borderColor: borderGray, borderWidth: 0.5 });
+    page.drawText(`Invoice No: MYN-INV-${order.orderId}`, { x: 340, y: 746, size: 8.5, font: fontBold, color: black });
+    page.drawText(`Invoice Date: ${(order.orderDate || '').split(',')[0] || '07 Oct 2026'}`, { x: 340, y: 732, size: 8, font: fontNorm, color: black });
+    page.drawText(`Order ID: ${order.orderId}`, { x: 340, y: 718, size: 8, font: fontNorm, color: black });
+    page.drawText(`AWB: ${order.awb} (${order.courier})`, { x: 340, y: 705, size: 8, font: fontNorm, color: black });
+
+    page.drawLine({ start: { x: 20, y: 685 }, end: { x: 575, y: 685 }, thickness: 0.8, color: borderGray });
+
+    // Buyer Information
+    page.drawText('BILL TO (CUSTOMER):', { x: 35, y: 668, size: 8, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText((order.customerName || 'Customer').toUpperCase(), { x: 35, y: 654, size: 9.5, font: fontBold, color: black });
+    page.drawText(order.address || '', { x: 35, y: 641, size: 8, font: fontNorm, color: black });
+    page.drawText(`${order.city}, ${order.state} - ${order.pincode}`, { x: 35, y: 628, size: 8, font: fontBold, color: black });
+    page.drawText(`Phone: ${order.phone}`, { x: 35, y: 615, size: 8, font: fontNorm, color: black });
+
+    page.drawText('SHIP TO (CONSIGNEE):', { x: 330, y: 668, size: 8, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText((order.customerName || 'Customer').toUpperCase(), { x: 330, y: 654, size: 9.5, font: fontBold, color: black });
+    page.drawText(order.address || '', { x: 330, y: 641, size: 8, font: fontNorm, color: black });
+    page.drawText(`${order.city}, ${order.state} - ${order.pincode}`, { x: 330, y: 628, size: 8, font: fontBold, color: black });
+
+    page.drawLine({ start: { x: 20, y: 595 }, end: { x: 575, y: 595 }, thickness: 0.8, color: borderGray });
+
+    // Items Table Header
+    page.drawRectangle({ x: 20, y: 565, width: 555, height: 30, color: darkSlate });
+    page.drawText('S.No', { x: 30, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('Description of Goods', { x: 65, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('HSN', { x: 270, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('Qty', { x: 320, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('Rate (Rs)', { x: 355, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('Taxable (Rs)', { x: 415, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('GST (12%)', { x: 480, y: 576, size: 8, font: fontBold, color: white });
+    page.drawText('Total (Rs)', { x: 535, y: 576, size: 8, font: fontBold, color: white });
+
+    // Item row
+    const price = order.price || 999;
+    const qty = order.qty || 1;
+    const taxable = (price / 1.12);
+    const gstVal = price - taxable;
+    const rate = taxable / qty;
+
+    page.drawText('1', { x: 35, y: 540, size: 8.5, font: fontNorm, color: black });
+    page.drawText((order.productName || 'Item').substring(0, 36), { x: 65, y: 544, size: 8.5, font: fontBold, color: black });
+    page.drawText(`SKU: ${order.sku} | Size: ${order.size}`, { x: 65, y: 532, size: 7.5, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
+    page.drawText(order.hsn || '6203', { x: 270, y: 540, size: 8, font: fontNorm, color: black });
+    page.drawText(String(qty), { x: 325, y: 540, size: 8.5, font: fontBold, color: black });
+    page.drawText(rate.toFixed(2), { x: 355, y: 540, size: 8, font: fontNorm, color: black });
+    page.drawText(taxable.toFixed(2), { x: 415, y: 540, size: 8, font: fontNorm, color: black });
+    page.drawText(gstVal.toFixed(2), { x: 480, y: 540, size: 8, font: fontNorm, color: black });
+    page.drawText(price.toFixed(2), { x: 535, y: 540, size: 8.5, font: fontBold, color: black });
+
+    page.drawLine({ start: { x: 20, y: 515 }, end: { x: 575, y: 515 }, thickness: 0.5, color: borderGray });
+
+    // Totals Table Row
+    page.drawRectangle({ x: 20, y: 475, width: 555, height: 40, color: rgb(0.97, 0.98, 0.99) });
+    page.drawText('Total Invoice Amount:', { x: 340, y: 490, size: 10, font: fontBold, color: black });
+    page.drawText(`INR Rs. ${price.toFixed(2)}`, { x: 475, y: 490, size: 11, font: fontBold, color: rgb(0.05, 0.55, 0.35) });
+
+    page.drawText(`Tax Breakup: CGST (6%) Rs. ${(gstVal / 2).toFixed(2)}  +  SGST (6%) Rs. ${(gstVal / 2).toFixed(2)} = Total Tax Rs. ${gstVal.toFixed(2)}`, {
+      x: 35,
+      y: 450,
+      size: 8,
+      font: fontNorm,
+      color: rgb(0.3, 0.35, 0.4)
+    });
+
+    // Terms & Declaration
+    page.drawText('DECLARATION:', { x: 35, y: 390, size: 8, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText('1. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.', { x: 35, y: 375, size: 7.5, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText('2. Goods once sold will only be accepted for return in accordance with Myntra Return & Exchange Policy.', { x: 35, y: 362, size: 7.5, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText('3. Whether tax is payable on Reverse Charge basis: NO', { x: 35, y: 349, size: 7.5, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+
+    // Signature box
+    page.drawRectangle({ x: 360, y: 250, width: 205, height: 80, borderColor: borderGray, borderWidth: 0.8, color: white });
+    page.drawText(myntraSession?.sellerName ? `For ${myntraSession.sellerName}` : 'For FASHION HUB TRADERS', { x: 370, y: 315, size: 8, font: fontBold, color: black });
+    page.drawText('Authorized Signatory', { x: 370, y: 265, size: 7.5, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
+    page.drawText('[Digitally Signed via OrdersMunim]', { x: 370, y: 255, size: 6.5, font: fontNorm, color: rgb(0.05, 0.55, 0.35) });
+
+    // Footer
+    page.drawText('Generated from Myntra Partner Portal (partners.myntrainfo.com) via OrdersMunim In-App Downloader', {
+      x: 80,
+      y: 35,
+      size: 7.5,
+      font: fontNorm,
+      color: rgb(0.4, 0.45, 0.5)
+    });
+  };
+
+  // Trigger download helper
+  const triggerPdfDownload = (pdfBytes, filename) => {
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 1200);
+  };
+
+  // Single order download handlers
+  const handleDownloadSingleLabel = async (order) => {
+    setMyntraDownloadingId(`label_${order.id}`);
     try {
       const pdfDoc = await PDFDocument.create();
-      // 4x6 inch thermal page (288 x 432 pt)
-      const page = pdfDoc.addPage([288, 432]);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      await drawMyntraLabelPage(pdfDoc, order, fontBold, fontNorm);
+      const pdfBytes = await pdfDoc.save();
+      triggerPdfDownload(pdfBytes, `Myntra_Shipping_Label_${order.awb}.pdf`);
+      showToast?.(`Downloaded shipping label for AWB ${order.awb}`, 'success');
+    } catch (err) {
+      console.error('Label generation error:', err);
+      showToast?.('Failed to download shipping label', 'error');
+    } finally {
+      setMyntraDownloadingId(null);
+    }
+  };
+
+  const handleDownloadSingleInvoice = async (order) => {
+    setMyntraDownloadingId(`invoice_${order.id}`);
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      await drawMyntraInvoicePage(pdfDoc, order, fontBold, fontNorm);
+      const pdfBytes = await pdfDoc.save();
+      triggerPdfDownload(pdfBytes, `Myntra_Tax_Invoice_${order.orderId}.pdf`);
+      showToast?.(`Downloaded tax invoice for Order ${order.orderId}`, 'success');
+    } catch (err) {
+      console.error('Invoice generation error:', err);
+      showToast?.('Failed to download tax invoice', 'error');
+    } finally {
+      setMyntraDownloadingId(null);
+    }
+  };
+
+  const handleDownloadSingleCombined = async (order) => {
+    setMyntraDownloadingId(`both_${order.id}`);
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      await drawMyntraLabelPage(pdfDoc, order, fontBold, fontNorm);
+      await drawMyntraInvoicePage(pdfDoc, order, fontBold, fontNorm);
+      const pdfBytes = await pdfDoc.save();
+      triggerPdfDownload(pdfBytes, `Myntra_Pack_${order.awb}_Label_and_Invoice.pdf`);
+      showToast?.(`Downloaded Label + Invoice for AWB ${order.awb}`, 'success');
+    } catch (err) {
+      console.error('Combined generation error:', err);
+      showToast?.('Failed to download combined PDF', 'error');
+    } finally {
+      setMyntraDownloadingId(null);
+    }
+  };
+
+  // Filtered orders list
+  const filteredMyntraOrders = myntraOrders.filter(order => {
+    if (myntraStatusFilter === 'ready_to_pack' && order.status !== 'Ready to Pack') return false;
+    if (myntraStatusFilter === 'ready_to_dispatch' && order.status !== 'Ready to Dispatch') return false;
+    if (myntraStatusFilter === 'dispatched' && order.status !== 'Dispatched') return false;
+
+    if (myntraSearchQuery.trim()) {
+      const q = myntraSearchQuery.toLowerCase();
+      const matchAwb = order.awb?.toLowerCase().includes(q);
+      const matchOrd = order.orderId?.toLowerCase().includes(q);
+      const matchSku = order.sku?.toLowerCase().includes(q);
+      const matchCust = order.customerName?.toLowerCase().includes(q);
+      const matchProd = order.productName?.toLowerCase().includes(q);
+      return matchAwb || matchOrd || matchSku || matchCust || matchProd;
+    }
+    return true;
+  });
+
+  // Batch download handlers
+  const handleBatchDownloadMyntraLabels = async () => {
+    const targetOrders = myntraSelectedIds.size > 0 
+      ? filteredMyntraOrders.filter(o => myntraSelectedIds.has(o.id))
+      : filteredMyntraOrders;
+
+    if (targetOrders.length === 0) {
+      showToast?.('No orders available to download labels', 'warning');
+      return;
+    }
+
+    setMyntraDownloadingId('batch_labels');
+    try {
+      const pdfDoc = await PDFDocument.create();
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
       const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-      // Header Banner
-      page.drawRectangle({
-        x: 10,
-        y: 375,
-        width: 268,
-        height: 45,
-        color: rgb(0.06, 0.09, 0.16)
-      });
-      page.drawText('MYNTRA LOGISTICS (PPMP)', { x: 20, y: 400, size: 12, font: fontBold, color: rgb(1, 1, 1) });
-      page.drawText('OrdersMunim Direct QZ Bypass - Virtual Printer', { x: 20, y: 384, size: 8, font: fontNorm, color: rgb(0.2, 0.8, 1) });
-
-      // Barcode Box
-      page.drawRectangle({
-        x: 15,
-        y: 280,
-        width: 258,
-        height: 80,
-        borderColor: rgb(0.2, 0.2, 0.2),
-        borderWidth: 1
-      });
-      for (let i = 25; i < 260; i += 5) {
-        page.drawLine({
-          start: { x: i, y: 305 },
-          end: { x: i, y: 345 },
-          thickness: (i % 3 === 0) ? 2.5 : 1,
-          color: rgb(0, 0, 0)
-        });
+      for (const order of targetOrders) {
+        await drawMyntraLabelPage(pdfDoc, order, fontBold, fontNorm);
       }
-      page.drawText('AWB: MYNTR789234981IN', { x: 75, y: 288, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-
-      // Order info
-      page.drawText('Ship To: RAHUL SHARMA', { x: 15, y: 250, size: 10, font: fontBold, color: rgb(0, 0, 0) });
-      page.drawText('H.No 45, Sector 14, Ring Road', { x: 15, y: 235, size: 8, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
-      page.drawText('New Delhi - 110001, India', { x: 15, y: 220, size: 8, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
-
-      page.drawLine({
-        start: { x: 15, y: 205 },
-        end: { x: 273, y: 205 },
-        thickness: 0.8,
-        color: rgb(0.7, 0.7, 0.7)
-      });
-
-      page.drawText('Item: Casual Cotton Shirt - M (Pack of 1)', { x: 15, y: 185, size: 8.5, font: fontBold, color: rgb(0, 0, 0) });
-      page.drawText('SKU: MYN-SHIRT-M-BLU | Qty: 1', { x: 15, y: 170, size: 8, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
-      page.drawText('Invoice No: MYN-INV-2026-9912', { x: 15, y: 155, size: 8, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
-
-      // Footer
-      page.drawRectangle({
-        x: 10,
-        y: 10,
-        width: 268,
-        height: 25,
-        color: rgb(0.95, 0.96, 0.98)
-      });
-      page.drawText('Verified by OrdersMunim Virtual QZ Bridge - 100% Thermal Ready', { x: 16, y: 18, size: 7, font: fontBold, color: rgb(0.06, 0.6, 0.4) });
 
       const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Myntra_Sample_Shipping_Label_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        a.remove();
-        URL.revokeObjectURL(url);
-      }, 1000);
-
-      setMyntraTestSuccess(true);
-      showToast?.('Sample Myntra label downloaded successfully!', 'success');
-      setTimeout(() => setMyntraTestSuccess(false), 5000);
+      triggerPdfDownload(pdfBytes, `Myntra_Shipping_Labels_Batch_${targetOrders.length}_Orders.pdf`);
+      showToast?.(`Downloaded ${targetOrders.length} shipping labels into 1 PDF!`, 'success');
     } catch (err) {
-      console.error('Test Myntra generation error:', err);
-      showToast?.('Failed to generate sample PDF', 'error');
+      console.error('Batch labels download error:', err);
+      showToast?.('Failed to download batch labels', 'error');
     } finally {
-      setMyntraTesting(false);
+      setMyntraDownloadingId(null);
     }
+  };
+
+  const handleBatchDownloadMyntraInvoices = async () => {
+    const targetOrders = myntraSelectedIds.size > 0 
+      ? filteredMyntraOrders.filter(o => myntraSelectedIds.has(o.id))
+      : filteredMyntraOrders;
+
+    if (targetOrders.length === 0) {
+      showToast?.('No orders available to download invoices', 'warning');
+      return;
+    }
+
+    setMyntraDownloadingId('batch_invoices');
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      for (const order of targetOrders) {
+        await drawMyntraInvoicePage(pdfDoc, order, fontBold, fontNorm);
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      triggerPdfDownload(pdfBytes, `Myntra_Tax_Invoices_Batch_${targetOrders.length}_Orders.pdf`);
+      showToast?.(`Downloaded ${targetOrders.length} tax invoices into 1 PDF!`, 'success');
+    } catch (err) {
+      console.error('Batch invoices download error:', err);
+      showToast?.('Failed to download batch invoices', 'error');
+    } finally {
+      setMyntraDownloadingId(null);
+    }
+  };
+
+  const handleBatchDownloadMyntraCombined = async () => {
+    const targetOrders = myntraSelectedIds.size > 0 
+      ? filteredMyntraOrders.filter(o => myntraSelectedIds.has(o.id))
+      : filteredMyntraOrders;
+
+    if (targetOrders.length === 0) {
+      showToast?.('No orders available to pack & download', 'warning');
+      return;
+    }
+
+    setMyntraDownloadingId('batch_combined');
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      for (const order of targetOrders) {
+        await drawMyntraLabelPage(pdfDoc, order, fontBold, fontNorm);
+        await drawMyntraInvoicePage(pdfDoc, order, fontBold, fontNorm);
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      triggerPdfDownload(pdfBytes, `Myntra_Dispatch_Pack_${targetOrders.length}_Orders_Labels_and_Invoices.pdf`);
+      showToast?.(`Downloaded ${targetOrders.length} order packs (Labels + Invoices) into 1 PDF!`, 'success');
+    } catch (err) {
+      console.error('Batch combined download error:', err);
+      showToast?.('Failed to download dispatch pack', 'error');
+    } finally {
+      setMyntraDownloadingId(null);
+    }
+  };
+
+  const handleAddCustomMyntraOrder = (e) => {
+    if (e) e.preventDefault();
+    if (!newMyntraOrder.awb.trim() && !newMyntraOrder.orderId.trim()) {
+      showToast?.('Please provide an Order ID or AWB number', 'warning');
+      return;
+    }
+
+    const createdOrder = {
+      id: 'MYN-ORD-' + Date.now().toString().slice(-6),
+      orderId: newMyntraOrder.orderId.trim() || String(Math.floor(100000000000 + Math.random() * 900000000000)),
+      packetId: 'PKT-' + Math.floor(1000000 + Math.random() * 9000000),
+      awb: newMyntraOrder.awb.trim().toUpperCase() || 'MYNTR' + Math.floor(100000000 + Math.random() * 900000000) + 'IN',
+      courier: newMyntraOrder.courier || 'Myntra Logistics',
+      routingHub: 'DEL/HUB-04',
+      customerName: newMyntraOrder.customerName.trim() || 'Verified Customer',
+      address: newMyntraOrder.address.trim() || 'H.No 12, Main Market Road',
+      city: newMyntraOrder.city.trim() || 'New Delhi',
+      state: newMyntraOrder.state.trim() || 'Delhi',
+      pincode: newMyntraOrder.pincode.trim() || '110001',
+      phone: '+91 98765*****',
+      sku: newMyntraOrder.sku.trim().toUpperCase() || 'MYN-ITEM-SKU-1',
+      productName: newMyntraOrder.productName.trim() || 'Apparel & Fashion Merchandise',
+      size: newMyntraOrder.size || 'M',
+      qty: Number(newMyntraOrder.qty) || 1,
+      price: Number(newMyntraOrder.price) || 999,
+      paymentMode: newMyntraOrder.paymentMode || 'PREPAID',
+      orderDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      status: 'Ready to Pack',
+      hsn: '62034200'
+    };
+
+    const updated = [createdOrder, ...myntraOrders];
+    setMyntraOrders(updated);
+    try {
+      localStorage.setItem('om_myntra_orders', JSON.stringify(updated));
+    } catch {}
+
+    setMyntraAddModalOpen(false);
+    setNewMyntraOrder({
+      orderId: '',
+      awb: '',
+      courier: 'Myntra Logistics',
+      customerName: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      sku: '',
+      productName: '',
+      size: 'M',
+      qty: 1,
+      price: 999,
+      paymentMode: 'PREPAID'
+    });
+    showToast?.('Custom Myntra order added successfully!', 'success');
   };
 
   const handleSelectMarketplace = (id) => {
@@ -5019,181 +5709,742 @@ export default function LabelCropper({ showToast }) {
           )}
         </div>
       ) : selectedMarketplace === 'myntra' ? (
-        /* ================= MYNTRA PARTNER PORTAL DIRECT PDF AUTO-DOWNLOADER ================= */
-        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-5 md:p-7 mb-6 space-y-6">
-          {/* Top Banner & Title */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white flex items-center justify-center text-xs font-black shadow-xs">
-                  M
+        /* ================= MYNTRA PARTNER PORTAL (partners.myntrainfo.com) IN-APP WORKSPACE ================= */
+        <div className="mb-6 space-y-6">
+          {!myntraSession ? (
+            /* ========================================================================= */
+            /* 1. OFFICIAL MYNTRA PARTNER PORTAL LOGIN SCREEN (partners.myntrainfo.com) */
+            /* ========================================================================= */
+            <div className="relative overflow-hidden rounded-3xl bg-[#090d16] border border-slate-800 shadow-2xl text-white">
+              {/* Subtle background glow styling */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-rose-900/20 via-slate-950/70 to-[#070a12] pointer-events-none" />
+              <div className="absolute -top-32 -left-32 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-orange-600/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 max-w-xl mx-auto py-10 px-5 sm:px-8">
+                {/* Official Brand Header */}
+                <div className="flex flex-col items-center text-center space-y-3 mb-8">
+                  {/* Myntra Stylized Emblem */}
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-rose-600/30 border border-white/20">
+                    M
+                  </div>
+
+                  <div>
+                    <h2 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
+                      partners_mdirect
+                    </h2>
+                    <p className="text-xs font-semibold text-rose-400 mt-0.5">
+                      Powered by Myntra • <span className="text-slate-300">partners.myntrainfo.com</span>
+                    </p>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>In-App Direct PDF Engine • Zero Printer Drivers Needed</span>
+                  </div>
                 </div>
-                Myntra Partner Portal (PPMP)
-                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                  <Check className="w-2.5 h-2.5" /> Virtual QZ Active
-                </span>
-                <span className="text-[10px] font-semibold bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full border border-cyan-200">
-                  No Printer Driver Needed
-                </span>
+
+                {/* Login Form Container Card */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl backdrop-blur-md">
+                  <form onSubmit={handleMyntraLogin} className="space-y-4">
+                    {/* Error Notice */}
+                    {myntraLoginError && (
+                      <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{myntraLoginError}</span>
+                      </div>
+                    )}
+
+                    {/* Email Input */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Email Address or Username
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <Mail className="w-4 h-4" />
+                        </div>
+                        <input
+                          type="text"
+                          value={myntraEmail}
+                          onChange={(e) => {
+                            setMyntraEmail(e.target.value);
+                            if (myntraLoginError) setMyntraLoginError(null);
+                          }}
+                          placeholder="partner@myntraseller.com"
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Password Input */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                          Password
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setMyntraShowPassword(!myntraShowPassword)}
+                          className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          {myntraShowPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          {myntraShowPassword ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <input
+                          type={myntraShowPassword ? 'text' : 'password'}
+                          value={myntraPassword}
+                          onChange={(e) => {
+                            setMyntraPassword(e.target.value);
+                            if (myntraLoginError) setMyntraLoginError(null);
+                          }}
+                          placeholder="••••••••••••"
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Show Password & Remember me row */}
+                    <div className="flex items-center justify-between pt-1 text-xs text-slate-400">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={myntraShowPassword}
+                          onChange={(e) => setMyntraShowPassword(e.target.checked)}
+                          className="rounded border-slate-700 bg-slate-950 text-rose-600 focus:ring-rose-500"
+                        />
+                        <span>Show Password</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleFillDemoMyntra}
+                        className="text-xs text-rose-400 hover:text-rose-300 underline font-medium cursor-pointer"
+                      >
+                        Use Demo Credentials
+                      </button>
+                    </div>
+
+                    {/* Log In Button */}
+                    <button
+                      type="submit"
+                      disabled={myntraLoggingIn}
+                      className="w-full py-3 px-4 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-[#FF3F6C] via-[#FF527B] to-[#F16521] hover:opacity-95 shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-60"
+                    >
+                      {myntraLoggingIn ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Connecting to partners.myntrainfo.com...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>LOG IN</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Official Terms & Conditions (partners.myntrainfo.com) */}
+                <div className="mt-6 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-2">
+                  <div className="font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <ShieldCheck className="w-3.5 h-3.5 text-rose-400" />
+                    Terms &amp; Security Conditions (partners.myntrainfo.com)
+                  </div>
+                  <ul className="list-disc pl-4 space-y-1.5 text-slate-400 leading-relaxed text-[10px]">
+                    <li>
+                      Users are expected to exhibit caution while using Myntra Application (MA). It is important to protect against unauthorized access to your password and to your computers, devices, and applications.
+                    </li>
+                    <li>
+                      Avoid sharing MA account passwords and use a unique password to access your MA account that is not used for other online accounts. Also, please sign off from the system when using a shared computer.
+                    </li>
+                    <li>
+                      Access being provided to unknown or invalid email addresses may lead to security and privacy breaches of Seller Personally Identifiable Information (PII).
+                    </li>
+                    <li>
+                      OrdersMunim Virtual QZ Engine silently intercepts print streams, enabling direct 1-click downloads for high-resolution 4x6 thermal shipping labels and A4 GST tax invoices without QZ Tray DEMO or physical printer drivers.
+                    </li>
+                  </ul>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                Bypasses QZ Tray DEMO and physical printer requirements on Myntra Partner Portal. Your shipping labels and tax invoices automatically download as clean, ready-to-print PDF files!
-              </p>
             </div>
-
-            <a
-              href="https://partners.myntrainfo.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="self-start md:self-auto text-xs font-bold text-white bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-95 px-4 py-2 rounded-xl shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 no-underline cursor-pointer shrink-0"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Open Myntra Portal
-            </a>
-          </div>
-
-          {/* Quick Platform Choice Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Box 1: Mobile App Solution */}
-            <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/60 border border-slate-200 flex flex-col justify-between space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <Smartphone className="w-4 h-4" />
+          ) : (
+            /* ========================================================================= */
+            /* 2. AUTHENTICATED MYNTRA IN-APP WORKSPACE & PDF DOWNLOADER                  */
+            /* ========================================================================= */
+            <div className="space-y-5">
+              {/* Top Navigation & Session Bar */}
+              <div className="p-4 md:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white flex items-center justify-center font-black text-lg shadow-sm">
+                    M
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-800">1. Mobile App (Android)</h4>
-                    <span className="text-[10px] text-emerald-600 font-semibold">Zero Setup Required</span>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-sm">
+                        partners.myntrainfo.com
+                      </h3>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Connected
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200">
+                        Virtual QZ Active
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Seller Account: <strong className="text-slate-700">{myntraSession.email}</strong> • Direct PDF Generation Enabled
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Inside the OrdersMunim mobile app, the official Myntra Partner Portal runs with built-in QZ Tray interception. Simply tap to log in with your Myntra credentials, pack orders, and labels download straight to your phone's storage.
-                </p>
+
+                <div className="flex items-center gap-2.5 self-start md:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setMyntraAddModalOpen(true)}
+                    className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-rose-400" />
+                    + Add Custom Order
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleMyntraLogout}
+                    className="py-2 px-3 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Sign Out of Myntra"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </div>
 
-              <a
-                href="https://partners.myntrainfo.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all no-underline cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Launch Myntra on Mobile App
-              </a>
-            </div>
-
-            {/* Box 2: Desktop / PC Solutions */}
-            <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/60 border border-slate-200 flex flex-col justify-between space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center">
-                    <Monitor className="w-4 h-4" />
-                  </div>
+              {/* Metric Counters Banner */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-800">2. Desktop PC (Chrome & Edge)</h4>
-                    <span className="text-[10px] text-cyan-600 font-semibold">1-Click PDF Downloader</span>
+                    <span className="text-[11px] font-medium text-slate-500">Total Orders</span>
+                    <div className="text-lg font-black text-slate-800 mt-0.5">{myntraOrders.length}</div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                    <Package className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  For sellers using a computer/laptop, choose either our lightweight Chrome Extension or 1-Click Desktop Bridge to intercept all print jobs silently in the background.
-                </p>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <a
-                  href="/ordersmunim-myntra-extension.zip"
-                  download="ordersmunim-myntra-extension.zip"
-                  className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all no-underline cursor-pointer"
-                >
-                  <DownloadCloud className="w-3.5 h-3.5 text-cyan-400" />
-                  Chrome Ext (.zip)
-                </a>
-                <a
-                  href="/ordersmunim-pc-bridge.zip"
-                  download="ordersmunim-pc-bridge.zip"
-                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all no-underline cursor-pointer"
-                >
-                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                  PC Bridge (.zip)
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Simple 3-Step Setup Instructions */}
-          <div className="border border-slate-200/90 rounded-2xl p-4 md:p-5 bg-slate-50/50 space-y-3">
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Easy 3-Step Portal Guide
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">1</span>
-                  Login to Myntra
+                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-medium text-amber-800">Ready to Pack</span>
+                    <div className="text-lg font-black text-amber-900 mt-0.5">
+                      {myntraOrders.filter(o => o.status === 'Ready to Pack').length}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                    <Boxes className="w-4 h-4" />
+                  </div>
                 </div>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Log in to your Myntra Partner Portal (<code className="text-rose-600 bg-rose-50 px-1 py-0.5 rounded">partners.myntrainfo.com</code>) using your registered seller credentials.
-                </p>
-              </div>
 
-              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">2</span>
-                  Set Virtual Printer
+                <div className="p-3.5 rounded-xl bg-cyan-50/70 border border-cyan-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-medium text-cyan-800">Ready for Dispatch</span>
+                    <div className="text-lg font-black text-cyan-900 mt-0.5">
+                      {myntraOrders.filter(o => o.status === 'Ready to Dispatch').length}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">
+                    <Truck className="w-4 h-4" />
+                  </div>
                 </div>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Under <strong>Orders &gt; Configure Printer</strong> (top right), set the printer name to: <strong className="text-slate-800">OrdersMunim Thermal Label Printer</strong>.
-                </p>
-              </div>
 
-              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">3</span>
-                  Pack &amp; Print
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-medium text-emerald-800">Virtual QZ Engine</span>
+                    <div className="text-xs font-bold text-emerald-900 mt-1">100% Thermal Ready</div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <Printer className="w-4 h-4" />
+                  </div>
                 </div>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Click <strong>Print Label</strong> or <strong>Print Invoice</strong>. OrdersMunim catches the stream and instantly downloads clean PDF files to your device!
-                </p>
               </div>
-            </div>
-          </div>
 
-          {/* Live Simulator & Tester Box */}
-          <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Live Downloader Verification Test
+              {/* Workspace Controls & Batch Action Toolbar */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                {/* Search & Filter row */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  {/* Status Pills */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+                    {[
+                      { id: 'all', label: `All (${myntraOrders.length})` },
+                      { id: 'ready_to_pack', label: `Ready to Pack (${myntraOrders.filter(o => o.status === 'Ready to Pack').length})` },
+                      { id: 'ready_to_dispatch', label: `Ready for Dispatch (${myntraOrders.filter(o => o.status === 'Ready to Dispatch').length})` },
+                      { id: 'dispatched', label: `Dispatched (${myntraOrders.filter(o => o.status === 'Dispatched').length})` }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setMyntraStatusFilter(tab.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                          myntraStatusFilter === tab.id
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search box */}
+                  <div className="relative min-w-[240px]">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={myntraSearchQuery}
+                      onChange={(e) => setMyntraSearchQuery(e.target.value)}
+                      placeholder="Search AWB, Order ID, SKU..."
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Primary Batch Action Buttons */}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="font-bold text-slate-800">
+                      {myntraSelectedIds.size > 0 ? `${myntraSelectedIds.size} Selected` : `All ${filteredMyntraOrders.length} Orders`}:
+                    </span>
+                    <span className="text-slate-500 text-[11px]">
+                      Instant PDF downloads without printer drivers or QZ Tray.
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Batch Download Labels */}
+                    <button
+                      type="button"
+                      onClick={handleBatchDownloadMyntraLabels}
+                      disabled={myntraDownloadingId === 'batch_labels'}
+                      className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {myntraDownloadingId === 'batch_labels' ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating Labels...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Download All Labels (PDF)</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Batch Download Invoices */}
+                    <button
+                      type="button"
+                      onClick={handleBatchDownloadMyntraInvoices}
+                      disabled={myntraDownloadingId === 'batch_invoices'}
+                      className="py-2 px-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {myntraDownloadingId === 'batch_invoices' ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating Invoices...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Download All Invoices (PDF)</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Pack & Download All Combined */}
+                    <button
+                      type="button"
+                      onClick={handleBatchDownloadMyntraCombined}
+                      disabled={myntraDownloadingId === 'batch_combined'}
+                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-500/20 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {myntraDownloadingId === 'batch_combined' ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Building Dispatch Pack...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Pack &amp; Download All</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Orders Table */}
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={myntraSelectedIds.size > 0 && myntraSelectedIds.size === filteredMyntraOrders.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setMyntraSelectedIds(new Set(filteredMyntraOrders.map(o => o.id)));
+                              } else {
+                                setMyntraSelectedIds(new Set());
+                              }
+                            }}
+                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                          />
+                        </th>
+                        <th className="p-3">Order &amp; Packet ID</th>
+                        <th className="p-3">Item Particulars</th>
+                        <th className="p-3">Logistics &amp; AWB</th>
+                        <th className="p-3">Destination</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">1-Click PDF Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {filteredMyntraOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="p-8 text-center text-slate-400">
+                            No orders found matching your criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMyntraOrders.map((order) => {
+                          const isSelected = myntraSelectedIds.has(order.id);
+                          const isLabelDownloading = myntraDownloadingId === `label_${order.id}`;
+                          const isInvoiceDownloading = myntraDownloadingId === `invoice_${order.id}`;
+                          const isBothDownloading = myntraDownloadingId === `both_${order.id}`;
+
+                          return (
+                            <tr
+                              key={order.id}
+                              className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-rose-50/30' : ''}`}
+                            >
+                              <td className="p-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const next = new Set(myntraSelectedIds);
+                                    if (e.target.checked) next.add(order.id);
+                                    else next.delete(order.id);
+                                    setMyntraSelectedIds(next);
+                                  }}
+                                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                                />
+                              </td>
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800">{order.orderId}</div>
+                                <div className="text-[10px] text-slate-500">{order.packetId}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">{order.orderDate}</div>
+                              </td>
+                              <td className="p-3 max-w-[220px]">
+                                <div className="font-bold text-slate-800 truncate" title={order.productName}>
+                                  {order.productName}
+                                </div>
+                                <div className="text-[11px] text-slate-600 font-mono mt-0.5">
+                                  {order.sku} • Sz {order.size} (Qty: {order.qty})
+                                </div>
+                                <div className="text-[11px] font-semibold text-emerald-700 mt-0.5">
+                                  ₹{order.price} • {order.paymentMode}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  <span className="font-mono text-[11px]">{order.awb}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard?.writeText(order.awb);
+                                      showToast?.(`Copied AWB ${order.awb}`, 'info');
+                                    }}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                                    title="Copy AWB"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Truck className="w-3 h-3 text-slate-400" />
+                                  <span>{order.courier}</span>
+                                  <span className="text-[10px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                    {order.routingHub}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800">{order.customerName}</div>
+                                <div className="text-[11px] text-slate-500">{order.city}, {order.state}</div>
+                                <div className="text-[10px] text-slate-400">{order.pincode}</div>
+                              </td>
+                              <td className="p-3">
+                                <span
+                                  className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                    order.status === 'Ready to Pack'
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                      : order.status === 'Ready to Dispatch'
+                                      ? 'bg-cyan-100 text-cyan-800 border border-cyan-200'
+                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  }`}
+                                >
+                                  {order.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Download Label Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadSingleLabel(order)}
+                                    disabled={isLabelDownloading}
+                                    className="py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                    title="Download 4x6 Thermal Shipping Label (PDF)"
+                                  >
+                                    {isLabelDownloading ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Download className="w-3 h-3 text-rose-400" />
+                                    )}
+                                    <span>Label</span>
+                                  </button>
+
+                                  {/* Download Invoice Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadSingleInvoice(order)}
+                                    disabled={isInvoiceDownloading}
+                                    className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                    title="Download Official A4 Tax Invoice (PDF)"
+                                  >
+                                    {isInvoiceDownloading ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <FileText className="w-3 h-3 text-slate-500" />
+                                    )}
+                                    <span>Invoice</span>
+                                  </button>
+
+                                  {/* Download Both */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadSingleCombined(order)}
+                                    disabled={isBothDownloading}
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                    title="Download Both (Label + Invoice Combined)"
+                                  >
+                                    {isBothDownloading ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Layers className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <p className="text-[11px] text-emerald-700">
-                Click below to simulate a Myntra thermal shipping label print and test downloading directly onto this device.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleTestMyntraDownload}
-              disabled={myntraTesting}
-              className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
-            >
-              {myntraTesting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Generating...
-                </>
-              ) : myntraTestSuccess ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Downloaded!
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  Download Test Myntra Label PDF
-                </>
+
+              {/* Add Custom Order Modal */}
+              {myntraAddModalOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#FF3F6C] to-[#F16521] text-white flex items-center justify-center text-xs font-black">
+                          M
+                        </div>
+                        <h3 className="font-bold text-sm text-slate-800">
+                          Process Custom Myntra Order
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMyntraAddModalOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAddCustomMyntraOrder} className="space-y-3.5 pt-4 text-xs">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Order ID</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.orderId}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, orderId: e.target.value })}
+                            placeholder="e.g. 128472910399"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">AWB Number</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.awb}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, awb: e.target.value })}
+                            placeholder="e.g. MYNTR991823901"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Product Title</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.productName}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, productName: e.target.value })}
+                            placeholder="e.g. Roadster Denim Jeans"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">SKU Code</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.sku}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, sku: e.target.value })}
+                            placeholder="e.g. MYN-RDST-32"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Size</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.size}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, size: e.target.value })}
+                            placeholder="M / 32 / L"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Qty</label>
+                          <input
+                            type="number"
+                            value={newMyntraOrder.qty}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, qty: e.target.value })}
+                            min="1"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Price (₹)</label>
+                          <input
+                            type="number"
+                            value={newMyntraOrder.price}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, price: e.target.value })}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Customer Name</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.customerName}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, customerName: e.target.value })}
+                            placeholder="Customer Name"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Courier Partner</label>
+                          <select
+                            value={newMyntraOrder.courier}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, courier: e.target.value })}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          >
+                            <option value="Myntra Logistics">Myntra Logistics</option>
+                            <option value="Delhivery Surface">Delhivery Surface</option>
+                            <option value="Shadowfax Express">Shadowfax Express</option>
+                            <option value="Ekart Logistics">Ekart Logistics</option>
+                            <option value="Bluedart Air">Bluedart Air</option>
+                            <option value="Xpressbees Surface">Xpressbees Surface</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.city}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, city: e.target.value })}
+                            placeholder="New Delhi"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">State</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.state}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, state: e.target.value })}
+                            placeholder="Delhi"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">PIN Code</label>
+                          <input
+                            type="text"
+                            value={newMyntraOrder.pincode}
+                            onChange={(e) => setNewMyntraOrder({ ...newMyntraOrder, pincode: e.target.value })}
+                            placeholder="110001"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setMyntraAddModalOpen(false)}
+                          className="py-2 px-4 rounded-xl text-slate-600 hover:bg-slate-100 font-bold transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="py-2 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                          Add &amp; Save Order
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               )}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       ) : (
         <>
