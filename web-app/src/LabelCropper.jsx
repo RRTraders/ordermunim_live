@@ -102,13 +102,13 @@ export const MARKETPLACES = [
   },
   {
     id: 'myntra',
-    name: 'Myntra',
+    name: 'Myntra (M-Direct)',
     shortName: 'Myntra',
-    tagline: 'partners.myntrainfo.com (In-App)',
-    badgeText: 'myntra',
+    tagline: 'mdirect.myntrainfo.com/Orders/Search',
+    badgeText: 'm-direct',
     badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
     iconLetter: 'M',
-    description: 'Official Myntra Partner Portal (partners.myntrainfo.com). In-app login with direct PDF download for labels & tax invoices without printer drivers or QZ Tray.',
+    description: 'Myntra M-Direct Portal (mdirect.myntrainfo.com/Orders/Search). Direct in-app login & 1-click PDF download for shipping labels and invoices without printer drivers or QZ Tray.',
     ready: true
   },
 ];
@@ -2077,7 +2077,7 @@ export default function LabelCropper({ showToast }) {
   const [myntraStatusFilter, setMyntraStatusFilter] = useState('all');
   const [myntraDownloadingId, setMyntraDownloadingId] = useState(null);
   const [myntraAddModalOpen, setMyntraAddModalOpen] = useState(false);
-  const [myntraActiveTab, setMyntraActiveTab] = useState('orders'); // 'orders' | 'portal_view'
+  const [myntraActiveTab, setMyntraActiveTab] = useState('portal_view'); // 'portal_view' (https://mdirect.myntrainfo.com/Orders/Search) | 'orders'
 
   const [newMyntraOrder, setNewMyntraOrder] = useState({
     orderId: '',
@@ -2115,12 +2115,14 @@ export default function LabelCropper({ showToast }) {
       const session = {
         email: emailVal,
         sellerName: emailVal.split('@')[0].toUpperCase(),
-        storeName: 'Myntra Partner Brand',
-        portal: 'partners.myntrainfo.com',
+        storeName: 'Myntra M-Direct Store',
+        portal: 'mdirect.myntrainfo.com/Orders/Search',
+        url: 'https://mdirect.myntrainfo.com/Orders/Search',
         loginAt: new Date().toISOString(),
         token: 'myn_' + Math.random().toString(36).substring(2, 11),
       };
       setMyntraSession(session);
+      setMyntraActiveTab('portal_view');
       try {
         localStorage.setItem('om_myntra_session', JSON.stringify(session));
         if (myntraRememberMe) {
@@ -2130,7 +2132,7 @@ export default function LabelCropper({ showToast }) {
         console.error('Failed to save Myntra session:', err);
       }
       setMyntraLoggingIn(false);
-      showToast?.('Logged in to partners.myntrainfo.com successfully!', 'success');
+      showToast?.('Logged in! Opened https://mdirect.myntrainfo.com/Orders/Search', 'success');
     }, 750);
   };
 
@@ -2140,7 +2142,7 @@ export default function LabelCropper({ showToast }) {
       localStorage.removeItem('om_myntra_session');
     } catch {}
     setMyntraPassword('');
-    showToast?.('Logged out of Myntra Partner Portal', 'info');
+    showToast?.('Logged out of Myntra M-Direct Portal', 'info');
   };
 
   const handleFillDemoMyntra = () => {
@@ -2221,7 +2223,7 @@ export default function LabelCropper({ showToast }) {
 
     // Embed QR code on the right
     try {
-      const qrDataUrl = await QRCode.toDataURL(`https://partners.myntrainfo.com/orders/track?awb=${awbStr}`, { margin: 1, width: 128 });
+      const qrDataUrl = await QRCode.toDataURL(`https://mdirect.myntrainfo.com/Orders/Search?awb=${awbStr}`, { margin: 1, width: 128 });
       const binaryStr = atob(qrDataUrl.split(',')[1]);
       const qrBytes = new Uint8Array(binaryStr.length);
       for (let j = 0; j < binaryStr.length; j++) qrBytes[j] = binaryStr.charCodeAt(j);
@@ -2297,7 +2299,7 @@ export default function LabelCropper({ showToast }) {
       font: fontBold,
       color: rgb(0.05, 0.55, 0.35)
     });
-    page.drawText('partners.myntrainfo.com PPMP Gateway', {
+    page.drawText('mdirect.myntrainfo.com/Orders/Search PPMP Gateway', {
       x: 18,
       y: 13,
       size: 6.5,
@@ -2334,7 +2336,7 @@ export default function LabelCropper({ showToast }) {
       color: darkSlate
     });
     page.drawText('TAX INVOICE (PPMP)', { x: 35, y: 798, size: 14, font: fontBold, color: white });
-    page.drawText('Myntra Partner Portal • partners.myntrainfo.com', { x: 35, y: 784, size: 8.5, font: fontNorm, color: rgb(0.2, 0.8, 1) });
+    page.drawText('Myntra M-Direct • mdirect.myntrainfo.com/Orders/Search', { x: 35, y: 784, size: 8.5, font: fontNorm, color: rgb(0.2, 0.8, 1) });
     page.drawText('ORIGINAL FOR RECIPIENT', { x: 420, y: 795, size: 9, font: fontBold, color: white });
 
     // Invoice & Seller metadata
@@ -2422,8 +2424,8 @@ export default function LabelCropper({ showToast }) {
     page.drawText('[Digitally Signed via OrdersMunim]', { x: 370, y: 255, size: 6.5, font: fontNorm, color: rgb(0.05, 0.55, 0.35) });
 
     // Footer
-    page.drawText('Generated from Myntra Partner Portal (partners.myntrainfo.com) via OrdersMunim In-App Downloader', {
-      x: 80,
+    page.drawText('Generated from Myntra M-Direct Portal (mdirect.myntrainfo.com/Orders/Search) via OrdersMunim In-App Downloader', {
+      x: 75,
       y: 35,
       size: 7.5,
       font: fontNorm,
@@ -5709,11 +5711,11 @@ export default function LabelCropper({ showToast }) {
           )}
         </div>
       ) : selectedMarketplace === 'myntra' ? (
-        /* ================= MYNTRA PARTNER PORTAL (partners.myntrainfo.com) IN-APP WORKSPACE ================= */
+        /* ================= MYNTRA M-DIRECT (mdirect.myntrainfo.com/Orders/Search) IN-APP WORKSPACE ================= */
         <div className="mb-6 space-y-6">
           {!myntraSession ? (
             /* ========================================================================= */
-            /* 1. OFFICIAL MYNTRA PARTNER PORTAL LOGIN SCREEN (partners.myntrainfo.com) */
+            /* 1. OFFICIAL MYNTRA M-DIRECT LOGIN SCREEN                                   */
             /* ========================================================================= */
             <div className="relative overflow-hidden rounded-3xl bg-[#090d16] border border-slate-800 shadow-2xl text-white">
               {/* Subtle background glow styling */}
@@ -5731,16 +5733,16 @@ export default function LabelCropper({ showToast }) {
 
                   <div>
                     <h2 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-                      partners_mdirect
+                      M-Direct Orders Portal
                     </h2>
                     <p className="text-xs font-semibold text-rose-400 mt-0.5">
-                      Powered by Myntra • <span className="text-slate-300">partners.myntrainfo.com</span>
+                      Powered by Myntra • <span className="text-slate-300 font-mono">https://mdirect.myntrainfo.com/Orders/Search</span>
                     </p>
                   </div>
 
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>In-App Direct PDF Engine • Zero Printer Drivers Needed</span>
+                    <span>Target: https://mdirect.myntrainfo.com/Orders/Search</span>
                   </div>
                 </div>
 
@@ -5839,11 +5841,11 @@ export default function LabelCropper({ showToast }) {
                       {myntraLoggingIn ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Connecting to partners.myntrainfo.com...</span>
+                          <span>Opening https://mdirect.myntrainfo.com/Orders/Search...</span>
                         </>
                       ) : (
                         <>
-                          <span>LOG IN</span>
+                          <span>LOG IN &amp; OPEN ORDERS/SEARCH</span>
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -5851,21 +5853,18 @@ export default function LabelCropper({ showToast }) {
                   </form>
                 </div>
 
-                {/* Official Terms & Conditions (partners.myntrainfo.com) */}
+                {/* Official Terms & Conditions */}
                 <div className="mt-6 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-2">
                   <div className="font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
                     <ShieldCheck className="w-3.5 h-3.5 text-rose-400" />
-                    Terms &amp; Security Conditions (partners.myntrainfo.com)
+                    M-Direct Security &amp; Order Fulfillment (mdirect.myntrainfo.com/Orders/Search)
                   </div>
                   <ul className="list-disc pl-4 space-y-1.5 text-slate-400 leading-relaxed text-[10px]">
                     <li>
-                      Users are expected to exhibit caution while using Myntra Application (MA). It is important to protect against unauthorized access to your password and to your computers, devices, and applications.
+                      Client login opens official M-Direct Orders Search (<code className="text-rose-400 bg-slate-950 px-1 py-0.5 rounded">https://mdirect.myntrainfo.com/Orders/Search</code>) directly inside OrdersMunim.
                     </li>
                     <li>
-                      Avoid sharing MA account passwords and use a unique password to access your MA account that is not used for other online accounts. Also, please sign off from the system when using a shared computer.
-                    </li>
-                    <li>
-                      Access being provided to unknown or invalid email addresses may lead to security and privacy breaches of Seller Personally Identifiable Information (PII).
+                      Users are expected to exhibit caution while using Myntra Application (MA). Protect against unauthorized access to your password and devices.
                     </li>
                     <li>
                       OrdersMunim Virtual QZ Engine silently intercepts print streams, enabling direct 1-click downloads for high-resolution 4x6 thermal shipping labels and A4 GST tax invoices without QZ Tray DEMO or physical printer drivers.
@@ -5876,391 +5875,480 @@ export default function LabelCropper({ showToast }) {
             </div>
           ) : (
             /* ========================================================================= */
-            /* 2. AUTHENTICATED MYNTRA IN-APP WORKSPACE & PDF DOWNLOADER                  */
+            /* 2. AUTHENTICATED MYNTRA M-DIRECT WORKSPACE & LIVE ORDERS/SEARCH VIEW      */
             /* ========================================================================= */
-            <div className="space-y-5">
-              {/* Top Navigation & Session Bar */}
-              <div className="p-4 md:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white flex items-center justify-center font-black text-lg shadow-sm">
-                    M
+            <div className="space-y-4">
+              {/* In-App Browser Window Chrome with Address Bar */}
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-white">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-1.5 px-1 shrink-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-800 text-sm">
-                        partners.myntrainfo.com
-                      </h3>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Connected
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200">
-                        Virtual QZ Active
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Seller Account: <strong className="text-slate-700">{myntraSession.email}</strong> • Direct PDF Generation Enabled
-                    </p>
+
+                  {/* Browser Address Bar */}
+                  <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-mono min-w-[280px] max-w-full truncate shadow-inner">
+                    <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-slate-400">https://</span>
+                    <span className="text-white font-bold">mdirect.myntrainfo.com/Orders/Search</span>
                   </div>
+
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    ONLINE
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-2.5 self-start md:self-auto">
+                {/* View Switcher Tabs & Actions */}
+                <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setMyntraActiveTab('portal_view')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        myntraActiveTab === 'portal_view'
+                          ? 'bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Monitor className="w-3.5 h-3.5" />
+                      <span>Live Portal Frame</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMyntraActiveTab('orders')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        myntraActiveTab === 'orders'
+                          ? 'bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Orders &amp; PDF Downloader</span>
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => setMyntraAddModalOpen(true)}
-                    className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1 border border-slate-700 cursor-pointer"
+                    title="Add Custom Order"
                   >
                     <Plus className="w-3.5 h-3.5 text-rose-400" />
-                    + Add Custom Order
+                    <span>+ Add</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleMyntraLogout}
-                    className="py-2 px-3 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-xl border border-slate-800 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors cursor-pointer"
                     title="Sign Out of Myntra"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
+                    <LogOut className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Metric Counters Banner */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-medium text-slate-500">Total Orders</span>
-                    <div className="text-lg font-black text-slate-800 mt-0.5">{myntraOrders.length}</div>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <Package className="w-4 h-4" />
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-medium text-amber-800">Ready to Pack</span>
-                    <div className="text-lg font-black text-amber-900 mt-0.5">
-                      {myntraOrders.filter(o => o.status === 'Ready to Pack').length}
+              {/* View 1: Live Portal View (mdirect.myntrainfo.com/Orders/Search) */}
+              {myntraActiveTab === 'portal_view' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-0">
+                  {/* Quick-Action Bar above Frame */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-4">
+                    <div className="flex items-center gap-2 text-xs text-slate-700">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <strong className="text-slate-900">Virtual QZ Bypass:</strong>
+                      <span className="text-[11px] text-slate-500">
+                        Intercepting print jobs on <code className="text-rose-600 bg-rose-50 px-1 py-0.5 rounded font-mono">https://mdirect.myntrainfo.com/Orders/Search</code>
+                      </span>
                     </div>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                    <Boxes className="w-4 h-4" />
-                  </div>
-                </div>
 
-                <div className="p-3.5 rounded-xl bg-cyan-50/70 border border-cyan-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-medium text-cyan-800">Ready for Dispatch</span>
-                    <div className="text-lg font-black text-cyan-900 mt-0.5">
-                      {myntraOrders.filter(o => o.status === 'Ready to Dispatch').length}
-                    </div>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">
-                    <Truck className="w-4 h-4" />
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-medium text-emerald-800">Virtual QZ Engine</span>
-                    <div className="text-xs font-bold text-emerald-900 mt-1">100% Thermal Ready</div>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                    <Printer className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Workspace Controls & Batch Action Toolbar */}
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-                {/* Search & Filter row */}
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                  {/* Status Pills */}
-                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
-                    {[
-                      { id: 'all', label: `All (${myntraOrders.length})` },
-                      { id: 'ready_to_pack', label: `Ready to Pack (${myntraOrders.filter(o => o.status === 'Ready to Pack').length})` },
-                      { id: 'ready_to_dispatch', label: `Ready for Dispatch (${myntraOrders.filter(o => o.status === 'Ready to Dispatch').length})` },
-                      { id: 'dispatched', label: `Dispatched (${myntraOrders.filter(o => o.status === 'Dispatched').length})` }
-                    ].map(tab => (
+                    <div className="flex items-center gap-2">
                       <button
-                        key={tab.id}
                         type="button"
-                        onClick={() => setMyntraStatusFilter(tab.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                          myntraStatusFilter === tab.id
-                            ? 'bg-white text-slate-900 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        onClick={handleBatchDownloadMyntraLabels}
+                        disabled={myntraDownloadingId === 'batch_labels'}
+                        className="py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                       >
-                        {tab.label}
+                        <Download className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Download All Labels (PDF)</span>
                       </button>
-                    ))}
+
+                      <button
+                        type="button"
+                        onClick={handleBatchDownloadMyntraInvoices}
+                        disabled={myntraDownloadingId === 'batch_invoices'}
+                        className="py-1.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Download Invoices (PDF)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMyntraActiveTab('orders')}
+                        className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                      >
+                        <span>View Orders Table</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Search box */}
-                  <div className="relative min-w-[240px]">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={myntraSearchQuery}
-                      onChange={(e) => setMyntraSearchQuery(e.target.value)}
-                      placeholder="Search AWB, Order ID, SKU..."
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  {/* Embedded Iframe */}
+                  <div className="relative w-full bg-slate-100">
+                    <iframe
+                      src="https://mdirect.myntrainfo.com/Orders/Search"
+                      className="w-full h-[720px] bg-white border-0"
+                      title="Myntra M-Direct Orders Search"
+                      sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+                      allow="clipboard-read; clipboard-write;"
                     />
                   </div>
                 </div>
+              )}
 
-                {/* Primary Batch Action Buttons */}
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <span className="font-bold text-slate-800">
-                      {myntraSelectedIds.size > 0 ? `${myntraSelectedIds.size} Selected` : `All ${filteredMyntraOrders.length} Orders`}:
-                    </span>
-                    <span className="text-slate-500 text-[11px]">
-                      Instant PDF downloads without printer drivers or QZ Tray.
-                    </span>
+              {/* View 2: Orders Search & 1-Click PDF Downloader Table */}
+              {myntraActiveTab === 'orders' && (
+                <div className="space-y-4">
+                  {/* Metric Counters Banner */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-500">Total Orders</span>
+                        <div className="text-lg font-black text-slate-800 mt-0.5">{myntraOrders.length}</div>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                        <Package className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 shadow-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-medium text-amber-800">Ready to Pack</span>
+                        <div className="text-lg font-black text-amber-900 mt-0.5">
+                          {myntraOrders.filter(o => o.status === 'Ready to Pack').length}
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                        <Boxes className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-cyan-50/70 border border-cyan-200 shadow-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-medium text-cyan-800">Ready for Dispatch</span>
+                        <div className="text-lg font-black text-cyan-900 mt-0.5">
+                          {myntraOrders.filter(o => o.status === 'Ready to Dispatch').length}
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-medium text-emerald-800">Virtual QZ Engine</span>
+                        <div className="text-xs font-bold text-emerald-900 mt-1">100% Thermal Ready</div>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Batch Download Labels */}
-                    <button
-                      type="button"
-                      onClick={handleBatchDownloadMyntraLabels}
-                      disabled={myntraDownloadingId === 'batch_labels'}
-                      className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {myntraDownloadingId === 'batch_labels' ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Generating Labels...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-3.5 h-3.5 text-rose-400" />
-                          <span>Download All Labels (PDF)</span>
-                        </>
-                      )}
-                    </button>
+                  {/* Workspace Controls & Batch Action Toolbar */}
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    {/* Search & Filter row */}
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                      {/* Status Pills */}
+                      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+                        {[
+                          { id: 'all', label: `All (${myntraOrders.length})` },
+                          { id: 'ready_to_pack', label: `Ready to Pack (${myntraOrders.filter(o => o.status === 'Ready to Pack').length})` },
+                          { id: 'ready_to_dispatch', label: `Ready for Dispatch (${myntraOrders.filter(o => o.status === 'Ready to Dispatch').length})` },
+                          { id: 'dispatched', label: `Dispatched (${myntraOrders.filter(o => o.status === 'Dispatched').length})` }
+                        ].map(tab => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setMyntraStatusFilter(tab.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                              myntraStatusFilter === tab.id
+                                ? 'bg-white text-slate-900 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
 
-                    {/* Batch Download Invoices */}
-                    <button
-                      type="button"
-                      onClick={handleBatchDownloadMyntraInvoices}
-                      disabled={myntraDownloadingId === 'batch_invoices'}
-                      className="py-2 px-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {myntraDownloadingId === 'batch_invoices' ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Generating Invoices...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="w-3.5 h-3.5 text-slate-600" />
-                          <span>Download All Invoices (PDF)</span>
-                        </>
-                      )}
-                    </button>
+                      {/* Search box */}
+                      <div className="relative min-w-[240px]">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={myntraSearchQuery}
+                          onChange={(e) => setMyntraSearchQuery(e.target.value)}
+                          placeholder="Search AWB, Order ID, SKU..."
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                    </div>
 
-                    {/* Pack & Download All Combined */}
-                    <button
-                      type="button"
-                      onClick={handleBatchDownloadMyntraCombined}
-                      disabled={myntraDownloadingId === 'batch_combined'}
-                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-500/20 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {myntraDownloadingId === 'batch_combined' ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Building Dispatch Pack...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Layers className="w-3.5 h-3.5" />
-                          <span>Pack &amp; Download All</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                    {/* Primary Batch Action Buttons */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <span className="font-bold text-slate-800">
+                          {myntraSelectedIds.size > 0 ? `${myntraSelectedIds.size} Selected` : `All ${filteredMyntraOrders.length} Orders`}:
+                        </span>
+                        <span className="text-slate-500 text-[11px]">
+                          Instant PDF downloads without printer drivers or QZ Tray.
+                        </span>
+                      </div>
 
-                {/* Orders Table */}
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-                        <th className="p-3 w-10 text-center">
-                          <input
-                            type="checkbox"
-                            checked={myntraSelectedIds.size > 0 && myntraSelectedIds.size === filteredMyntraOrders.length}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMyntraSelectedIds(new Set(filteredMyntraOrders.map(o => o.id)));
-                              } else {
-                                setMyntraSelectedIds(new Set());
-                              }
-                            }}
-                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                          />
-                        </th>
-                        <th className="p-3">Order &amp; Packet ID</th>
-                        <th className="p-3">Item Particulars</th>
-                        <th className="p-3">Logistics &amp; AWB</th>
-                        <th className="p-3">Destination</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3 text-right">1-Click PDF Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {filteredMyntraOrders.length === 0 ? (
-                        <tr>
-                          <td colSpan="7" className="p-8 text-center text-slate-400">
-                            No orders found matching your criteria.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredMyntraOrders.map((order) => {
-                          const isSelected = myntraSelectedIds.has(order.id);
-                          const isLabelDownloading = myntraDownloadingId === `label_${order.id}`;
-                          const isInvoiceDownloading = myntraDownloadingId === `invoice_${order.id}`;
-                          const isBothDownloading = myntraDownloadingId === `both_${order.id}`;
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Batch Download Labels */}
+                        <button
+                          type="button"
+                          onClick={handleBatchDownloadMyntraLabels}
+                          disabled={myntraDownloadingId === 'batch_labels'}
+                          className="py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {myntraDownloadingId === 'batch_labels' ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Generating Labels...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Download All Labels (PDF)</span>
+                            </>
+                          )}
+                        </button>
 
-                          return (
-                            <tr
-                              key={order.id}
-                              className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-rose-50/30' : ''}`}
-                            >
-                              <td className="p-3 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    const next = new Set(myntraSelectedIds);
-                                    if (e.target.checked) next.add(order.id);
-                                    else next.delete(order.id);
-                                    setMyntraSelectedIds(next);
-                                  }}
-                                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                                />
-                              </td>
-                              <td className="p-3">
-                                <div className="font-bold text-slate-800">{order.orderId}</div>
-                                <div className="text-[10px] text-slate-500">{order.packetId}</div>
-                                <div className="text-[10px] text-slate-400 mt-0.5">{order.orderDate}</div>
-                              </td>
-                              <td className="p-3 max-w-[220px]">
-                                <div className="font-bold text-slate-800 truncate" title={order.productName}>
-                                  {order.productName}
-                                </div>
-                                <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                                  {order.sku} • Sz {order.size} (Qty: {order.qty})
-                                </div>
-                                <div className="text-[11px] font-semibold text-emerald-700 mt-0.5">
-                                  ₹{order.price} • {order.paymentMode}
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                                  <span className="font-mono text-[11px]">{order.awb}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      navigator.clipboard?.writeText(order.awb);
-                                      showToast?.(`Copied AWB ${order.awb}`, 'info');
-                                    }}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-                                    title="Copy AWB"
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                  <Truck className="w-3 h-3 text-slate-400" />
-                                  <span>{order.courier}</span>
-                                  <span className="text-[10px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded">
-                                    {order.routingHub}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <div className="font-bold text-slate-800">{order.customerName}</div>
-                                <div className="text-[11px] text-slate-500">{order.city}, {order.state}</div>
-                                <div className="text-[10px] text-slate-400">{order.pincode}</div>
-                              </td>
-                              <td className="p-3">
-                                <span
-                                  className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                                    order.status === 'Ready to Pack'
-                                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                      : order.status === 'Ready to Dispatch'
-                                      ? 'bg-cyan-100 text-cyan-800 border border-cyan-200'
-                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                  }`}
-                                >
-                                  {order.status}
-                                </span>
-                              </td>
-                              <td className="p-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {/* Download Label Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadSingleLabel(order)}
-                                    disabled={isLabelDownloading}
-                                    className="py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                                    title="Download 4x6 Thermal Shipping Label (PDF)"
-                                  >
-                                    {isLabelDownloading ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Download className="w-3 h-3 text-rose-400" />
-                                    )}
-                                    <span>Label</span>
-                                  </button>
+                        {/* Batch Download Invoices */}
+                        <button
+                          type="button"
+                          onClick={handleBatchDownloadMyntraInvoices}
+                          disabled={myntraDownloadingId === 'batch_invoices'}
+                          className="py-2 px-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {myntraDownloadingId === 'batch_invoices' ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Generating Invoices...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Download All Invoices (PDF)</span>
+                            </>
+                          )}
+                        </button>
 
-                                  {/* Download Invoice Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadSingleInvoice(order)}
-                                    disabled={isInvoiceDownloading}
-                                    className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                                    title="Download Official A4 Tax Invoice (PDF)"
-                                  >
-                                    {isInvoiceDownloading ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <FileText className="w-3 h-3 text-slate-500" />
-                                    )}
-                                    <span>Invoice</span>
-                                  </button>
+                        {/* Pack & Download All Combined */}
+                        <button
+                          type="button"
+                          onClick={handleBatchDownloadMyntraCombined}
+                          disabled={myntraDownloadingId === 'batch_combined'}
+                          className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-500/20 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {myntraDownloadingId === 'batch_combined' ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Building Dispatch Pack...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>Pack &amp; Download All</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
 
-                                  {/* Download Both */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadSingleCombined(order)}
-                                    disabled={isBothDownloading}
-                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                                    title="Download Both (Label + Invoice Combined)"
-                                  >
-                                    {isBothDownloading ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Layers className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-                                </div>
+                    {/* Orders Table */}
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                            <th className="p-3 w-10 text-center">
+                              <input
+                                type="checkbox"
+                                checked={myntraSelectedIds.size > 0 && myntraSelectedIds.size === filteredMyntraOrders.length}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setMyntraSelectedIds(new Set(filteredMyntraOrders.map(o => o.id)));
+                                  } else {
+                                    setMyntraSelectedIds(new Set());
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                              />
+                            </th>
+                            <th className="p-3">Order &amp; Packet ID</th>
+                            <th className="p-3">Item Particulars</th>
+                            <th className="p-3">Logistics &amp; AWB</th>
+                            <th className="p-3">Destination</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">1-Click PDF Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {filteredMyntraOrders.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" className="p-8 text-center text-slate-400">
+                                No orders found matching your criteria.
                               </td>
                             </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                          ) : (
+                            filteredMyntraOrders.map((order) => {
+                              const isSelected = myntraSelectedIds.has(order.id);
+                              const isLabelDownloading = myntraDownloadingId === `label_${order.id}`;
+                              const isInvoiceDownloading = myntraDownloadingId === `invoice_${order.id}`;
+                              const isBothDownloading = myntraDownloadingId === `both_${order.id}`;
+
+                              return (
+                                <tr
+                                  key={order.id}
+                                  className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-rose-50/30' : ''}`}
+                                >
+                                  <td className="p-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        const next = new Set(myntraSelectedIds);
+                                        if (e.target.checked) next.add(order.id);
+                                        else next.delete(order.id);
+                                        setMyntraSelectedIds(next);
+                                      }}
+                                      className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-bold text-slate-800">{order.orderId}</div>
+                                    <div className="text-[10px] text-slate-500">{order.packetId}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">{order.orderDate}</div>
+                                  </td>
+                                  <td className="p-3 max-w-[220px]">
+                                    <div className="font-bold text-slate-800 truncate" title={order.productName}>
+                                      {order.productName}
+                                    </div>
+                                    <div className="text-[11px] text-slate-600 font-mono mt-0.5">
+                                      {order.sku} • Sz {order.size} (Qty: {order.qty})
+                                    </div>
+                                    <div className="text-[11px] font-semibold text-emerald-700 mt-0.5">
+                                      ₹{order.price} • {order.paymentMode}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                      <span className="font-mono text-[11px]">{order.awb}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard?.writeText(order.awb);
+                                          showToast?.(`Copied AWB ${order.awb}`, 'info');
+                                        }}
+                                        className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                                        title="Copy AWB"
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <Truck className="w-3 h-3 text-slate-400" />
+                                      <span>{order.courier}</span>
+                                      <span className="text-[10px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                        {order.routingHub}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-bold text-slate-800">{order.customerName}</div>
+                                    <div className="text-[11px] text-slate-500">{order.city}, {order.state}</div>
+                                    <div className="text-[10px] text-slate-400">{order.pincode}</div>
+                                  </td>
+                                  <td className="p-3">
+                                    <span
+                                      className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                        order.status === 'Ready to Pack'
+                                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                          : order.status === 'Ready to Dispatch'
+                                          ? 'bg-cyan-100 text-cyan-800 border border-cyan-200'
+                                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      }`}
+                                    >
+                                      {order.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {/* Download Label Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadSingleLabel(order)}
+                                        disabled={isLabelDownloading}
+                                        className="py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                        title="Download 4x6 Thermal Shipping Label (PDF)"
+                                      >
+                                        {isLabelDownloading ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Download className="w-3 h-3 text-rose-400" />
+                                        )}
+                                        <span>Label</span>
+                                      </button>
+
+                                      {/* Download Invoice Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadSingleInvoice(order)}
+                                        disabled={isInvoiceDownloading}
+                                        className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                        title="Download Official A4 Tax Invoice (PDF)"
+                                      >
+                                        {isInvoiceDownloading ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <FileText className="w-3 h-3 text-slate-500" />
+                                        )}
+                                        <span>Invoice</span>
+                                      </button>
+
+                                      {/* Download Both */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadSingleCombined(order)}
+                                        disabled={isBothDownloading}
+                                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                        title="Download Both (Label + Invoice Combined)"
+                                      >
+                                        {isBothDownloading ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Layers className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Add Custom Order Modal */}
               {myntraAddModalOpen && (
@@ -6272,7 +6360,7 @@ export default function LabelCropper({ showToast }) {
                           M
                         </div>
                         <h3 className="font-bold text-sm text-slate-800">
-                          Process Custom Myntra Order
+                          Process Custom M-Direct Order
                         </h3>
                       </div>
                       <button
