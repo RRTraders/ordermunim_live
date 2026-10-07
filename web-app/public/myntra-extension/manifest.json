@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "OrdersMunim - Myntra Label & Invoice Downloader",
+  "version": "1.0.0",
+  "description": "Bypasses QZ Tray and thermal printer requirements on Myntra Partner Portal to automatically download Shipping Labels and Invoices as clean PDF files.",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://partnerportal.myntra.com/*",
+    "https://partners.myntrainfo.com/*",
+    "https://*.myntra.com/*"
+  ],
+  "action": {
+    "default_title": "OrdersMunim Myntra Downloader",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://partnerportal.myntra.com/*",
+        "https://partners.myntrainfo.com/*",
+        "https://*.myntra.com/*"
+      ],
+      "js": ["qz_interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

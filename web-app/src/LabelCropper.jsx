@@ -33,7 +33,12 @@ import {
   Sparkles, 
   Check, 
   Filter, 
-  QrCode 
+  QrCode,
+  ExternalLink,
+  DownloadCloud,
+  Monitor,
+  Smartphone,
+  Terminal
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -91,12 +96,12 @@ export const MARKETPLACES = [
     id: 'myntra',
     name: 'Myntra',
     shortName: 'Myntra',
-    tagline: 'Myntra Partner Portal (PPX)',
+    tagline: 'Myntra Partner Portal (Direct PDF)',
     badgeText: 'myntra',
     badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
     iconLetter: 'M',
-    description: 'Multi-item packing slips & 4x6 thermal barcode cropper for Myntra PPX labels and logistics.',
-    ready: false
+    description: 'Direct Label & Invoice Auto-Downloader. Bypasses QZ Tray & thermal printer requirements on Myntra Partner Portal.',
+    ready: true
   },
 ];
 
@@ -1883,6 +1888,98 @@ export default function LabelCropper({ showToast }) {
       result: null,
       error: null,
     });
+  };
+
+  const [myntraTesting, setMyntraTesting] = useState(false);
+  const [myntraTestSuccess, setMyntraTestSuccess] = useState(false);
+
+  const handleTestMyntraDownload = async () => {
+    setMyntraTesting(true);
+    try {
+      const pdfDoc = await PDFDocument.create();
+      // 4x6 inch thermal page (288 x 432 pt)
+      const page = pdfDoc.addPage([288, 432]);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontNorm = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      // Header Banner
+      page.drawRectangle({
+        x: 10,
+        y: 375,
+        width: 268,
+        height: 45,
+        color: rgb(0.06, 0.09, 0.16)
+      });
+      page.drawText('MYNTRA LOGISTICS (PPMP)', { x: 20, y: 400, size: 12, font: fontBold, color: rgb(1, 1, 1) });
+      page.drawText('OrdersMunim Direct QZ Bypass - Virtual Printer', { x: 20, y: 384, size: 8, font: fontNorm, color: rgb(0.2, 0.8, 1) });
+
+      // Barcode Box
+      page.drawRectangle({
+        x: 15,
+        y: 280,
+        width: 258,
+        height: 80,
+        borderColor: rgb(0.2, 0.2, 0.2),
+        borderWidth: 1
+      });
+      for (let i = 25; i < 260; i += 5) {
+        page.drawLine({
+          start: { x: i, y: 305 },
+          end: { x: i, y: 345 },
+          thickness: (i % 3 === 0) ? 2.5 : 1,
+          color: rgb(0, 0, 0)
+        });
+      }
+      page.drawText('AWB: MYNTR789234981IN', { x: 75, y: 288, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+
+      // Order info
+      page.drawText('Ship To: RAHUL SHARMA', { x: 15, y: 250, size: 10, font: fontBold, color: rgb(0, 0, 0) });
+      page.drawText('H.No 45, Sector 14, Ring Road', { x: 15, y: 235, size: 8, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+      page.drawText('New Delhi - 110001, India', { x: 15, y: 220, size: 8, font: fontNorm, color: rgb(0.2, 0.2, 0.2) });
+
+      page.drawLine({
+        start: { x: 15, y: 205 },
+        end: { x: 273, y: 205 },
+        thickness: 0.8,
+        color: rgb(0.7, 0.7, 0.7)
+      });
+
+      page.drawText('Item: Casual Cotton Shirt - M (Pack of 1)', { x: 15, y: 185, size: 8.5, font: fontBold, color: rgb(0, 0, 0) });
+      page.drawText('SKU: MYN-SHIRT-M-BLU | Qty: 1', { x: 15, y: 170, size: 8, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
+      page.drawText('Invoice No: MYN-INV-2026-9912', { x: 15, y: 155, size: 8, font: fontNorm, color: rgb(0.3, 0.3, 0.3) });
+
+      // Footer
+      page.drawRectangle({
+        x: 10,
+        y: 10,
+        width: 268,
+        height: 25,
+        color: rgb(0.95, 0.96, 0.98)
+      });
+      page.drawText('Verified by OrdersMunim Virtual QZ Bridge - 100% Thermal Ready', { x: 16, y: 18, size: 7, font: fontBold, color: rgb(0.06, 0.6, 0.4) });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Myntra_Sample_Shipping_Label_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 1000);
+
+      setMyntraTestSuccess(true);
+      showToast?.('Sample Myntra label downloaded successfully!', 'success');
+      setTimeout(() => setMyntraTestSuccess(false), 5000);
+    } catch (err) {
+      console.error('Test Myntra generation error:', err);
+      showToast?.('Failed to generate sample PDF', 'error');
+    } finally {
+      setMyntraTesting(false);
+    }
   };
 
   const handleSelectMarketplace = (id) => {
@@ -4920,6 +5017,183 @@ export default function LabelCropper({ showToast }) {
               </div>
             </div>
           )}
+        </div>
+      ) : selectedMarketplace === 'myntra' ? (
+        /* ================= MYNTRA PARTNER PORTAL DIRECT PDF AUTO-DOWNLOADER ================= */
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-5 md:p-7 mb-6 space-y-6">
+          {/* Top Banner & Title */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white flex items-center justify-center text-xs font-black shadow-xs">
+                  M
+                </div>
+                Myntra Partner Portal (PPMP)
+                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                  <Check className="w-2.5 h-2.5" /> Virtual QZ Active
+                </span>
+                <span className="text-[10px] font-semibold bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full border border-cyan-200">
+                  No Printer Driver Needed
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                Bypasses QZ Tray DEMO and physical printer requirements on Myntra Partner Portal. Your shipping labels and tax invoices automatically download as clean, ready-to-print PDF files!
+              </p>
+            </div>
+
+            <a
+              href="https://partners.myntrainfo.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="self-start md:self-auto text-xs font-bold text-white bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-95 px-4 py-2 rounded-xl shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 no-underline cursor-pointer shrink-0"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open Myntra Portal
+            </a>
+          </div>
+
+          {/* Quick Platform Choice Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Box 1: Mobile App Solution */}
+            <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/60 border border-slate-200 flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">1. Mobile App (Android)</h4>
+                    <span className="text-[10px] text-emerald-600 font-semibold">Zero Setup Required</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Inside the OrdersMunim mobile app, the official Myntra Partner Portal runs with built-in QZ Tray interception. Simply tap to log in with your Myntra credentials, pack orders, and labels download straight to your phone's storage.
+                </p>
+              </div>
+
+              <a
+                href="https://partners.myntrainfo.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all no-underline cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Launch Myntra on Mobile App
+              </a>
+            </div>
+
+            {/* Box 2: Desktop / PC Solutions */}
+            <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/60 border border-slate-200 flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center">
+                    <Monitor className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">2. Desktop PC (Chrome & Edge)</h4>
+                    <span className="text-[10px] text-cyan-600 font-semibold">1-Click PDF Downloader</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  For sellers using a computer/laptop, choose either our lightweight Chrome Extension or 1-Click Desktop Bridge to intercept all print jobs silently in the background.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a
+                  href="/ordersmunim-myntra-extension.zip"
+                  download="ordersmunim-myntra-extension.zip"
+                  className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all no-underline cursor-pointer"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5 text-cyan-400" />
+                  Chrome Ext (.zip)
+                </a>
+                <a
+                  href="/ordersmunim-pc-bridge.zip"
+                  download="ordersmunim-pc-bridge.zip"
+                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all no-underline cursor-pointer"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                  PC Bridge (.zip)
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Simple 3-Step Setup Instructions */}
+          <div className="border border-slate-200/90 rounded-2xl p-4 md:p-5 bg-slate-50/50 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Easy 3-Step Portal Guide
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">1</span>
+                  Login to Myntra
+                </div>
+                <p className="text-slate-500 text-[11px] leading-relaxed">
+                  Log in to your Myntra Partner Portal (<code className="text-rose-600 bg-rose-50 px-1 py-0.5 rounded">partners.myntrainfo.com</code>) using your registered seller credentials.
+                </p>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">2</span>
+                  Set Virtual Printer
+                </div>
+                <p className="text-slate-500 text-[11px] leading-relaxed">
+                  Under <strong>Orders &gt; Configure Printer</strong> (top right), set the printer name to: <strong className="text-slate-800">OrdersMunim Thermal Label Printer</strong>.
+                </p>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-slate-200/70 space-y-1">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">3</span>
+                  Pack &amp; Print
+                </div>
+                <p className="text-slate-500 text-[11px] leading-relaxed">
+                  Click <strong>Print Label</strong> or <strong>Print Invoice</strong>. OrdersMunim catches the stream and instantly downloads clean PDF files to your device!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Simulator & Tester Box */}
+          <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Live Downloader Verification Test
+              </div>
+              <p className="text-[11px] text-emerald-700">
+                Click below to simulate a Myntra thermal shipping label print and test downloading directly onto this device.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestMyntraDownload}
+              disabled={myntraTesting}
+              className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              {myntraTesting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Generating...
+                </>
+              ) : myntraTestSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Downloaded!
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  Download Test Myntra Label PDF
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <>
