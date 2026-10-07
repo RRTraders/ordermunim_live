@@ -14,6 +14,7 @@ import {
   UploadCloud, 
   ChevronUp, 
   ChevronDown, 
+  ChevronRight, 
   Scissors, 
   FileCheck, 
   Clock, 

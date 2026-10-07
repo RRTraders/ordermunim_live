@@ -83,6 +83,49 @@ import {
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
+class CropperErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("CropperErrorBoundary caught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 text-center max-w-lg mx-auto my-6 space-y-4 shadow-xl">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-white text-base">Label Cropper Encountered an Issue</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {this.state.error?.message || "An unexpected error occurred while loading the workspace."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.removeItem('om_selected_marketplace');
+              } catch (e) {}
+              this.setState({ hasError: false, error: null });
+            }}
+            className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+          >
+            Reset &amp; Reload Cropper
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const CURRENT_APP_VERSION_CODE = 16;
 const CURRENT_APP_VERSION_NAME = "2.6";
 
@@ -3079,7 +3122,9 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'cropper' ? (
-          <LabelCropper showToast={showToast} />
+          <CropperErrorBoundary>
+            <LabelCropper showToast={showToast} />
+          </CropperErrorBoundary>
         ) : (
           <>
             {/* ================= ADMIN VIEW (SUPER ADMIN ONLY - ZERO OTPs) ================= */}
