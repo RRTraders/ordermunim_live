@@ -5,12 +5,14 @@ const NativeMeesho = registerPlugin('MeeshoDirect');
 
 export function isNativeMobile() {
   try {
-    if (typeof Capacitor !== 'undefined' && typeof Capacitor.isNativePlatform === 'function') {
-      if (Capacitor.isNativePlatform()) return true;
+    if (typeof Capacitor !== 'undefined') {
+      if (typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform()) return true;
+      if (typeof Capacitor.getPlatform === 'function' && Capacitor.getPlatform() === 'android') return true;
     }
     if (typeof window !== 'undefined') {
-      if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
-        if (window.Capacitor.isNativePlatform()) return true;
+      if (window.Capacitor) {
+        if (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+        if (typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() === 'android') return true;
       }
       if (window.location && window.location.protocol === 'capacitor:') {
         return true;
@@ -169,20 +171,37 @@ export async function downloadAndInstallApk(url, onProgress) {
  * Retrieve installed app version info from Android package manager (or fallback)
  */
 export async function getAppVersionInfo() {
-  if (isNativeMobile()) {
+  const isNative = isNativeMobile();
+  if (isNative) {
     try {
       const info = await NativeMeesho.getAppInfo();
       if (info && info.versionCode) {
         return {
           versionCode: Number(info.versionCode),
-          versionName: String(info.versionName || '1.5')
+          versionName: String(info.versionName || '2.5'),
+          packageName: String(info.packageName || 'com.rrtraders.meeshootp'),
+          isNative: true,
+          platform: 'android'
         };
       }
     } catch (err) {
       console.warn('[Native Meesho] getAppInfo error:', err);
     }
+    return {
+      versionCode: 15,
+      versionName: '2.5',
+      packageName: 'com.rrtraders.meeshootp',
+      isNative: true,
+      platform: 'android'
+    };
   }
-  return null;
+  return {
+    versionCode: 15,
+    versionName: '2.5',
+    packageName: null,
+    isNative: false,
+    platform: 'web'
+  };
 }
 
 
