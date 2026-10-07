@@ -306,10 +306,10 @@ export default function App() {
     }
 
     const currentList = Array.isArray(profile?.followStores) ? profile.followStores : [];
-    const maxPermitted = isSuperAdmin ? 999 : (Number(profile?.maxAccounts) || 1);
+    const maxPermitted = typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1);
 
     if (currentList.length >= maxPermitted) {
-      showToast(`Store limit reached (${maxPermitted} stores permitted). Upgrade plan to add more.`, 'error');
+      showToast(`Store limit reached (${maxPermitted} store${maxPermitted === 1 ? '' : 's'} permitted). Contact admin to add more stores.`, 'error');
       return;
     }
 
@@ -3116,7 +3116,7 @@ export default function App() {
                   <span className="font-bold text-sm text-white">Follow Us Store Profiles</span>
                 </div>
                 <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
-                  {(profile?.followStores || []).length} / {isSuperAdmin ? '∞' : (Number(profile?.maxAccounts) || 1)} Stores Added
+                  {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} Stores Added
                 </span>
               </div>
 
@@ -3145,7 +3145,7 @@ export default function App() {
               </div>
 
               {/* Add Store Form */}
-              {(profile?.followStores || []).length < (isSuperAdmin ? 999 : (Number(profile?.maxAccounts) || 1)) ? (
+              {(profile?.followStores || []).length < (typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)) ? (
                 <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-800/60 space-y-2">
                   <div className="text-[11px] font-bold text-slate-300">Add New Store Profile:</div>
                   <input
@@ -3173,7 +3173,7 @@ export default function App() {
                 </form>
               ) : (
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300">
-                  Store slot quota reached ({Number(profile?.maxAccounts) || 1} permitted). Upgrade your plan or contact admin to add more stores.
+                  Store slot quota reached ({typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} permitted). Contact admin to add more stores.
                 </div>
               )}
             </div>
