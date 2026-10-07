@@ -47,7 +47,15 @@ import {
   ShieldCheck,
   EyeOff,
   Search,
-  ArrowRight
+  ArrowRight,
+  Camera,
+  Video,
+  VideoOff,
+  Edit3,
+  Calendar,
+  Play,
+  Square,
+  Circle
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -110,6 +118,17 @@ export const MARKETPLACES = [
     badgeStyle: 'bg-gradient-to-tr from-[#FF3F6C] via-[#FF527B] to-[#F16521] text-white shadow-rose-950/20',
     iconLetter: 'M',
     description: 'Myntra Partner Portal. Direct in-app login & 1-click PDF download for shipping labels and invoices without printer drivers or QZ Tray.',
+    ready: true
+  },
+  {
+    id: 'webcam',
+    name: 'Webcam',
+    shortName: 'Webcam',
+    tagline: 'Return Parcel Video Proof & Unboxing Studio',
+    badgeText: 'cam',
+    badgeStyle: 'bg-gradient-to-tr from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-teal-950/20',
+    iconLetter: '📹',
+    description: 'Live Webcam Unboxing & Return Proof with customizable real-time Indian Date & Time watermark timer for marketplace claims.',
     ready: true
   },
 ];
@@ -437,6 +456,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     flipcart: createInitialMarketplaceState(),
     meesho: createInitialMarketplaceState(),
     myntra: createInitialMarketplaceState(),
+    webcam: createInitialMarketplaceState(),
   }));
 
   const updateMarketplaceState = (mpId, updater) => {
@@ -2741,8 +2761,254 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         localStorage.setItem('label_follow_us_link', matched.url);
         localStorage.setItem('label_follow_us_enabled', 'true');
       } catch {}
-      if (showToast) showToast(`Selected "${matched.name}" for Follow Us panel`, 'success');
     }
+  };
+
+  // ================= WEBCAM & DATE/TIME CLOCK PROOF STUDIO =================
+  const [clockMode, setClockMode] = useState(() => {
+    try {
+      return localStorage.getItem('om_clock_mode') || 'live';
+    } catch {
+      return 'live';
+    }
+  });
+  const [customClockOffsetMs, setCustomClockOffsetMs] = useState(() => {
+    try {
+      const stored = localStorage.getItem('om_clock_offset_ms');
+      return stored ? Number(stored) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [showClockModal, setShowClockModal] = useState(false);
+  const [editDateStr, setEditDateStr] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
+  const [editTimeStr, setEditTimeStr] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+
+  const [currentIstTime, setCurrentIstTime] = useState('');
+
+  // Webcam State
+  const [isWebcamActive, setIsWebcamActive] = useState(false);
+  const [webcamStream, setWebcamStream] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDurationSec, setRecordingDurationSec] = useState(0);
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState(null);
+  const [availableCameras, setAvailableCameras] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [webcamError, setWebcamError] = useState(null);
+
+  const webcamVideoRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+
+  // Live Timer Update
+  useEffect(() => {
+    const updateTime = () => {
+      try {
+        const nowMs = Date.now();
+        const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
+        const targetDate = new Date(effectiveMs);
+        const options = {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        };
+        setCurrentIstTime(new Intl.DateTimeFormat('en-IN', options).format(targetDate));
+      } catch (e) {
+        setCurrentIstTime(new Date().toLocaleTimeString());
+      }
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, [clockMode, customClockOffsetMs]);
+
+  // Recording Duration Counter
+  useEffect(() => {
+    let interval = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingDurationSec(s => s + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  // Clean up webcam stream on unmount
+  useEffect(() => {
+    return () => {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [webcamStream]);
+
+  const handleOpenClockModal = () => {
+    try {
+      const nowMs = Date.now();
+      const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
+      const d = new Date(effectiveMs);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      setEditDateStr(`${yyyy}-${mm}-${dd}`);
+      setEditTimeStr(`${hh}:${min}`);
+    } catch {}
+    setShowClockModal(true);
+  };
+
+  const handleApplyCustomTime = (e) => {
+    e.preventDefault();
+    if (!editDateStr || !editTimeStr) {
+      if (showToast) showToast('Please select valid date and time', 'error');
+      return;
+    }
+    try {
+      const [year, month, day] = editDateStr.split('-').map(Number);
+      const [hour, minute] = editTimeStr.split(':').map(Number);
+      const chosen = new Date(year, month - 1, day, hour, minute, 0);
+      const offset = chosen.getTime() - Date.now();
+
+      setCustomClockOffsetMs(offset);
+      setClockMode('custom');
+      localStorage.setItem('om_clock_mode', 'custom');
+      localStorage.setItem('om_clock_offset_ms', String(offset));
+      setShowClockModal(false);
+      if (showToast) showToast('Custom Date & Time applied! Clock is ticking live from this time.', 'success');
+    } catch (err) {
+      if (showToast) showToast(`Error applying custom time: ${err.message}`, 'error');
+    }
+  };
+
+  const handleResetToLiveTime = () => {
+    setClockMode('live');
+    setCustomClockOffsetMs(0);
+    localStorage.setItem('om_clock_mode', 'live');
+    localStorage.removeItem('om_clock_offset_ms');
+    setShowClockModal(false);
+    if (showToast) showToast('Reset to Live Real-Time Indian Standard Time (IST)', 'info');
+  };
+
+  const handleStartWebcam = async (cameraId = selectedCameraId) => {
+    setWebcamError(null);
+    try {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+      }
+      const constraints = {
+        video: cameraId ? { deviceId: { exact: cameraId } } : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        audio: true
+      };
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: cameraId ? { deviceId: { exact: cameraId } } : true,
+          audio: false
+        });
+      }
+      setWebcamStream(stream);
+      setIsWebcamActive(true);
+      if (webcamVideoRef.current) {
+        webcamVideoRef.current.srcObject = stream;
+        webcamVideoRef.current.play().catch(() => {});
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevs = devices.filter(d => d.kind === 'videoinput');
+        setAvailableCameras(videoDevs);
+      } catch {}
+      if (showToast) showToast('Webcam started! Timer is running live.', 'success');
+    } catch (err) {
+      console.error(err);
+      setWebcamError(err.message || 'Could not access camera. Please allow camera permissions in your browser.');
+      if (showToast) showToast('Camera access denied or unavailable', 'error');
+    }
+  };
+
+  const handleStopWebcam = () => {
+    if (isRecording) {
+      handleStopRecording();
+    }
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(t => t.stop());
+      setWebcamStream(null);
+    }
+    setIsWebcamActive(false);
+    if (webcamVideoRef.current) {
+      webcamVideoRef.current.srcObject = null;
+    }
+    if (showToast) showToast('Webcam stopped', 'info');
+  };
+
+  const handleStartRecording = () => {
+    if (!webcamStream) {
+      if (showToast) showToast('Please start webcam first', 'error');
+      return;
+    }
+    try {
+      recordedChunksRef.current = [];
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : 'video/mp4';
+
+      const recorder = new MediaRecorder(webcamStream, { mimeType: mime });
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mime });
+        if (recordedVideoUrl) {
+          try { URL.revokeObjectURL(recordedVideoUrl); } catch {}
+        }
+        const url = URL.createObjectURL(blob);
+        setRecordedVideoUrl(url);
+        if (showToast) showToast('Recording completed! Video proof ready to save.', 'success');
+      };
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingDurationSec(0);
+      if (showToast) showToast('Recording started with live timer!', 'info');
+    } catch (err) {
+      if (showToast) showToast(`Recording failed: ${err.message}`, 'error');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+      setIsRecording(false);
+    }
+  };
+
+  const formatSecs = (sec) => {
+    const mins = Math.floor(sec / 60);
+    const remainder = sec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
   };
 
   // Handle uploaded files strictly for current marketplace
@@ -6367,6 +6633,266 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
           )}
         </div>
+      ) : selectedMarketplace === 'webcam' ? (
+        /* ================= WEBCAM RETURN PROOF & UNBOXING STUDIO ================= */
+        <div className="mb-6 space-y-6 animate-in fade-in duration-200">
+          {/* Header Card with Shifted Clock Badge from Image 1 */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                  Live Proof Camera
+                </span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <Camera className="w-6 h-6 text-emerald-400" />
+                Webcam Return Proof &amp; Unboxing Studio
+              </h2>
+              <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
+                Record parcel unboxing with live Indian Date &amp; Time proof. Accepted by Meesho, Flipkart, Amazon &amp; Myntra for return claims.
+              </p>
+            </div>
+
+            {/* Shifted Clock Badge (Image 1 shifted here!) */}
+            <div className="flex flex-col items-start md:items-end gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenClockModal}
+                className={`flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-slate-950 border transition-all text-mono text-xs sm:text-sm font-bold tracking-wider shadow-inner cursor-pointer group ${
+                  clockMode === 'custom'
+                    ? 'border-amber-500/60 text-amber-300 hover:border-amber-400 shadow-amber-950/20'
+                    : 'border-emerald-500/50 text-emerald-400 hover:border-emerald-400 shadow-emerald-950/20'
+                }`}
+                title="Click to edit / customize Date & Time for video proof"
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  clockMode === 'custom' ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'
+                }`}></span>
+                <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-mono whitespace-nowrap">{currentIstTime || 'Loading IST...'}</span>
+                <Edit3 className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity shrink-0 ml-0.5 text-cyan-400" />
+              </button>
+
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-slate-400">Timer Mode:</span>
+                <span className={`font-bold ${clockMode === 'custom' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {clockMode === 'custom' ? 'Custom Edited (Ticking Live)' : 'Live Real-Time IST'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleOpenClockModal}
+                  className="text-cyan-400 hover:underline cursor-pointer font-bold"
+                >
+                  Edit Time
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Webcam Recording Stage */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm space-y-5">
+            {/* Camera Selection & Status Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 flex-wrap">
+                {isWebcamActive ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Webcam Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold">
+                    <VideoOff className="w-3.5 h-3.5 text-slate-400" />
+                    Webcam Offline
+                  </span>
+                )}
+
+                {isRecording && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-300 text-rose-700 text-xs font-black animate-pulse">
+                    <Circle className="w-2.5 h-2.5 fill-rose-600 text-rose-600" />
+                    REC [{formatSecs(recordingDurationSec)}]
+                  </span>
+                )}
+              </div>
+
+              {/* Camera Selector (if multiple cameras available) */}
+              {availableCameras.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-slate-600">Camera:</label>
+                  <select
+                    value={selectedCameraId}
+                    onChange={(e) => {
+                      setSelectedCameraId(e.target.value);
+                      if (isWebcamActive) {
+                        handleStartWebcam(e.target.value);
+                      }
+                    }}
+                    className="px-2.5 py-1 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                  >
+                    {availableCameras.map((cam, idx) => (
+                      <option key={cam.deviceId || idx} value={cam.deviceId}>
+                        {cam.label || `Camera ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Video Viewport Container */}
+            <div className="relative aspect-video max-w-3xl mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 shadow-2xl flex items-center justify-center">
+              {isWebcamActive ? (
+                <>
+                  <video
+                    ref={webcamVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Superimposed Live Timestamp HUD Overlay (High contrast CCTV style for unboxing proof) */}
+                  <div className="absolute top-3 left-3 z-20 pointer-events-none">
+                    <div className="bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-xl px-3 py-1.5 shadow-lg space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-rose-500 animate-ping' : 'bg-emerald-400 animate-pulse'}`}></span>
+                        <span className="font-mono text-xs sm:text-sm font-black text-emerald-400 tracking-wider">
+                          {currentIstTime}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-bold flex items-center gap-2">
+                        <span>ORDERSMUNIM PROOF</span>
+                        {isRecording && (
+                          <span className="text-rose-400 font-mono font-black">
+                            • REC {formatSecs(recordingDurationSec)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top-Right Recording Indicator */}
+                  {isRecording && (
+                    <div className="absolute top-3 right-3 z-20 pointer-events-none">
+                      <div className="bg-rose-600/90 text-white font-black text-xs px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse">
+                        <Circle className="w-2.5 h-2.5 fill-white text-white" />
+                        <span>RECORDING</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Webcam Offline State */
+                <div className="text-center p-6 space-y-4 max-w-sm">
+                  <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Camera className="w-8 h-8 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Webcam Ready</h3>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Tap below to start your PC webcam. The live Indian Date &amp; Time timer will run directly on the video screen.
+                    </p>
+                  </div>
+                  {webcamError && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                      {webcamError}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleStartWebcam()}
+                    className="py-3 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mx-auto cursor-pointer transition-all active:scale-95"
+                  >
+                    <Play className="w-4 h-4 fill-slate-950 text-slate-950" />
+                    <span>Start Web Cam &amp; Timer</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons Toolbar */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              {!isWebcamActive ? (
+                <button
+                  type="button"
+                  onClick={() => handleStartWebcam()}
+                  className="py-3 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Start Web Cam &amp; Timer</span>
+                </button>
+              ) : (
+                <>
+                  {!isRecording ? (
+                    <button
+                      type="button"
+                      onClick={handleStartRecording}
+                      className="py-3 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/25 flex items-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Circle className="w-4 h-4 fill-white text-white" />
+                      <span>Start Recording &amp; Timer</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStopRecording}
+                      className="py-3 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md flex items-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Square className="w-4 h-4 fill-rose-500 text-rose-500" />
+                      <span>Stop Recording ({formatSecs(recordingDurationSec)})</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleStopWebcam}
+                    className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <VideoOff className="w-4 h-4 text-slate-500" />
+                    <span>Stop Webcam</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenClockModal}
+                    className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4 text-cyan-600" />
+                    <span>Edit Date &amp; Time</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Video Download Ready Card */}
+            {recordedVideoUrl && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-950">Recorded Proof Video Ready!</h4>
+                    <p className="text-xs text-emerald-700">
+                      Unboxing video captured with timestamp. Ready to download and submit for claim.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={recordedVideoUrl}
+                    download={`Return_Proof_${new Date().toISOString().slice(0, 10)}.webm`}
+                    className="py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Proof Video</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <>
           {/* ================= UNDER DEVELOPMENT CARD ================= */}
@@ -6622,6 +7148,102 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 </a>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= EDIT DATE & TIME MODAL (FOR WEBCAM STUDIO) ================= */}
+      {showClockModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-white">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Edit Date &amp; Time</h3>
+                  <p className="text-[11px] text-slate-400">Webcam Proof &amp; Unboxing Timestamp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowClockModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Display Status */}
+            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 text-center space-y-1">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Currently Showing:</span>
+              <div className="font-mono text-sm font-bold text-emerald-400 tracking-wider">
+                {currentIstTime}
+              </div>
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                <span className={`w-2 h-2 rounded-full ${clockMode === 'custom' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                <span className="text-[10px] text-slate-300 font-semibold">
+                  Mode: <strong className={clockMode === 'custom' ? 'text-amber-400' : 'text-emerald-400'}>
+                    {clockMode === 'custom' ? 'Custom / Edited (Ticking Live)' : 'Live Real-Time IST'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Form to Set Custom Date & Time */}
+            <form onSubmit={handleApplyCustomTime} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                  Select Date
+                </label>
+                <input
+                  type="date"
+                  value={editDateStr}
+                  onChange={(e) => setEditDateStr(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  Select Time
+                </label>
+                <input
+                  type="time"
+                  step="1"
+                  value={editTimeStr}
+                  onChange={(e) => setEditTimeStr(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+                💡 <strong>Natural unboxing proof:</strong> The clock will continuously tick forward second-by-second from this edited time, making the video proof look 100% genuine!
+              </p>
+
+              <div className="flex items-center gap-2 pt-1">
+                {clockMode === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={handleResetToLiveTime}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-colors cursor-pointer border border-slate-700"
+                  >
+                    Reset to Live IST
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+                >
+                  Set Custom Time
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
