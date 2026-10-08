@@ -2805,6 +2805,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const [facingMode, setFacingMode] = useState('environment'); // default to rear camera on mobile for return parcel unboxing!
   const [webcamError, setWebcamError] = useState(null);
 
+  // Detect mobile device (phones/tablets/Capacitor) so rear/front flip is shown only on mobile
+  const isMobileDevice = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+    const isMobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+    const isSmallTouch = window.matchMedia && window.matchMedia('(pointer: coarse) and (max-width: 1024px)').matches;
+    const isCapacitor = Boolean(window.Capacitor?.isNativePlatform?.() || window.location?.protocol === 'capacitor:');
+    return isMobileUA || isSmallTouch || isCapacitor;
+  }, []);
+
   const webcamVideoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -6907,17 +6917,19 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 )}
               </div>
 
-              {/* Camera Selector & Flip Front/Back Controls */}
+              {/* Camera Selector & Flip Front/Back Controls (Flip button only on mobile devices) */}
               <div className="flex items-center gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={handleToggleFacingMode}
-                  className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 active:scale-95 shadow-2xs"
-                  title="Switch between Rear (Back) and Front Camera"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
-                  <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
-                </button>
+                {isMobileDevice && (
+                  <button
+                    type="button"
+                    onClick={handleToggleFacingMode}
+                    className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 active:scale-95 shadow-2xs"
+                    title="Switch between Rear (Back) and Front Camera"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
+                    <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
+                  </button>
+                )}
 
                 {availableCameras.length > 1 && (
                   <select
