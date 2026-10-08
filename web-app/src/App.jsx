@@ -3115,7 +3115,10 @@ export default function App() {
             {/* 1. Home */}
             <button
               type="button"
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => {
+                setActiveTab('dashboard');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               className={`relative py-1.5 transition-colors cursor-pointer group ${
                 activeTab === 'dashboard' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
               }`}
@@ -3196,14 +3199,22 @@ export default function App() {
             {/* 3. OTP */}
             <button
               type="button"
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => {
+                setActiveTab('otp');
+                setTimeout(() => {
+                  const el = document.getElementById('otp-stores-section');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 50);
+              }}
               className={`relative py-1.5 transition-colors cursor-pointer group ${
-                activeTab === 'dashboard' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
+                activeTab === 'otp' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
               }`}
             >
               <span>OTP</span>
               <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
-                activeTab === 'dashboard' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                activeTab === 'otp' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
               }`} />
             </button>
 
@@ -4096,7 +4107,7 @@ export default function App() {
             </div>
 
             {/* Account Quota & Controls Bar */}
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs">
+            <div id="otp-stores-section" className="bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs scroll-mt-20">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base md:text-lg font-black text-slate-900">Connected Stores</h2>
                 <span className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
