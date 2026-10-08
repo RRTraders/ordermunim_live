@@ -3097,20 +3097,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center: Desktop Navigation Bar with All Items */}
-          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 text-xs font-bold text-slate-700">
+          {/* Center: Desktop Navigation Bar with Clean Underline-on-Hover Style (Image 2 Inspired) */}
+          <nav className="hidden lg:flex items-center gap-7 text-[13px] font-semibold text-slate-700">
             {/* 1. Home */}
             <button
               type="button"
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                activeTab === 'dashboard'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
-                  : 'hover:text-slate-900 hover:bg-white/70'
+              className={`relative py-1.5 transition-colors cursor-pointer group ${
+                activeTab === 'dashboard' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
               }`}
             >
-              <Home className="w-3.5 h-3.5" />
               <span>Home</span>
+              <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
+                activeTab === 'dashboard' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
+              }`} />
             </button>
 
             {/* 2. E Commerce with Vertical Hover Menu (Ajio, Amazon, Flipkart, Meesho, Myntra) */}
@@ -3125,20 +3125,24 @@ export default function App() {
                   setActiveTab('cropper');
                   setEcomDropdownOpen(false);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                className={`relative py-1.5 flex items-center gap-1 transition-colors cursor-pointer group ${
                   activeTab === 'cropper' && activeCropperMarketplace !== 'webcam'
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
-                    : 'hover:text-slate-900 hover:bg-white/70'
+                    ? 'text-[#083B82] font-bold'
+                    : 'hover:text-[#083B82]'
                 }`}
               >
-                <ShoppingBag className="w-3.5 h-3.5" />
                 <span>E Commerce</span>
-                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-700 transition-transform" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform" />
+                <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
+                  activeTab === 'cropper' && activeCropperMarketplace !== 'webcam'
+                    ? 'scale-x-100'
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                }`} />
               </button>
 
               {ecomDropdownOpen && (
-                <div className="absolute top-full left-0 pt-1.5 z-50 w-52 animate-in fade-in slide-in-from-top-1 duration-150">
-                  <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xl p-1.5 flex flex-col gap-0.5">
+                <div className="absolute top-full left-0 pt-2 z-50 w-56 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2 flex flex-col gap-1">
                     {[
                       { id: 'ajio', name: 'Ajio', letter: 'A', bg: 'bg-slate-900 text-amber-400', desc: 'Merge Labels & Invoices' },
                       { id: 'amazon', name: 'Amazon', letter: 'a', bg: 'bg-[#131921] text-[#FF9900]', desc: 'Easy Ship Label Filter' },
@@ -3179,14 +3183,14 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                activeTab === 'dashboard'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
-                  : 'hover:text-slate-900 hover:bg-white/70'
+              className={`relative py-1.5 transition-colors cursor-pointer group ${
+                activeTab === 'dashboard' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
               }`}
             >
-              <Package className="w-3.5 h-3.5" />
               <span>OTP</span>
+              <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
+                activeTab === 'dashboard' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
+              }`} />
             </button>
 
             {/* 4. Webcam (Webcam Recorder) */}
@@ -3197,45 +3201,49 @@ export default function App() {
                 try { localStorage.setItem('om_selected_marketplace', 'webcam'); } catch {}
                 setActiveTab('cropper');
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+              className={`relative py-1.5 transition-colors cursor-pointer group ${
                 activeTab === 'cropper' && activeCropperMarketplace === 'webcam'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
-                  : 'hover:text-slate-900 hover:bg-white/70'
+                  ? 'text-[#083B82] font-bold'
+                  : 'hover:text-[#083B82]'
               }`}
             >
-              <Video className="w-3.5 h-3.5" />
               <span>Webcam (Recorder)</span>
+              <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
+                activeTab === 'cropper' && activeCropperMarketplace === 'webcam'
+                  ? 'scale-x-100'
+                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
+              }`} />
             </button>
 
             {/* 5. PDF Tools (Coming Soon) */}
             <button
               type="button"
               onClick={() => setShowPdfComingSoonModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+              className="relative py-1.5 flex items-center gap-1.5 hover:text-[#083B82] transition-colors cursor-pointer group"
             >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
               <span>PDF Tools</span>
               <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-md">Soon</span>
+              <span className="absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 scale-x-0 group-hover:scale-x-100 origin-left" />
             </button>
 
             {/* 6. About Us */}
             <button
               type="button"
               onClick={() => setShowAboutModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+              className="relative py-1.5 hover:text-[#083B82] transition-colors cursor-pointer group"
             >
-              <Info className="w-3.5 h-3.5 text-slate-500" />
               <span>About Us</span>
+              <span className="absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 scale-x-0 group-hover:scale-x-100 origin-left" />
             </button>
 
             {/* 7. Contact Us */}
             <button
               type="button"
               onClick={() => setShowContactModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+              className="relative py-1.5 hover:text-[#083B82] transition-colors cursor-pointer group"
             >
-              <Phone className="w-3.5 h-3.5 text-slate-500" />
               <span>Contact Us</span>
+              <span className="absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 scale-x-0 group-hover:scale-x-100 origin-left" />
             </button>
           </nav>
 
