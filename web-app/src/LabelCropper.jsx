@@ -6898,19 +6898,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           {/* Main Webcam Recording Stage */}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm space-y-5">
             {/* Camera Selection & Status Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 flex-wrap">
+              <div className="flex items-center gap-2">
                 {isWebcamActive ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-xs font-bold">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Webcam Active
+                    Camera Live
                   </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold">
-                    <VideoOff className="w-3.5 h-3.5 text-slate-400" />
-                    Webcam Offline
-                  </span>
-                )}
+                ) : null}
 
                 {isRecording && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-300 text-rose-700 text-xs font-black animate-pulse">
@@ -6921,14 +6916,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               </div>
 
               {/* Camera Selector & Flip Front/Back Controls */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-auto">
                 <button
                   type="button"
                   onClick={handleToggleFacingMode}
-                  className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+                  className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 active:scale-95 shadow-2xs"
                   title="Switch between Rear (Back) and Front Camera"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
                   <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
                 </button>
 
@@ -6954,7 +6949,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* Video Viewport Container */}
-            <div className="relative aspect-video max-w-3xl mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 shadow-2xl flex items-center justify-center">
+            <div className="relative aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 shadow-2xl flex items-center justify-center">
               {isWebcamActive ? (
                 <>
                   <video
@@ -6986,14 +6981,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 </>
               ) : (
                 /* Webcam Offline State */
-                <div className="text-center p-6 space-y-4 max-w-sm">
-                  <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto shadow-inner">
-                    <Camera className="w-8 h-8 text-emerald-400" />
+                <div className="text-center p-4 sm:p-6 space-y-3.5 max-w-md w-full">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Camera className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Camera Ready</h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Tap below to start your PC Webcam or Phone Camera. The live Indian Date &amp; Time timer will run directly on the video screen.
+                    <h3 className="text-base sm:text-lg font-black text-white">Camera Ready</h3>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-xs mx-auto">
+                      Tap below to start camera with live IST Date &amp; Time proof directly on video screen.
                     </p>
                   </div>
                   {webcamError && (
@@ -7011,7 +7006,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={() => handleStartWebcam()}
-                    className="py-3 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mx-auto cursor-pointer transition-all active:scale-95"
+                    className="w-full sm:w-auto py-3.5 px-8 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 mx-auto cursor-pointer transition-all active:scale-95"
                   >
                     <Play className="w-4 h-4 fill-slate-950 text-slate-950" />
                     <span>Start Camera &amp; Live Timer</span>
@@ -7020,18 +7015,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               )}
             </div>
 
-            {/* Action Buttons Toolbar */}
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              {!isWebcamActive ? (
-                <button
-                  type="button"
-                  onClick={() => handleStartWebcam()}
-                  className="py-3 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition-all"
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Start Web Cam &amp; Timer</span>
-                </button>
-              ) : (
+            {/* Action Buttons Toolbar (Only shown when Camera is Active) */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+              {isWebcamActive && (
                 <>
                   {!isRecording ? (
                     <button
