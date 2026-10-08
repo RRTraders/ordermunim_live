@@ -5408,67 +5408,57 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             className="hidden"
           />
 
-          {/* The Upload Buttons with file status shown just beside each button */}
-          <div className="space-y-4">
-            {/* 1. Label PDF Button & List */}
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          {/* The Upload Rows: 1 Row for Label, 1 Row for Invoice (Total 2 Row Style) */}
+          <div className="space-y-3">
+            {/* ROW 1: Label PDF */}
+            <div className="p-3 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50/80 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => ajioLabelInputRef.current?.click()}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shrink-0"
                 >
                   <FileText className="w-4 h-4 text-amber-400" />
                   <span>+ Add Label PDF(s)</span>
                 </button>
               </div>
 
-              {/* Just beside the button */}
-              <div className="flex-1 min-w-0 space-y-2">
-                {ajioState.labelError && (
-                  <div className="flex items-center justify-between gap-3 p-2.5 px-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 text-xs shadow-sm animate-in fade-in zoom-in-95 duration-200">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span className="font-bold text-[12px] leading-snug">{ajioState.labelError}</span>
-                    </div>
+              {/* Middle & Right: Files List or Empty Message */}
+              <div className="flex-1 min-w-0 flex items-center justify-between gap-3 flex-wrap">
+                {ajioState.labelError ? (
+                  <div className="flex items-center gap-2 text-rose-600 text-xs font-semibold">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{ajioState.labelError}</span>
                     <button
                       type="button"
                       onClick={() => setAjioState(prev => ({ ...prev, labelError: null }))}
-                      className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
-                      title="Dismiss Error"
+                      className="text-rose-500 hover:text-rose-800 p-0.5 cursor-pointer"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                )}
-
-                {ajioState.labelFiles && ajioState.labelFiles.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
-                      <span>{ajioState.labelFiles.length} file(s) selected</span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
-                        Total: {ajioState.labelTotalPages} {ajioState.labelTotalPages === 1 ? 'Page' : 'Pages'}
-                      </span>
-                    </div>
-                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                ) : ajioState.labelFiles && ajioState.labelFiles.length > 0 ? (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                       {ajioState.labelFiles.map((fObj, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span className="font-semibold text-slate-800 truncate" title={fObj.name}>
-                              {fObj.name}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
-                              {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
-                            </span>
-                            <span className="text-slate-400 text-[10px] shrink-0">
-                              ({formatFileSize(fObj.size)})
-                            </span>
-                          </div>
+                        <div
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="font-semibold text-slate-800 max-w-[160px] truncate" title={fObj.name}>
+                            {fObj.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                            {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
+                          </span>
+                          <span className="text-slate-400 text-[10px] shrink-0">
+                            ({formatFileSize(fObj.size)})
+                          </span>
                           <button
                             type="button"
                             onClick={() => removeAjioLabelFile(idx)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                            className="text-slate-400 hover:text-rose-600 p-0.5 rounded transition-colors shrink-0 cursor-pointer"
                             title="Remove this file"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -5476,74 +5466,73 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : !ajioState.labelError && (
-                  <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {ajioState.labelFiles.length} file{ajioState.labelFiles.length > 1 ? 's' : ''}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200">
+                        Total: {ajioState.labelTotalPages} {ajioState.labelTotalPages === 1 ? 'Page' : 'Pages'}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400 italic">
                     No Label PDF selected yet (Select one or multiple PDFs)
                   </span>
                 )}
               </div>
             </div>
 
-            {/* 2. Invoice PDF Button & List */}
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            {/* ROW 2: Invoice PDF */}
+            <div className="p-3 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50/80 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => ajioInvoiceInputRef.current?.click()}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shrink-0"
                 >
                   <FileCheck className="w-4 h-4 text-sky-400" />
                   <span>+ Add Invoice PDF(s)</span>
                 </button>
               </div>
 
-              {/* Just beside the button */}
-              <div className="flex-1 min-w-0 space-y-2">
-                {ajioState.invoiceError && (
-                  <div className="flex items-center justify-between gap-3 p-2.5 px-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 text-xs shadow-sm animate-in fade-in zoom-in-95 duration-200">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span className="font-bold text-[12px] leading-snug">{ajioState.invoiceError}</span>
-                    </div>
+              {/* Middle & Right: Files List or Empty Message */}
+              <div className="flex-1 min-w-0 flex items-center justify-between gap-3 flex-wrap">
+                {ajioState.invoiceError ? (
+                  <div className="flex items-center gap-2 text-rose-600 text-xs font-semibold">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{ajioState.invoiceError}</span>
                     <button
                       type="button"
                       onClick={() => setAjioState(prev => ({ ...prev, invoiceError: null }))}
-                      className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
-                      title="Dismiss Error"
+                      className="text-rose-500 hover:text-rose-800 p-0.5 cursor-pointer"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                )}
-
-                {ajioState.invoiceFiles && ajioState.invoiceFiles.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 px-1">
-                      <span>{ajioState.invoiceFiles.length} file(s) selected</span>
-                      <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 font-bold">
-                        Total: {ajioState.invoiceTotalPages} {ajioState.invoiceTotalPages === 1 ? 'Page' : 'Pages'}
-                      </span>
-                    </div>
-                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                ) : ajioState.invoiceFiles && ajioState.invoiceFiles.length > 0 ? (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                       {ajioState.invoiceFiles.map((fObj, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                            <span className="font-semibold text-slate-800 truncate" title={fObj.name}>
-                              {fObj.name}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-bold shrink-0">
-                              {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
-                            </span>
-                            <span className="text-slate-400 text-[10px] shrink-0">
-                              ({formatFileSize(fObj.size)})
-                            </span>
-                          </div>
+                        <div
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-xs shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <span className="font-semibold text-slate-800 max-w-[160px] truncate" title={fObj.name}>
+                            {fObj.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-bold shrink-0">
+                            {fObj.pageCount} {fObj.pageCount === 1 ? 'Page' : 'Pages'}
+                          </span>
+                          <span className="text-slate-400 text-[10px] shrink-0">
+                            ({formatFileSize(fObj.size)})
+                          </span>
                           <button
                             type="button"
                             onClick={() => removeAjioInvoiceFile(idx)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors shrink-0 cursor-pointer"
+                            className="text-slate-400 hover:text-rose-600 p-0.5 rounded transition-colors shrink-0 cursor-pointer"
                             title="Remove this file"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -5551,39 +5540,24 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : !ajioState.invoiceError && (
-                  <span className="text-xs text-slate-400 italic pl-1 flex items-center h-full pt-1.5">
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {ajioState.invoiceFiles.length} file{ajioState.invoiceFiles.length > 1 ? 's' : ''}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-800 font-bold text-xs border border-sky-200">
+                        Total: {ajioState.invoiceTotalPages} {ajioState.invoiceTotalPages === 1 ? 'Page' : 'Pages'}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400 italic">
                     No Invoice PDF selected yet (Select one or multiple PDFs)
                   </span>
                 )}
               </div>
             </div>
           </div>
-
-          {/* Merge Logic & Status Preview */}
-          {ajioState.labelFiles.length > 0 && ajioState.invoiceFiles.length > 0 && (
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-              <div className="flex items-center justify-between font-bold text-slate-700">
-                <span className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                  Smart "Ship To :" Customer Name Matching
-                </span>
-                <span className="font-mono text-indigo-600">
-                  Labels: {ajioState.labelTotalPages} Pages ({ajioState.labelFiles.length} {ajioState.labelFiles.length === 1 ? 'file' : 'files'}) • Invoices: {ajioState.invoiceTotalPages} Pages ({ajioState.invoiceFiles.length} {ajioState.invoiceFiles.length === 1 ? 'file' : 'files'})
-                </span>
-              </div>
-
-              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 text-[11px] leading-relaxed space-y-1">
-                <p>
-                  <strong>How it works:</strong> Each label is 1 page. OrderMunim reads the recipient name after <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-semibold font-mono">Ship To :</code> and matches all invoice pages belonging to that customer (1 page, 2 pages, or more), placing them directly after their shipping label.
-                </p>
-                <p className="text-slate-400 text-[10px]">
-                  ✓ Even if invoices have multiple pages or different sort orders, every label receives its exact matching invoice(s).
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Progress Bar (if merging) */}
           {ajioState.isMerging && (
