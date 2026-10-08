@@ -2222,6 +2222,29 @@ export default function App() {
     }
   };
 
+  // Semantic version comparison helper: returns true ONLY if installed is strictly older than target
+  const checkIsVersionOlder = (instCode, instName, tgtCode, tgtName) => {
+    // 1. Compare semantic version names (e.g., "2.7" vs "2.5")
+    if (instName && tgtName) {
+      const parseNums = (str) => String(str).replace(/[^0-9.]/g, '').split('.').map(n => parseInt(n, 10) || 0);
+      const instParts = parseNums(instName);
+      const tgtParts = parseNums(tgtName);
+      const maxLen = Math.max(instParts.length, tgtParts.length);
+      for (let i = 0; i < maxLen; i++) {
+        const a = instParts[i] || 0;
+        const b = tgtParts[i] || 0;
+        if (a > b) return false; // Installed is newer (e.g. 2.7 > 2.5) -> NOT older
+        if (a < b) return true;  // Installed is older -> is older
+      }
+      return false; // Equal version strings
+    }
+    // 2. Compare integer version codes if names are unavailable
+    if (tgtCode && instCode) {
+      return Number(instCode) < Number(tgtCode);
+    }
+    return false;
+  };
+
   // Compute In-App Update Status for Current User
   const getAppUpdateStatus = () => {
     // Only prompt for APK update on native Android mobile app!
@@ -2230,30 +2253,37 @@ export default function App() {
       return { shouldPrompt: false };
     }
 
-    const remoteTarget = (appUpdateConfig && appUpdateConfig.active) ? (Number(appUpdateConfig.versionCode) || 0) : 0;
-    const targetVersion = Math.max(remoteTarget, CURRENT_APP_VERSION_CODE);
-    const isOlder = installedVersionCode < targetVersion;
+    // CRITICAL: If broadcast is NOT active in admin Firestore config, NEVER prompt or lock!
+    if (!appUpdateConfig || !appUpdateConfig.active) {
+      return { shouldPrompt: false };
+    }
+
+    const targetCode = Number(appUpdateConfig.versionCode) || 0;
+    const targetName = String(appUpdateConfig.versionName || '').trim();
+
+    // Check if installed app is genuinely older than target broadcast version
+    const isOlder = checkIsVersionOlder(installedVersionCode, installedVersionName, targetCode, targetName);
     if (!isOlder) {
       return { shouldPrompt: false };
     }
 
-    const mode = appUpdateConfig?.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig?.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
-    const versionName = appUpdateConfig?.versionName || `v${CURRENT_APP_VERSION_NAME}`;
+    const mode = appUpdateConfig.updateMode || 'optional';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
+    const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
       return {
         shouldPrompt: true,
         isForce: true,
         downloadUrl,
-        title: appUpdateConfig?.title || 'Mandatory App Update (v2.6)',
-        message: appUpdateConfig?.message || 'A required update is available with live Webview sync, Ajio label merger & Amazon extractor. You must update to continue using OrderMunim.',
+        title: appUpdateConfig.title || 'Mandatory App Update',
+        message: appUpdateConfig.message || `A required update (${versionName}) is available. Please update to continue using OrderMunim.`,
         versionName
       };
     }
 
     if (mode === 'optional') {
-      if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetVersion)) {
+      if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetCode)) {
         return { shouldPrompt: false };
       }
       return {
@@ -2261,8 +2291,8 @@ export default function App() {
         isForce: false,
         isGrace: false,
         downloadUrl,
-        title: appUpdateConfig?.title || 'New Update Available (v2.6)!',
-        message: appUpdateConfig?.message || 'Please update your OrderMunim app to access live Webview cloud sync, Ajio multi-file label merger & Amazon label extractor.',
+        title: appUpdateConfig.title || 'New Update Available!',
+        message: appUpdateConfig.message || `A new update (${versionName}) is available. Please update your OrderMunim app.`,
         versionName
       };
     }
@@ -2278,12 +2308,12 @@ export default function App() {
         isForce: true,
         downloadUrl,
         title: 'Update Required to Continue',
-        message: appUpdateConfig.message || `Your ${appUpdateConfig.graceDays || 2}-day grace period has expired. You must update to version ${versionName} to continue using Meesho OTP.`,
+        message: appUpdateConfig.message || `Your grace period has expired. You must update to version ${versionName} to continue using OrderMunim.`,
         versionName
       };
     }
 
-    if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetVersion)) {
+    if (updateDismissed || (dismissedUpdateCode && dismissedUpdateCode >= targetCode)) {
       return { shouldPrompt: false };
     }
 
@@ -2532,7 +2562,8 @@ export default function App() {
   const updateStatus = getAppUpdateStatus();
 
   // If Force Update is active (grace period expired or immediate), lock out all non-super-admin users
-  if (!isSuperAdmin && updateStatus.isForce && updateStatus.shouldPrompt) {
+  // SAFETY: Never lock if broadcast is inactive or if user is on equal/higher version
+  if (!isSuperAdmin && updateStatus.isForce && updateStatus.shouldPrompt && Boolean(appUpdateConfig?.active)) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 text-white">
         <div className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-5 shadow-2xl shadow-rose-950/60 animate-in fade-in zoom-in-95 duration-200">
@@ -2573,6 +2604,19 @@ export default function App() {
             >
               <Rocket className="w-5 h-5" />
               Install Latest Update Now
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUpdateDismissed(true);
+                if (appUpdateConfig?.versionCode) {
+                  setDismissedUpdateCode(Number(appUpdateConfig.versionCode));
+                  try { localStorage.setItem('om_dismissed_update_code', String(appUpdateConfig.versionCode)); } catch {}
+                }
+              }}
+              className="w-full mt-2 py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer underline"
+            >
+              Dismiss / Continue to App
             </button>
             <p className="text-[11px] text-slate-500 mt-2">
               Tap above to download the APK. Your existing login and stores will remain intact.
@@ -3434,7 +3478,7 @@ export default function App() {
                   <span>App Version</span>
                   <div className="flex items-center gap-2">
                     <strong className="text-slate-900 font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
-                    {installedVersionCode >= (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) ? (
+                    {!Boolean(appUpdateConfig?.active && checkIsVersionOlder(installedVersionCode, installedVersionName, Number(appUpdateConfig.versionCode), appUpdateConfig.versionName)) ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                         <Check className="w-2.5 h-2.5" /> Up to date
                       </span>
@@ -3449,7 +3493,7 @@ export default function App() {
             </div>
 
             {/* In-App APK Update Action Button if update is available */}
-            {isMobileApp && installedVersionCode < (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) && (
+            {isMobileApp && Boolean(appUpdateConfig?.active && checkIsVersionOlder(installedVersionCode, installedVersionName, Number(appUpdateConfig.versionCode), appUpdateConfig.versionName)) && (
               <button
                 type="button"
                 onClick={() => handleInstallAppUpdate(appUpdateConfig?.downloadUrl)}
