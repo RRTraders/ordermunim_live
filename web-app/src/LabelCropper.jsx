@@ -1218,7 +1218,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       //   Append ALL pages belonging to matching invoice document ([P1, P2...]) right behind the label!
       const usedInvoiceDocIndices = new Set();
       const matchedPairs = [];
-      const mergeSequence = [];
 
       for (let i = 0; i < labelPagesInfo.length; i++) {
         const lbl = labelPagesInfo[i];
@@ -1239,6 +1238,83 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           }
         }
 
+        matchedPairs.push({
+          labelNum: i + 1,
+          fileName: lbl.fileName,
+          labelPageIndex: lbl.pageIndex,
+          labelPage: lbl.pageNum,
+          customerName: lbl.shipToName || 'Customer Name Not Detected',
+          orderId: lbl.orderId,
+          matchReason: matchRes ? matchRes.reason : 'No matching invoice',
+          isMatched: !!matchedDoc,
+          matchedDoc,
+          items: matchedDoc?.items || [],
+          matchedInvoices: matchedDoc ? matchedDoc.pages.map(pg => ({
+            fileName: pg.fileName,
+            pageNum: pg.pageNum,
+            pageIndex: pg.pageIndex,
+          })) : [],
+        });
+      }
+
+      // Collect unmatched invoice documents
+      const unmatchedInvoices = [];
+      for (let j = 0; j < invoiceDocuments.length; j++) {
+        if (!usedInvoiceDocIndices.has(j)) {
+          unmatchedInvoices.push(invoiceDocuments[j]);
+        }
+      }
+
+      const fullyMatchedCount = matchedPairs.filter(p => p.isMatched).length;
+      const unmatchedLabelsCount = matchedPairs.filter(p => !p.isMatched).length;
+
+      // ─────────────────────────────────────────────────────────────────
+      // CASE 1: 0 MATCHING (Complete Mismatch)
+      // If invoices were uploaded but 0 labels matched, block download and show error!
+      // ─────────────────────────────────────────────────────────────────
+      if (invoiceDocuments.length > 0 && fullyMatchedCount === 0) {
+        setAjioState(prev => ({
+          ...prev,
+          isMerging: false,
+          mergeProgress: 0,
+          mergeStatusText: '',
+          mergedDownload: null, // DO NOT give option to download file
+          error: `0 Matches Found! None of the ${labelPagesInfo.length} shipping labels matched any uploaded invoices. Please verify that the Label PDF and Invoice PDF belong to the same batch.`,
+          matchStats: {
+            totalLabels: totalLabelPages,
+            totalInvoices: totalInvoicePages,
+            labelFilesCount: ajioState.labelFiles.length,
+            invoiceFilesCount: ajioState.invoiceFiles.length,
+            totalPages: 0,
+            fullyMatchedCount: 0,
+            unmatchedLabelsCount: labelPagesInfo.length,
+            unmatchedInvoicesCount: unmatchedInvoices.length,
+            matchedPairs,
+            unmatchedInvoices,
+            includeInvoices,
+          },
+        }));
+        setShowAjioBreakdown(true);
+        showToast?.('0 Matches Found! No labels matched the uploaded invoices.', 'error');
+        return;
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // CASE 2: PARTIAL OR COMPLETE MATCHING
+      // "so give only download matching" -> ONLY include matched orders in mergeSequence!
+      // ─────────────────────────────────────────────────────────────────
+      const mergeSequence = [];
+      for (let i = 0; i < matchedPairs.length; i++) {
+        const pair = matchedPairs[i];
+
+        // If invoices were provided, STRICTLY EXCLUDE UNMATCHED LABELS FROM DOWNLOAD!
+        if (invoiceDocuments.length > 0 && !pair.isMatched) {
+          continue;
+        }
+
+        const lbl = labelPagesInfo[pair.labelNum - 1];
+        const matchedDoc = pair.matchedDoc;
+
         // Add label page with matched invoice items (for SKU stamping)
         mergeSequence.push({
           type: 'label',
@@ -1247,7 +1323,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           pageIndex: lbl.pageIndex,
           pageNum: lbl.pageNum,
           name: lbl.shipToName,
-          labelNum: i + 1,
+          labelNum: pair.labelNum,
           items: matchedDoc?.items || [],
         });
 
@@ -1261,46 +1337,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               pageIndex: pg.pageIndex,
               pageNum: pg.pageNum,
               name: matchedDoc.shipToName,
-              labelNum: i + 1,
+              labelNum: pair.labelNum,
             });
-          }
-        }
-
-        matchedPairs.push({
-          labelNum: i + 1,
-          fileName: lbl.fileName,
-          labelPageIndex: lbl.pageIndex,
-          labelPage: lbl.pageNum,
-          customerName: lbl.shipToName || 'Customer Name Not Detected',
-          orderId: lbl.orderId,
-          matchReason: matchRes ? matchRes.reason : 'No matching invoice',
-          items: matchedDoc?.items || [],
-          matchedInvoices: matchedDoc ? matchedDoc.pages.map(pg => ({
-            fileName: pg.fileName,
-            pageNum: pg.pageNum,
-            pageIndex: pg.pageIndex,
-          })) : [],
-        });
-      }
-
-      // Any remaining unmatched invoice documents are appended at the end (only if includeInvoices is true)
-      const unmatchedInvoices = [];
-      if (includeInvoices) {
-        for (let j = 0; j < invoiceDocuments.length; j++) {
-          if (!usedInvoiceDocIndices.has(j)) {
-            const invDoc = invoiceDocuments[j];
-            for (const pg of invDoc.pages) {
-              unmatchedInvoices.push(pg);
-              mergeSequence.push({
-                type: 'invoice',
-                fileIndex: pg.fileIndex,
-                fileName: pg.fileName,
-                pageIndex: pg.pageIndex,
-                pageNum: pg.pageNum,
-                name: invDoc.shipToName,
-                unmatched: true,
-              });
-            }
           }
         }
       }
@@ -1458,8 +1496,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         labelFilesCount: ajioState.labelFiles.length,
         invoiceFilesCount: ajioState.invoiceFiles.length,
         totalPages: mergeSequence.length,
-        fullyMatchedCount: matchedPairs.filter(p => p.matchedInvoices.length > 0).length,
-        unmatchedLabelsCount: matchedPairs.filter(p => p.matchedInvoices.length === 0).length,
+        fullyMatchedCount,
+        unmatchedLabelsCount,
         unmatchedInvoicesCount: unmatchedInvoices.length,
         matchedPairs,
         unmatchedInvoices,
@@ -1472,8 +1510,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         filename,
         blob,
         totalPages: mergeSequence.length,
-        labelCount: totalLabelPages,
-        invoiceCount: includeInvoices ? totalInvoicePages : 0,
+        labelCount: fullyMatchedCount,
+        invoiceCount: includeInvoices ? mergeSequence.filter(m => m.type === 'invoice').length : 0,
         includeInvoices,
         mergeMode,
         matchStats,
@@ -1487,6 +1525,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         mergeStatusText: 'Completed!',
         mergedDownload: downloadInfo,
         matchStats,
+        error: null,
       }));
 
       updateMarketplaceState('ajio', {
@@ -1502,12 +1541,19 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       link.click();
       document.body.removeChild(link);
 
-      showToast?.(
-        includeInvoices
-          ? `Success! Merged ${mergeSequence.length} pages (Labels + Invoices).`
-          : `Success! Generated ${mergeSequence.length} shipping labels without invoices.`,
-        'success'
-      );
+      if (unmatchedLabelsCount > 0 && invoiceDocuments.length > 0) {
+        showToast?.(
+          `Partial Match: Downloaded ${fullyMatchedCount} matched orders only. ${unmatchedLabelsCount} unmatched label(s) were excluded.`,
+          'warning'
+        );
+      } else {
+        showToast?.(
+          includeInvoices
+            ? `Success! All ${fullyMatchedCount} orders matched and merged (Labels + Invoices).`
+            : `Success! Generated ${fullyMatchedCount} matching shipping labels without invoices.`,
+          'success'
+        );
+      }
     } catch (err) {
       console.error('Error during Ajio PDF merge:', err);
       setAjioState(prev => ({
@@ -5378,6 +5424,59 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             )}
           </div>
 
+          {/* 0 MATCHES ERROR BANNER (BLOCKS DOWNLOAD) */}
+          {ajioState.error && (
+            <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-500 text-rose-950 space-y-3 animate-in fade-in duration-200 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-rose-900">0 Matches Found — Download Blocked</h4>
+                    <p className="text-xs text-rose-700 leading-relaxed mt-0.5">{ajioState.error}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAjioState(prev => ({ ...prev, error: null }))}
+                  className="text-rose-500 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                  title="Dismiss Error"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Show breakdown list so client sees exactly which names didn't match */}
+              {ajioState.matchStats?.matchedPairs?.length > 0 && (
+                <div className="pt-2 border-t border-rose-200/80">
+                  <div className="flex items-center justify-between text-xs font-bold text-rose-900 mb-2">
+                    <span>Unmatched Shipping Labels ({ajioState.matchStats.matchedPairs.length} labels):</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAjioBreakdown(!showAjioBreakdown)}
+                      className="text-[11px] underline text-rose-700 hover:text-rose-900 cursor-pointer font-semibold"
+                    >
+                      {showAjioBreakdown ? 'Hide Names' : 'View All Names'}
+                    </button>
+                  </div>
+                  {showAjioBreakdown && (
+                    <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                      {ajioState.matchStats.matchedPairs.map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-rose-200 text-xs text-slate-800">
+                          <span className="font-bold">#{p.labelNum} {p.customerName}</span>
+                          <span className="text-[10px] text-rose-700 font-semibold px-2 py-0.5 rounded bg-rose-50 border border-rose-200">
+                            ✕ No matching invoice found in uploaded files
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Hidden file inputs */}
           <input
             ref={ajioLabelInputRef}
@@ -5671,20 +5770,51 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 )}
               </div>
 
+              {/* Partial Match Notification Banner */}
+              {ajioState.matchStats?.unmatchedLabelsCount > 0 && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-950 space-y-1 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Notice: {ajioState.matchStats.unmatchedLabelsCount} of {ajioState.matchStats.totalLabels} Label(s) had NO matching invoice!
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed pl-6">
+                    As requested, unmatched labels have been <strong>excluded from the download</strong>. The PDF below contains <strong>strictly the {ajioState.matchStats.fullyMatchedCount} matching</strong> orders.
+                  </p>
+                </div>
+              )}
+
               {/* Expandable Match Details List */}
               {showAjioBreakdown && ajioState.matchStats && (
                 <div className="p-3 bg-white rounded-xl border border-emerald-200 max-h-60 overflow-y-auto space-y-2 text-xs">
-                  <div className="font-bold text-slate-800 pb-1 border-b border-slate-100 text-[11px]">
-                    Label & Invoice Match Breakdown:
+                  <div className="font-bold text-slate-800 pb-1 border-b border-slate-100 text-[11px] flex items-center justify-between">
+                    <span>Label &amp; Invoice Match Breakdown:</span>
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      Green = Included in PDF • Red = Excluded (No match)
+                    </span>
                   </div>
                   {ajioState.matchStats.matchedPairs.map((pair, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between p-2 rounded-lg border text-[11px] ${
+                        pair.isMatched
+                          ? 'bg-slate-50 border-slate-100'
+                          : 'bg-rose-50/70 border-rose-200'
+                      }`}
+                    >
                       <div className="min-w-0 pr-2">
-                        <span className="font-bold text-slate-800">#{pair.labelNum} {pair.customerName}</span>
+                        <span className={`font-bold ${pair.isMatched ? 'text-slate-800' : 'text-rose-900'}`}>
+                          #{pair.labelNum} {pair.customerName}
+                        </span>
                         {pair.orderId && <span className="text-slate-400 text-[10px] ml-1.5 font-mono">({pair.orderId})</span>}
-                        {pair.matchReason && (
+                        {pair.isMatched ? (
                           <span className="inline-block text-emerald-700 text-[10px] ml-1.5 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                            {pair.matchReason}
+                            ✓ {pair.matchReason}
+                          </span>
+                        ) : (
+                          <span className="inline-block text-rose-700 text-[10px] ml-1.5 font-semibold bg-rose-100 px-1.5 py-0.5 rounded border border-rose-200">
+                            ✕ Excluded (No matching invoice)
                           </span>
                         )}
                         {pair.items && pair.items.length > 0 && (
@@ -5703,8 +5833,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                             Invoice {pair.matchedInvoices.map(m => (m.fileName ? `${m.fileName} P${m.pageNum}` : `P${m.pageNum}`)).join(', ')} ({pair.matchedInvoices.length} {pair.matchedInvoices.length === 1 ? 'page' : 'pages'})
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px]">
-                            No matching invoice
+                          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-semibold">
+                            Excluded from PDF
                           </span>
                         )}
                       </div>
@@ -5712,7 +5842,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   ))}
                   {ajioState.matchStats.unmatchedInvoices?.length > 0 && (
                     <div className="pt-1 text-[10px] text-amber-700 italic">
-                      + {ajioState.matchStats.unmatchedInvoices.length} invoice page(s) had no label match and were appended at the end.
+                      + {ajioState.matchStats.unmatchedInvoices.length} invoice page(s) had no label match and were excluded from download.
                     </div>
                   )}
                 </div>
