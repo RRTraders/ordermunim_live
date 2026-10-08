@@ -503,6 +503,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     excelRowCount: 0,
     excelData: null,
     isMerging: false,
+    mergeMode: 'with_invoice', // 'with_invoice' | 'without_invoice'
     mergeProgress: 0,
     mergeStatusText: '',
     mergedDownload: null,
@@ -1036,6 +1037,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       excelRowCount: 0,
       excelData: null,
       isMerging: false,
+      mergeMode: 'with_invoice',
       mergeProgress: 0,
       mergeStatusText: '',
       mergedDownload: null,
@@ -1046,7 +1048,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     });
   };
 
-  const handleMergeAjioPdf = async () => {
+  const handleMergeAjioPdf = async (options = {}) => {
+    const includeInvoices = typeof options === 'boolean' ? options : (options?.includeInvoices !== false);
+    const mergeMode = includeInvoices ? 'with_invoice' : 'without_invoice';
+
     if (!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length) {
       showToast?.('Please upload both Label PDF(s) and Invoice PDF(s) to merge', 'warning');
       return;
@@ -1055,6 +1060,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     setAjioState(prev => ({
       ...prev,
       isMerging: true,
+      mergeMode,
       mergeProgress: 5,
       mergeStatusText: 'Loading Label PDFs...',
       error: null,
@@ -1245,8 +1251,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           items: matchedDoc?.items || [],
         });
 
-        // Append all invoice pages belonging to this matched document
-        if (matchedDoc) {
+        // Append all invoice pages belonging to this matched document (only if includeInvoices is true)
+        if (includeInvoices && matchedDoc) {
           for (const pg of matchedDoc.pages) {
             mergeSequence.push({
               type: 'invoice',
@@ -1277,22 +1283,24 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         });
       }
 
-      // Any remaining unmatched invoice documents are appended at the end
+      // Any remaining unmatched invoice documents are appended at the end (only if includeInvoices is true)
       const unmatchedInvoices = [];
-      for (let j = 0; j < invoiceDocuments.length; j++) {
-        if (!usedInvoiceDocIndices.has(j)) {
-          const invDoc = invoiceDocuments[j];
-          for (const pg of invDoc.pages) {
-            unmatchedInvoices.push(pg);
-            mergeSequence.push({
-              type: 'invoice',
-              fileIndex: pg.fileIndex,
-              fileName: pg.fileName,
-              pageIndex: pg.pageIndex,
-              pageNum: pg.pageNum,
-              name: invDoc.shipToName,
-              unmatched: true,
-            });
+      if (includeInvoices) {
+        for (let j = 0; j < invoiceDocuments.length; j++) {
+          if (!usedInvoiceDocIndices.has(j)) {
+            const invDoc = invoiceDocuments[j];
+            for (const pg of invDoc.pages) {
+              unmatchedInvoices.push(pg);
+              mergeSequence.push({
+                type: 'invoice',
+                fileIndex: pg.fileIndex,
+                fileName: pg.fileName,
+                pageIndex: pg.pageIndex,
+                pageNum: pg.pageNum,
+                name: invDoc.shipToName,
+                unmatched: true,
+              });
+            }
           }
         }
       }
@@ -1440,7 +1448,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       const blob = new Blob([mergedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const dateTag = new Date().toISOString().slice(0, 10);
-      const filename = `Ajio_Matched_Labels_Invoices_${dateTag}.pdf`;
+      const filename = includeInvoices
+        ? `Ajio_Matched_Labels_Invoices_${dateTag}.pdf`
+        : `Ajio_Matched_Labels_Only_${dateTag}.pdf`;
 
       const matchStats = {
         totalLabels: totalLabelPages,
@@ -1453,6 +1463,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         unmatchedInvoicesCount: unmatchedInvoices.length,
         matchedPairs,
         unmatchedInvoices,
+        includeInvoices,
       };
 
       const downloadInfo = {
@@ -1462,13 +1473,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         blob,
         totalPages: mergeSequence.length,
         labelCount: totalLabelPages,
-        invoiceCount: totalInvoicePages,
+        invoiceCount: includeInvoices ? totalInvoicePages : 0,
+        includeInvoices,
+        mergeMode,
         matchStats,
       };
 
       setAjioState(prev => ({
         ...prev,
         isMerging: false,
+        mergeMode,
         mergeProgress: 100,
         mergeStatusText: 'Completed!',
         mergedDownload: downloadInfo,
@@ -1488,7 +1502,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       link.click();
       document.body.removeChild(link);
 
-      showToast?.(`Success! Merged ${mergeSequence.length} pages matched by customer name.`, 'success');
+      showToast?.(
+        includeInvoices
+          ? `Success! Merged ${mergeSequence.length} pages (Labels + Invoices).`
+          : `Success! Generated ${mergeSequence.length} shipping labels without invoices.`,
+        'success'
+      );
     } catch (err) {
       console.error('Error during Ajio PDF merge:', err);
       setAjioState(prev => ({
@@ -5325,6 +5344,22 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       ) : selectedMarketplace === 'ajio' ? (
         /* ================= AJIO INTERLEAVED PDF MERGER ================= */
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-5 md:p-7 mb-6 space-y-6">
+          {/* Top Center Ajio Icon & Brand Header */}
+          <div className="flex flex-col items-center justify-center text-center pt-1 pb-1">
+            <div className="w-16 h-16 rounded-2xl bg-[#2C4152] text-white flex items-center justify-center shadow-md shadow-slate-900/15 border border-slate-700/40 mb-2.5">
+              {/* Ajio Official Monogram */}
+              <svg viewBox="0 0 192 192" className="w-10 h-10 stroke-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="12">
+                <circle cx="96" cy="96" r="74" />
+                <path d="M96 22 38 140M96 22l58 118M96 81l38 77M96 81l-38 77m18-33h40" />
+              </svg>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-black tracking-widest uppercase shadow-xs">
+              <span>AJIO</span>
+              <span className="text-amber-400 font-bold">•</span>
+              <span className="text-slate-300 font-semibold text-[11px] normal-case tracking-normal">Smart Label &amp; Invoice Suite</span>
+            </div>
+          </div>
+
           {/* Top Instructions & Action Bar */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
@@ -5569,28 +5604,72 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
           )}
 
-          {/* Merge & Download Action Button */}
-          <button
-            type="button"
-            disabled={!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length || ajioState.isMerging}
-            onClick={handleMergeAjioPdf}
-            className={`w-full py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer ${
-              !ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                : ajioState.isMerging
-                ? 'bg-indigo-400 text-white cursor-wait'
-                : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 hover:from-slate-900 hover:to-indigo-900 text-white shadow-slate-950/20 active:scale-[0.99]'
-            }`}
-          >
-            <Layers className="w-4 h-4 text-amber-400" />
-            <span>
-              {ajioState.isMerging
-                ? (ajioState.mergeStatusText || 'Matching & Merging Pages...')
-                : (!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length)
-                ? 'Please Upload Both Label PDF(s) & Invoice PDF(s)'
-                : 'Match by Order# / Customer Name & Merge PDF'}
-            </span>
-          </button>
+          {/* Merge & Download Action Buttons (Cut into 2 Buttons) */}
+          <div className="space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Button 1: Merge without invoice */}
+              <button
+                type="button"
+                disabled={!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length || ajioState.isMerging}
+                onClick={() => handleMergeAjioPdf({ includeInvoices: false })}
+                className={`py-4 px-4 rounded-2xl font-bold text-sm shadow-md transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                  !ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    : ajioState.isMerging && ajioState.mergeMode === 'without_invoice'
+                    ? 'bg-amber-600 text-white cursor-wait'
+                    : ajioState.isMerging
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-amber-600/20 active:scale-[0.99]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-white" />
+                  <span className="text-sm">
+                    {ajioState.isMerging && ajioState.mergeMode === 'without_invoice'
+                      ? (ajioState.mergeStatusText || 'Merging without Invoice...')
+                      : 'Merge without invoice'}
+                  </span>
+                </div>
+                <span className="text-[11px] opacity-90 font-normal">
+                  Matches &amp; stamps SKUs on labels • Invoices omitted
+                </span>
+              </button>
+
+              {/* Button 2: Merge with Invoice */}
+              <button
+                type="button"
+                disabled={!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length || ajioState.isMerging}
+                onClick={() => handleMergeAjioPdf({ includeInvoices: true })}
+                className={`py-4 px-4 rounded-2xl font-bold text-sm shadow-md transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                  !ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    : ajioState.isMerging && ajioState.mergeMode === 'with_invoice'
+                    ? 'bg-indigo-600 text-white cursor-wait'
+                    : ajioState.isMerging
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 hover:from-slate-900 hover:to-indigo-900 text-white shadow-slate-950/20 active:scale-[0.99]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm">
+                    {ajioState.isMerging && ajioState.mergeMode === 'with_invoice'
+                      ? (ajioState.mergeStatusText || 'Merging with Invoice...')
+                      : 'Merge with Invoice'}
+                  </span>
+                </div>
+                <span className="text-[11px] opacity-90 font-normal">
+                  Matches &amp; stamps SKUs • Invoices attached after labels
+                </span>
+              </button>
+            </div>
+
+            {(!ajioState.labelFiles?.length || !ajioState.invoiceFiles?.length) && (
+              <div className="p-2.5 rounded-xl bg-slate-100 text-center text-xs text-slate-500 font-medium">
+                Please Upload Both Label PDF(s) &amp; Invoice PDF(s) to Enable Merging
+              </div>
+            )}
+          </div>
 
           {/* Download / Success Area (once merged) */}
           {ajioState.mergedDownload && (
@@ -5606,6 +5685,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     </h4>
                     <p className="text-[11px] text-emerald-700">
                       {ajioState.matchStats?.fullyMatchedCount || 0} of {ajioState.matchStats?.totalLabels || 0} Labels matched • {ajioState.mergedDownload.totalPages} Total Merged Pages
+                      {ajioState.mergedDownload?.includeInvoices === false ? ' (Labels Only • Invoices Omitted)' : ' (Labels + Invoices Interleaved)'}
                     </p>
                   </div>
                 </div>
