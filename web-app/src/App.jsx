@@ -130,8 +130,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 16;
-const CURRENT_APP_VERSION_NAME = "2.6";
+const CURRENT_APP_VERSION_CODE = 17;
+const CURRENT_APP_VERSION_NAME = "2.7";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -449,10 +449,10 @@ export default function App() {
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastVersionCode, setBroadcastVersionCode] = useState(16);
-  const [broadcastVersionName, setBroadcastVersionName] = useState('2.6');
-  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.6)!');
-  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.6 brings real-time Webview Cloud Sync, Ajio multi-file label merger & Amazon label extractor. Please update your app.');
+  const [broadcastVersionCode, setBroadcastVersionCode] = useState(17);
+  const [broadcastVersionName, setBroadcastVersionName] = useState('2.7');
+  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.7)!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.7 brings background 24/7 OTP crash-fix self-restart, direct mobile auto-login without extension & date-filtered live return OTPs. Please update your app.');
   const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
