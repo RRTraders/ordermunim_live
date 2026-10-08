@@ -247,7 +247,21 @@ export default function App() {
   const [accounts, setAccounts] = useState(() => {
     try {
       const cached = localStorage.getItem('cached_user_accounts');
-      return cached ? JSON.parse(cached) : [];
+      if (!cached) return [];
+      const parsed = JSON.parse(cached);
+      // Clear OTP fields if they are from a previous calendar day (IST) to prevent stale OTP display
+      const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
+      return parsed.map(acc => {
+        if (!acc.lastUpdated) return { ...acc, currentOtp: '----', courier: '', handoverCount: 0 };
+        const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
+        if (updatedDay !== todayIST) {
+          // OTP is from a previous day — display blank until Firestore/poll brings fresh data
+          return { ...acc, currentOtp: '----', courier: '', handoverCount: 0, otpList: [] };
+        }
+        return acc;
+      });
     } catch {
       return [];
     }
@@ -689,8 +703,23 @@ export default function App() {
       snapshot.forEach((d) => {
         accList.push({ id: d.id, ...d.data() });
       });
-      setAccounts(accList);
-      try { localStorage.setItem('cached_user_accounts', JSON.stringify(accList)); } catch {}
+      // Clear stale OTP from yesterday before updating state
+      const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
+      const freshList = accList.map(acc => {
+        if (!acc.lastUpdated) return acc; // No timestamp — leave as-is (Firestore is live truth)
+        const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
+        if (updatedDay !== todayIST) {
+          // OTP stored in Firestore is from yesterday — clear it (polling will update shortly)
+          return { ...acc, currentOtp: '----', courier: '', handoverCount: 0, otpList: [] };
+        }
+        return acc;
+      });
+      setAccounts(freshList);
+      try { localStorage.setItem('cached_user_accounts', JSON.stringify(freshList)); } catch {}
+    }, (err) => {
+      console.error('[Firestore] Accounts listener error:', err.code, err.message);
     });
 
     return () => {
@@ -802,7 +831,7 @@ export default function App() {
         const restoredPassword = (existing && existing.password) ? existing.password : (vaultCred?.password || '');
         const restoredEmail = (existing && existing.email) ? existing.email : (acc.email || vaultCred?.email || '');
 
-        if (!existing && acc.cookies) {
+        if (!existing && (acc.cookies || restoredPassword || restoredEmail || acc.email)) {
           const newSess = {
             email: restoredEmail,
             password: restoredPassword,
@@ -886,12 +915,28 @@ export default function App() {
     const pollAllNativeSessions = async () => {
       try {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
-        if (!rawSessions) return;
         let sessions = {};
         try {
-          sessions = JSON.parse(rawSessions);
-        } catch {
-          return;
+          sessions = rawSessions ? JSON.parse(rawSessions) : {};
+        } catch {}
+
+        // Fallback: Populate missing accounts from current accounts list so phone polls them directly
+        if (accountsRef.current && Array.isArray(accountsRef.current)) {
+          for (const acc of accountsRef.current) {
+            const key = acc.syncKey || acc.id;
+            if (key && !sessions[key]) {
+              const vaultCred = findCredentialsForAccount(acc, user?.uid);
+              sessions[key] = {
+                email: acc.email || vaultCred?.email || '',
+                password: vaultCred?.password || '',
+                identifier: acc.identifier || '',
+                supplierId: acc.supplierId || 0,
+                storeName: acc.storeName || '',
+                cookies: acc.cookies || '',
+                expired: false
+              };
+            }
+          }
         }
 
         const polledIdentifiers = new Set();

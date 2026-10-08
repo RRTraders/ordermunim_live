@@ -81,6 +81,12 @@ public class MeeshoBackgroundService extends Service {
             scheduler.shutdownNow();
         }
         super.onDestroy();
+        // Self-restart: send a broadcast to BootReceiver so Android restarts OTP monitoring automatically
+        try {
+            Intent restartIntent = new Intent(getApplicationContext(), BootReceiver.class);
+            restartIntent.setAction("android.intent.action.BOOT_COMPLETED");
+            sendBroadcast(restartIntent);
+        } catch (Exception ignored) {}
     }
 
     private void createNotificationChannels() {
@@ -233,8 +239,8 @@ public class MeeshoBackgroundService extends Service {
                     cookies = autoRelogin(email, password, syncKey);
                     if (!cookies.isEmpty()) {
                         sess.put("cookies", cookies);
-                        // Immediately fetch OTPs with the fresh cookies!
-                        pollSingleAccount(syncKey, sess);
+                        // NOTE: Do NOT recursively call pollSingleAccount here (stack overflow risk).
+                        // The updated cookies are now saved — next scheduled poll (30s) will use fresh cookies.
                     }
                 }
                 return;
