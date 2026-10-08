@@ -2572,7 +2572,6 @@ export default function App() {
               <p className="text-xs text-slate-400 mt-1">Live Feed • Ready for Courier Delivery Partners</p>
             </div>
             <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               Live Sync
             </div>
           </div>
@@ -3293,7 +3292,6 @@ export default function App() {
                   </span>
                   {broadcastActive ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                       Live v{broadcastVersionName}
                     </span>
                   ) : (
@@ -3312,9 +3310,6 @@ export default function App() {
                 >
                   <Rocket className="w-3.5 h-3.5 text-cyan-400" />
                   App Update Broadcast
-                  {broadcastActive && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Broadcast Active"></span>
-                  )}
                 </button>
               </div>
             )}
@@ -4103,12 +4098,10 @@ export default function App() {
                               <span>Checked: {acc.dateTime || 'Just now'}</span>
                               {isAutoSync ? (
                                 <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                   Auto-Sync Active
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1 text-slate-400 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                                   Connected
                                 </span>
                               )}
@@ -4667,12 +4660,11 @@ export default function App() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="font-bold text-sm text-white">Broadcast Status:</h4>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
                         broadcastActive
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : 'bg-slate-800 text-slate-400 border border-slate-700'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${broadcastActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
                         {broadcastActive ? 'LIVE TO ALL CLIENTS' : 'INACTIVE / STOPPED'}
                       </span>
                     </div>

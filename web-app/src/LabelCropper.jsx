@@ -4637,9 +4637,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 )}
 
-                {mp.ready ? (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 ml-0.5" title="Active & Ready" />
-                ) : (
+                {mp.ready ? null : (
                   <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200 ml-0.5">
                     Soon
                   </span>
@@ -4782,7 +4780,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     key={cName}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-900 shadow-2xs"
                   >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     {cName}: <span className="font-mono text-indigo-700 font-bold">{count} labels</span>
                   </span>
                 ))}
@@ -6845,7 +6842,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
                   Live Proof Camera
                 </span>
@@ -6859,7 +6855,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               </p>
             </div>
 
-            {/* Shifted Clock Badge (Image 1 shifted here!) */}
+            {/* Shifted Clock Badge */}
             <div className="flex flex-col items-start md:items-end gap-1.5 shrink-0">
               <button
                 type="button"
@@ -6871,9 +6867,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 }`}
                 title="Click to edit / customize Date & Time for video proof"
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
-                  clockMode === 'custom' ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'
-                }`}></span>
                 <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="font-mono whitespace-nowrap">{currentIstTime || 'Loading IST...'}</span>
                 <Edit3 className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity shrink-0 ml-0.5 text-cyan-400" />
@@ -6902,7 +6895,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               <div className="flex items-center gap-2">
                 {isWebcamActive ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-xs font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     Camera Live
                   </span>
                 ) : null}
