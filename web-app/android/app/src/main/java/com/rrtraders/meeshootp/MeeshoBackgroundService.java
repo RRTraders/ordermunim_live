@@ -94,14 +94,16 @@ public class MeeshoBackgroundService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            // 1. Silent Background Service Channel
+            // 1. Silent Background Service Channel (MIN importance hides status bar icon and minimizes notification)
             NotificationChannel serviceChannel = new NotificationChannel(
                     CHANNEL_SERVICE,
                     "Meesho Background Sync",
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_MIN
             );
-            serviceChannel.setDescription("Keeps Meesho OTP monitoring active 24/7");
+            serviceChannel.setDescription("Keeps Meesho OTP monitoring active silently");
             serviceChannel.setShowBadge(false);
+            serviceChannel.setSound(null, null);
+            serviceChannel.enableVibration(false);
             nm.createNotificationChannel(serviceChannel);
 
             // 2. High-Priority Alert Channel for Live OTPs
@@ -140,14 +142,57 @@ public class MeeshoBackgroundService extends Service {
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
                 .build();
     }
 
     private void startBackgroundPolling() {
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Check every 30 seconds directly from device
-        scheduler.scheduleWithFixedDelay(this::pollAllAccounts, 5, 30, TimeUnit.SECONDS);
+        // Dynamic, battery-efficient polling:
+        // Runs scheduled poll task that determines next delay based on delivery hours & sleep state
+        scheduleNextPoll(5);
+    }
+
+    private void scheduleNextPoll(long delaySeconds) {
+        if (scheduler == null || scheduler.isShutdown()) return;
+        scheduler.schedule(() -> {
+            try {
+                pollAllAccounts();
+            } catch (Exception ignored) {
+            } finally {
+                // Determine next delay based on time of day to preserve battery
+                long nextDelay = getDynamicPollDelaySeconds();
+                scheduleNextPoll(nextDelay);
+            }
+        }, delaySeconds, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Smart battery saver:
+     * - Active courier delivery hours (08:30 AM to 08:30 PM): 60 seconds interval
+     * - Night / non-delivery hours (08:30 PM to 08:30 AM): 180 seconds (3 min) interval
+     * Saves ~70% radio wakeup cycles and CPU battery consumption while keeping OTPs instant during delivery hours.
+     */
+    private long getDynamicPollDelaySeconds() {
+        try {
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
+            int minute = cal.get(java.util.Calendar.MINUTE);
+            int timeInMinutes = hour * 60 + minute;
+
+            int dayStart = 8 * 60 + 30;  // 08:30 AM
+            int dayEnd = 20 * 60 + 30;   // 08:30 PM
+
+            if (timeInMinutes >= dayStart && timeInMinutes <= dayEnd) {
+                return 60; // 60 seconds during active return delivery hours
+            } else {
+                return 180; // 3 minutes during night/off hours to prevent battery drain
+            }
+        } catch (Exception e) {
+            return 60;
+        }
     }
 
     private void pollAllAccounts() {
@@ -185,6 +230,7 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private void pollSingleAccount(String syncKey, JSONObject sess) {
+        HttpURLConnection conn = null;
         try {
             String identifier = sess.optString("identifier", "");
             long supplierId = sess.optLong("supplierId", 0);
@@ -200,10 +246,10 @@ public class MeeshoBackgroundService extends Service {
 
             // Fetch Delivery OTPs
             URL url = new URL("https://supplier.meesho.com/api/fulfillment/returnRto/fetchDeliveryOTPs");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
             conn.setDoInput(true);
             conn.setDoOutput(true);
 
@@ -239,8 +285,6 @@ public class MeeshoBackgroundService extends Service {
                     cookies = autoRelogin(email, password, syncKey);
                     if (!cookies.isEmpty()) {
                         sess.put("cookies", cookies);
-                        // NOTE: Do NOT recursively call pollSingleAccount here (stack overflow risk).
-                        // The updated cookies are now saved — next scheduled poll (30s) will use fresh cookies.
                     }
                 }
                 return;
@@ -313,7 +357,14 @@ public class MeeshoBackgroundService extends Service {
                     editor.apply();
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.disconnect();
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     private void triggerOtpAlert(String syncKey, String storeName, String courier, String otp, int count, int index) {
@@ -357,6 +408,7 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private String autoRelogin(String email, String password, String syncKey) {
+        HttpURLConnection conn = null;
         try {
             String deviceId = Build.FINGERPRINT;
             if (deviceId == null || deviceId.isEmpty()) {
@@ -370,7 +422,7 @@ public class MeeshoBackgroundService extends Service {
             postData.put("instance", "inst_" + System.currentTimeMillis());
 
             URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(15000);
@@ -413,7 +465,14 @@ public class MeeshoBackgroundService extends Service {
                     return freshCookies;
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.disconnect();
+                } catch (Exception ignored) {}
+            }
+        }
         return "";
     }
 
