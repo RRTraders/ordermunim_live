@@ -737,7 +737,18 @@ export default function App() {
         snapshot.forEach((d) => {
           accList.push({ id: d.id, ...d.data() });
         });
-        setAccounts(accList);
+        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
+        const freshList = accList.map(acc => {
+          if (!acc.lastUpdated) return acc;
+          const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
+          if (updatedDay !== todayIST) {
+            return { ...acc, currentOtp: '----', courier: '', handoverCount: 0, otpList: [] };
+          }
+          return acc;
+        });
+        setAccounts(freshList);
       });
       return () => unsub();
     }
