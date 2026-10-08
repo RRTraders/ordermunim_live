@@ -4574,20 +4574,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   };
 
   return (
-    <div className="glass-panel min-h-screen text-slate-100 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl border border-white/10 shadow-2xl">
+    <div className="bg-white text-slate-900 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl border border-slate-200/90 shadow-xs min-h-screen">
       {/* ================= MARKETPLACE HORIZONTAL SCROLLVIEW ================= */}
-      <div className="mb-6 pb-3 border-b border-white/10">
+      <div className="mb-6 pb-3 border-b border-slate-200/90">
         <div className="flex items-center justify-between mb-2.5 px-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-sky-300 uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-[#083B82] uppercase tracking-wider">
               Marketplace
             </span>
-            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+            <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
               (Choose platform to process labels)
             </span>
           </div>
           {!activeMarketplace?.ready && (
-            <span className="text-[10px] font-semibold bg-orange-500/20 text-orange-300 px-2.5 py-0.5 rounded-full border border-orange-500/30 animate-pulse">
+            <span className="text-[10px] font-semibold bg-orange-50 text-orange-700 px-2.5 py-0.5 rounded-full border border-orange-200 animate-pulse">
               In Development
             </span>
           )}
@@ -4619,10 +4619,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 key={mp.id}
                 type="button"
                 onClick={() => handleSelectMarketplace(mp.id)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl whitespace-nowrap text-xs md:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer shadow-sm ${
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl whitespace-nowrap text-xs md:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer shadow-xs ${
                   isSelected
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25 ring-2 ring-orange-400/50 scale-[1.02]'
-                    : 'glass-card text-slate-300 hover:text-white hover:bg-white/10 border border-white/10'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25 ring-2 ring-orange-300 scale-[1.02]'
+                    : 'bg-slate-50 text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/90'
                 }`}
               >
                 {/* Marketplace Mini Badge */}
@@ -4633,14 +4633,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
                 {mpFilesCount > 0 && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                    isSelected ? 'bg-white/20 text-white' : 'bg-sky-50 text-sky-700 border border-sky-200'
                   }`}>
                     {mpFilesCount} {mpFilesCount === 1 ? 'file' : 'files'}
                   </span>
                 )}
 
                 {mpIsProcessing && (
-                  <RefreshCw className="w-3 h-3 animate-spin text-orange-400" />
+                  <RefreshCw className="w-3 h-3 animate-spin text-orange-500" />
                 )}
 
                 {mpHasDownload && !mpIsProcessing && (
@@ -4648,7 +4648,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 )}
 
                 {mp.ready ? null : (
-                  <span className="text-[9px] font-medium bg-white/5 text-slate-400 px-1.5 py-0.5 rounded-md border border-white/10 ml-0.5">
+                  <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200 ml-0.5">
                     Soon
                   </span>
                 )}
@@ -4661,16 +4661,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart') ? (
         <>
           {/* ================= HEADER SECTION ================= */}
-          <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
                 {activeMarketplace?.name} Label Cropping and sorting tools
               </h1>
             </div>
 
             {/* Active Marketplace Logo Badge */}
             <div className="flex items-center gap-2">
-              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-lg border border-white/10`}>
+              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-md border border-slate-200`}>
                 <span className="font-extrabold text-base leading-none">{activeMarketplace?.iconLetter}</span>
                 <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">{activeMarketplace?.badgeText}</span>
               </div>
@@ -4678,20 +4678,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           </div>
 
       {/* ================= TOP PROCESSING REPORT CARD ================= */}
-      <div className="glass-card border border-white/10 rounded-2xl shadow-xl mb-6 overflow-hidden transition-all">
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs mb-6 overflow-hidden transition-all">
         <div 
           onClick={() => setReportOpen(!reportOpen)}
-          className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors"
+          className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 cursor-pointer hover:bg-slate-50/60 transition-colors"
         >
-          <div className="flex items-center gap-2 font-bold text-sm text-white">
-            <svg className="w-4 h-4 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
+            <svg className="w-4 h-4 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="20" x2="18" y2="10" />
               <line x1="12" y1="20" x2="12" y2="4" />
               <line x1="6" y1="20" x2="6" y2="14" />
             </svg>
             Processing Report
           </div>
-          <button type="button" className="text-slate-400 hover:text-white p-1 cursor-pointer">
+          <button type="button" className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
             {reportOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
@@ -4699,29 +4699,29 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         {reportOpen && (
           <div className="p-4 md:p-5 grid grid-cols-2 md:grid-cols-4 gap-3.5">
             {/* Total Labels */}
-            <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-sky-50 border border-sky-200/80 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-sky-200/70">Total Labels</div>
-                  <div className="text-lg font-bold text-sky-400 font-mono leading-tight">
-                    {metrics.success} <span className="text-slate-400 text-xs font-normal">/ {metrics.totalLabels}</span>
+                  <div className="text-[11px] font-semibold text-sky-700">Total Labels</div>
+                  <div className="text-lg font-bold text-[#083B82] font-mono leading-tight">
+                    {metrics.success} <span className="text-slate-500 text-xs font-normal">/ {metrics.totalLabels}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Success */}
-            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-orange-50 border border-orange-200/80 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-orange-200/70">Success</div>
-                  <div className="text-lg font-bold text-orange-400 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-orange-700">Success</div>
+                  <div className="text-lg font-bold text-orange-600 font-mono leading-tight">
                     {metrics.success}
                   </div>
                 </div>
@@ -4731,7 +4731,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   type="button" 
                   onClick={() => setShowSkuModal(true)} 
                   title="View SKU Summary"
-                  className="text-orange-400 hover:text-orange-300 transition-colors cursor-pointer"
+                  className="text-orange-600 hover:text-orange-700 transition-colors cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
@@ -4739,14 +4739,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* Duplicates */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
                   <Copy className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-400">Duplicates</div>
-                  <div className="text-lg font-bold text-white font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-slate-600">Duplicates</div>
+                  <div className="text-lg font-bold text-slate-800 font-mono leading-tight">
                     {metrics.duplicates}
                   </div>
                 </div>
@@ -4756,7 +4756,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   type="button" 
                   onClick={() => setShowDuplicateModal(true)} 
                   title="View duplicate labels"
-                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
@@ -4764,14 +4764,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* OCR Failed */}
-            <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-rose-50 border border-rose-200/80 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-rose-300/70">OCR Failed</div>
-                  <div className="text-lg font-bold text-rose-400 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-rose-700">OCR Failed</div>
+                  <div className="text-lg font-bold text-rose-600 font-mono leading-tight">
                     {metrics.ocrFailed}
                   </div>
                 </div>
@@ -4779,17 +4779,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
             {/* Courier Breakdown Chips */}
             {Object.keys(courierSummary).length > 0 && (
-              <div className="col-span-2 md:col-span-4 mt-1 pt-3.5 border-t border-white/10 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5 mr-1">
-                  <Truck className="w-4 h-4 text-sky-400" />
+              <div className="col-span-2 md:col-span-4 mt-1 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mr-1">
+                  <Truck className="w-4 h-4 text-sky-600" />
                   Rearranged by Courier:
                 </span>
                 {Object.entries(courierSummary).sort((a, b) => a[0].localeCompare(b[0])).map(([cName, count]) => (
                   <span
                     key={cName}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-sky-500/10 border border-sky-400/30 text-xs font-semibold text-sky-300 shadow-sm"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-sky-50 border border-sky-200 text-xs font-semibold text-sky-800 shadow-xs"
                   >
-                    {cName}: <span className="font-mono text-orange-400 font-bold">{count} labels</span>
+                    {cName}: <span className="font-mono text-orange-600 font-bold">{count} labels</span>
                   </span>
                 ))}
               </div>
@@ -4812,7 +4812,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               e.stopPropagation();
               if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
             }}
-            className="border-2 border-dashed border-sky-400/30 bg-sky-500/5 hover:bg-sky-500/10 rounded-2xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
+            className="border-2 border-dashed border-sky-300 bg-sky-50/40 hover:bg-sky-50/70 rounded-2xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
           >
             <input
               ref={fileInputRef}
@@ -4822,22 +4822,22 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               onChange={(e) => handleFiles(e.target.files)}
               className="hidden"
             />
-            <div className="w-10 h-10 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-full bg-sky-100 text-sky-600 border border-sky-200 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
               <UploadCloud className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-black text-white">
+            <h3 className="text-sm font-black text-slate-900">
               Upload PDF Files
             </h3>
-            <p className="text-xs text-sky-200/70 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Drag & drop or click to select files
             </p>
           </div>
 
           {/* PDF Files Container Card */}
-          <div className="glass-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
-              <div className="flex items-center gap-2 font-bold text-xs text-white">
-                <FileText className="w-4 h-4 text-orange-400" />
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
+                <FileText className="w-4 h-4 text-orange-500" />
                 PDF Files {files.length > 0 && `(${files.length})`}
               </div>
 
@@ -4846,7 +4846,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={clearAllFiles}
-                    className="text-xs text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg hover:bg-rose-500/10 transition-colors flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-rose-600 hover:text-rose-700 px-2.5 py-1 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Clear
                   </button>
@@ -4854,9 +4854,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <UploadCloud className="w-3.5 h-3.5 text-sky-400" />
+                  <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
                   Select PDFs
                 </button>
               </div>
@@ -4871,16 +4871,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               ) : (
                 <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
                   {files.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#040914]/80 border border-white/10 text-xs">
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
                       <div className="flex items-center gap-3 truncate max-w-[85%]">
-                        <FileCheck className="w-4 h-4 text-sky-400 shrink-0" />
-                        <span className="font-semibold text-white truncate">{file.name}</span>
+                        <FileCheck className="w-4 h-4 text-sky-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 truncate">{file.name}</span>
                         <span className="text-slate-400 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer"
+                        className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -7385,37 +7385,37 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
       {/* ================= EDIT DATE & TIME MODAL (FOR WEBCAM STUDIO) ================= */}
       {showClockModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-white">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Edit Date &amp; Time</h3>
-                  <p className="text-[11px] text-slate-400">Webcam Proof &amp; Unboxing Timestamp</p>
+                  <h3 className="text-sm font-bold text-slate-900">Edit Date &amp; Time</h3>
+                  <p className="text-[11px] text-slate-500">Webcam Proof &amp; Unboxing Timestamp</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowClockModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Current Display Status */}
-            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 text-center space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Currently Showing:</span>
-              <div className="font-mono text-sm font-bold text-emerald-400 tracking-wider">
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Currently Showing:</span>
+              <div className="font-mono text-sm font-bold text-emerald-700 tracking-wider">
                 {currentIstTime}
               </div>
               <div className="flex items-center justify-center gap-1.5 pt-1">
-                <span className={`w-2 h-2 rounded-full ${clockMode === 'custom' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
-                <span className="text-[10px] text-slate-300 font-semibold">
-                  Mode: <strong className={clockMode === 'custom' ? 'text-amber-400' : 'text-emerald-400'}>
+                <span className={`w-2 h-2 rounded-full ${clockMode === 'custom' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                <span className="text-[10px] text-slate-600 font-semibold">
+                  Mode: <strong className={clockMode === 'custom' ? 'text-amber-700' : 'text-emerald-700'}>
                     {clockMode === 'custom' ? 'Custom / Edited (Ticking Live)' : 'Live Real-Time IST'}
                   </strong>
                 </span>
@@ -7425,8 +7425,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             {/* Form to Set Custom Date & Time */}
             <form onSubmit={handleApplyCustomTime} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-sky-600" />
                   Select Date
                 </label>
                 <input
@@ -7434,13 +7434,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   value={editDateStr}
                   onChange={(e) => setEditDateStr(e.target.value)}
                   required
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-sky-600" />
                   Select Time
                 </label>
                 <input
@@ -7449,11 +7449,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   value={editTimeStr}
                   onChange={(e) => setEditTimeStr(e.target.value)}
                   required
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
               </div>
 
-              <p className="text-[10px] text-slate-400 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+              <p className="text-[10px] text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 💡 <strong>Natural unboxing proof:</strong> The clock will continuously tick forward second-by-second from this edited time, making the video proof look 100% genuine!
               </p>
 
@@ -7462,14 +7462,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={handleResetToLiveTime}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-colors cursor-pointer border border-slate-700"
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer border border-slate-200"
                   >
                     Reset to Live IST
                   </button>
                 )}
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                 >
                   Set Custom Time
                 </button>

@@ -2727,33 +2727,33 @@ export default function App() {
   // ===================== EMAIL VERIFICATION REQUIRED SCREEN =====================
   if (user && emailNeedsVerification) {
     return (
-      <div className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 shadow-2xl text-center space-y-5 border border-white/10">
-          <div className="w-16 h-16 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-sky-500/25 border border-white/20">
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-xs text-center space-y-5 border border-slate-200/90">
+          <div className="w-16 h-16 bg-gradient-to-tr from-[#083B82] to-sky-600 rounded-2xl mx-auto flex items-center justify-center shadow-md border border-slate-100">
             <MailCheck className="w-8 h-8 text-white" />
           </div>
 
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">Verify Your Email</h2>
-            <p className="text-xs text-sky-200/70 mt-1.5">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Verify Your Email</h2>
+            <p className="text-xs text-slate-500 mt-1.5">
               We have sent an official verification link to:
             </p>
-            <span className="inline-block mt-2 font-mono text-sm font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 px-3.5 py-1.5 rounded-xl shadow-inner">
+            <span className="inline-block mt-2 font-mono text-sm font-bold text-[#083B82] bg-sky-50 border border-sky-200 px-3.5 py-1.5 rounded-xl shadow-xs">
               {user.email}
             </span>
           </div>
 
-          <div className="bg-[#040914]/80 border border-white/10 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-2.5">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-slate-700 text-left space-y-2.5">
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+              <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
               <span>Open your email inbox (also check Spam/Junk folder if not in Inbox).</span>
             </div>
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+              <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
               <span>Click the <strong>verification link</strong> sent by Firebase.</span>
             </div>
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+              <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
               <span>Come back here and click <strong>"I Have Verified (Continue)"</strong> below.</span>
             </div>
           </div>
@@ -2762,7 +2762,7 @@ export default function App() {
             <button
               onClick={handleCheckVerified}
               disabled={authLoading}
-              className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4 text-white" />
               {authLoading ? 'Verifying status...' : 'I Have Verified (Continue)'}
@@ -2771,14 +2771,14 @@ export default function App() {
             <button
               onClick={handleResendVerificationEmail}
               disabled={authLoading}
-              className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold rounded-xl border border-white/10 transition-colors cursor-pointer"
+              className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors cursor-pointer"
             >
               Resend Verification Link
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full text-xs text-slate-400 hover:text-rose-400 transition-colors pt-2 block cursor-pointer"
+              className="w-full text-xs text-slate-500 hover:text-rose-600 transition-colors pt-2 block cursor-pointer"
             >
               Log out / Use different account
             </button>
@@ -2791,19 +2791,19 @@ export default function App() {
   // ===================== AUTH SCREEN (CUSTOMER & SUPER ADMIN) =====================
   if (!user) {
     return (
-      <div className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 shadow-2xl border border-white/10">
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-xs border border-slate-200/90">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-sky-500/25 mb-3 overflow-hidden bg-white p-1 border border-white/20">
+            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-3 overflow-hidden bg-white p-1 border border-slate-200">
               <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-white">OrdersMunim</h1>
-            <p className="text-xs text-sky-200/70 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
+            <h1 className="text-2xl font-black tracking-tight text-[#083B82]">OrdersMunim</h1>
+            <p className="text-xs text-slate-500 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
           </div>
 
           {authError && (
-            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3.5 rounded-xl text-xs flex items-center gap-2 mb-5">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-xl text-xs flex items-center gap-2 mb-5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{authError}</span>
             </div>
           )}
@@ -2812,14 +2812,14 @@ export default function App() {
           <div>
             {/* Mode Tabs (Sign In vs Create Account) */}
               {authMode !== 'forgot' && (
-                <div className="flex items-center justify-center gap-6 border-b border-white/10 pb-3 mb-5">
+                <div className="flex items-center justify-center gap-6 border-b border-slate-200 pb-3 mb-5">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); }}
                     className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
                       authMode === 'login' 
-                        ? 'text-orange-400 border-b-2 border-orange-500' 
-                        : 'text-slate-400 hover:text-white'
+                        ? 'text-orange-600 border-b-2 border-orange-500' 
+                        : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     Sign In
@@ -2829,8 +2829,8 @@ export default function App() {
                     onClick={() => { setAuthMode('signup'); setAuthError(''); }}
                     className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
                       authMode === 'signup' 
-                        ? 'text-orange-400 border-b-2 border-orange-500' 
-                        : 'text-slate-400 hover:text-white'
+                        ? 'text-orange-600 border-b-2 border-orange-500' 
+                        : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     Sign Up
@@ -2842,44 +2842,44 @@ export default function App() {
               {authMode === 'login' && (
                 <form onSubmit={handleCustomerLogin} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                         Password
                       </label>
                       <button
                         type="button"
                         onClick={() => { setAuthMode('forgot'); setAuthError(''); }}
-                        className="text-[11px] text-sky-400 hover:underline cursor-pointer"
+                        className="text-[11px] text-[#083B82] hover:underline cursor-pointer font-medium"
                       >
                         Forgot Password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="password"
                         value={customerPassword}
                         onChange={(e) => setCustomerPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2887,18 +2887,18 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Signing In...' : 'Sign In to Dashboard'}
                   </button>
 
                   <div className="text-center pt-2">
-                    <span className="text-xs text-slate-400">
-                      New to Meesho OTP Hub?{' '}
+                    <span className="text-xs text-slate-500">
+                      New to OrdersMunim?{' '}
                       <button
                         type="button"
                         onClick={() => { setAuthMode('signup'); setAuthError(''); }}
-                        className="text-orange-400 font-bold hover:underline cursor-pointer"
+                        className="text-orange-600 font-bold hover:underline cursor-pointer"
                       >
                         Sign Up
                       </button>
@@ -2911,45 +2911,45 @@ export default function App() {
               {authMode === 'signup' && (
                 <form onSubmit={handleCustomerSignup} className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Full Name
                     </label>
                     <div className="relative">
-                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         placeholder="e.g. Rajesh Kumar"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Create Password (Min 6 Characters)
                     </label>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="password"
                         value={customerPassword}
@@ -2957,17 +2957,17 @@ export default function App() {
                         placeholder="••••••••"
                         required
                         minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Confirm Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="password"
                         value={customerConfirmPass}
@@ -2975,30 +2975,30 @@ export default function App() {
                         placeholder="••••••••"
                         required
                         minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 p-2.5 rounded-xl">
+                  <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 p-2.5 rounded-xl">
                     📧 An official verification link will be sent to your email. You must verify your email before accessing the dashboard.
                   </p>
 
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Creating Account...' : 'Sign Up & Send Verification Link'}
                   </button>
 
                   <div className="text-center pt-2">
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-500">
                       Already have an account?{' '}
                       <button
                         type="button"
                         onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                        className="text-orange-400 font-bold hover:underline cursor-pointer"
+                        className="text-orange-600 font-bold hover:underline cursor-pointer"
                       >
                         Sign In
                       </button>
@@ -3011,25 +3011,25 @@ export default function App() {
               {authMode === 'forgot' && (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <div className="text-center mb-3">
-                    <h3 className="font-bold text-white text-base">Reset Your Password</h3>
-                    <p className="text-xs text-sky-200/70 mt-1">
+                    <h3 className="font-bold text-slate-900 text-base">Reset Your Password</h3>
+                    <p className="text-xs text-slate-500 mt-1">
                       Enter your email address and we will send you a password reset link.
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -3037,7 +3037,7 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Sending link...' : 'Send Password Reset Link'}
                   </button>
@@ -3045,7 +3045,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className="w-full text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1.5 pt-2 cursor-pointer"
+                    className="w-full text-xs text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5 pt-2 cursor-pointer font-medium"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     Back to Sign In
@@ -3061,57 +3061,90 @@ export default function App() {
 
   // ===================== LOGGED IN SELLER DASHBOARD =====================
   return (
-    <div className="min-h-screen text-slate-100 flex flex-col">
-      {/* Top Navigation / Mobile Toolbar */}
-      <header className="glass-panel border-b border-white/10 sticky top-0 z-30 shadow-lg shadow-black/30 backdrop-blur-xl">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Left: Mobile App Logo */}
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
+      {/* Top Navigation / Desktop & Mobile Toolbar */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          {/* Left: App Logo & Branding */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-md border border-white/20 flex items-center justify-center p-0.5">
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-xs border border-slate-200 flex items-center justify-center p-0.5">
               <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <span className="text-xs font-black text-white tracking-wide">OrdersMunim</span>
+            <div className="flex flex-col">
+              <span className="text-base font-black tracking-tight text-[#083B82] leading-none">OrdersMunim</span>
+              <span className="text-[10px] text-slate-400 font-semibold leading-tight hidden sm:block">Smart Order &amp; OTP Hub</span>
             </div>
           </div>
 
-          {/* Center: Welcome User's Name (clickable to open profile) */}
-          <div 
-            onClick={() => setActiveTab('profile')}
-            className="flex-1 text-center px-1 truncate cursor-pointer group"
-            title="Click to open your Profile"
-          >
-            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block group-hover:text-sky-300 transition-colors">
-              Welcome, <span className="text-orange-400 group-hover:underline underline-offset-2 font-black">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
-            </span>
-            {isSuperAdmin && (
-              <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider block">
-                Super Admin
-              </span>
-            )}
-          </div>
-
-          {/* Right: Profile & Sound Icons */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Center: Desktop Navigation Bar */}
+          <div className="hidden md:flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
             <button
-              onClick={() => setActiveTab('profile')}
-              title="Open Profile"
-              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'profile'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40 shadow-sm shadow-sky-500/20'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab !== 'cropper' && activeTab !== 'profile'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              <User className="w-4 h-4 text-sky-400" />
-              <span className="hidden sm:inline text-xs font-bold">Profile</span>
+              <Package className="w-4 h-4" />
+              <span>OTP Dashboard</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('cropper')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'cropper'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <Scissors className="w-4 h-4" />
+              <span>Label Cropper</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'profile'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>Store Slots</span>
+            </button>
+          </div>
+
+          {/* Right: Welcome User & Action Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div 
+              onClick={() => setActiveTab('profile')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
+              title="Click to open your Profile"
+            >
+              <div className="w-6 h-6 rounded-lg bg-orange-500/10 text-orange-600 font-black text-xs flex items-center justify-center">
+                {(profile?.name || user?.displayName || 'S')[0]}
+              </div>
+              <div className="text-left text-xs leading-none">
+                <span className="font-bold text-slate-800 block truncate max-w-[120px]">
+                  {profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}
+                </span>
+                {isSuperAdmin && (
+                  <span className="text-[9px] text-orange-600 font-extrabold uppercase tracking-wider">Super Admin</span>
+                )}
+              </div>
+            </div>
+
             {!isSuperAdmin && (
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 title={soundEnabled ? "Mute OTP Audio" : "Enable OTP Audio"}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
               >
-                {soundEnabled ? <Volume2 className="w-4 h-4 text-sky-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+                {soundEnabled ? <Volume2 className="w-4 h-4 text-orange-500" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
               </button>
             )}
           </div>
@@ -3119,30 +3152,30 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 pb-28 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 pb-28 space-y-6">
         {activeTab === 'profile' ? (
-          <div className="max-w-md mx-auto glass-panel border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in fade-in duration-200">
+          <div className="max-w-md mx-auto bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 animate-in fade-in duration-200 text-slate-900">
             {/* 1. Round Profile Picture */}
             <div className="flex flex-col items-center text-center space-y-3">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-sky-500 to-blue-700 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-sky-500/25 border-4 border-white/20 uppercase">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#083B82] to-sky-600 flex items-center justify-center text-white text-3xl font-black shadow-md border-4 border-slate-100 uppercase">
                 {(profile?.name || user?.displayName || user?.email || 'U')[0]}
               </div>
               <div>
-                <h3 className="font-bold text-lg text-white">
+                <h3 className="font-bold text-lg text-slate-900">
                   {profile?.name || user?.displayName || 'Seller User'}
                 </h3>
-                <p className="text-xs text-sky-200/70 font-mono mt-0.5">
+                <p className="text-xs text-slate-500 font-mono mt-0.5">
                   {user?.email || profile?.email || user?.phoneNumber || ''}
                 </p>
                 <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 uppercase tracking-wider">
                     {profile.maxAccounts !== undefined ? `${profile.maxAccounts} Store Slots` : '0 Store Slots'}
                   </span>
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 uppercase tracking-wider">
                     {accounts.length} Linked Stores
                   </span>
                   {isSuperAdmin && (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/40 uppercase tracking-wider">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
                       Super Admin
                     </span>
                   )}
@@ -3151,17 +3184,17 @@ export default function App() {
             </div>
 
             {/* Connected Stores Quota Box */}
-            <div className="glass-card border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-md">
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-sky-400" />
-                <span className="font-bold text-sm text-white">Connected Stores</span>
+                <Package className="w-4 h-4 text-sky-600" />
+                <span className="font-bold text-sm text-slate-900">Connected Stores</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                <span className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
                   {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
                 </span>
                 {accounts.length >= (profile.maxAccounts ?? 0) && (
-                  <span className="text-[10px] text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full font-semibold">
                     Limit Reached
                   </span>
                 )}
@@ -3169,33 +3202,33 @@ export default function App() {
             </div>
 
             {/* Follow Us Page Store Profiles (QR & Labels) */}
-            <div className="glass-card border border-white/10 rounded-2xl p-4 text-xs space-y-3.5 shadow-md">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-3.5 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
                 <div className="flex items-center gap-2">
-                  <QrCode className="w-4 h-4 text-sky-400" />
-                  <span className="font-bold text-sm text-white">Follow Us Store Profiles</span>
+                  <QrCode className="w-4 h-4 text-sky-600" />
+                  <span className="font-bold text-sm text-slate-900">Follow Us Store Profiles</span>
                 </div>
-                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                <span className="bg-sky-50 border border-sky-200 text-sky-700 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
                   {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} Stores Added
                 </span>
               </div>
 
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Add your store names &amp; links here. They will automatically appear in the <strong className="text-white">Follow Us dropdown</strong> on the Label Cropper page!
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Add your store names &amp; links here. They will automatically appear in the <strong className="text-slate-900">Follow Us dropdown</strong> on the Label Cropper page!
               </p>
 
               {/* Existing Stores List */}
               <div className="space-y-2">
                 {(profile?.followStores || []).map((store) => (
-                  <div key={store.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <div key={store.id} className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-xs">
                     <div className="min-w-0 flex-1 pr-2">
-                      <div className="font-bold text-white text-xs truncate">{store.name}</div>
-                      <div className="text-[10px] text-cyan-400 font-mono truncate">{store.url}</div>
+                      <div className="font-bold text-slate-900 text-xs truncate">{store.name}</div>
+                      <div className="text-[10px] text-sky-700 font-mono truncate">{store.url}</div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleDeleteFollowStore(store.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                       title="Remove store profile"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -3206,62 +3239,61 @@ export default function App() {
 
               {/* Add Store Form */}
               {(profile?.followStores || []).length < (typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)) ? (
-                <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-800/60 space-y-2">
-                  <div className="text-[11px] font-bold text-slate-300">Add New Store Profile:</div>
+                <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-200/80 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-700">Add New Store Profile:</div>
                   <input
                     type="text"
                     value={newFollowStoreName}
                     onChange={(e) => setNewFollowStoreName(e.target.value)}
                     placeholder="Store Name (e.g. RR Traders)"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500"
                   />
                   <input
                     type="url"
                     value={newFollowStoreUrl}
                     onChange={(e) => setNewFollowStoreUrl(e.target.value)}
                     placeholder="Profile URL (e.g. https://meesho.com/...)"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500"
                   />
                   <button
                     type="submit"
                     disabled={addingFollowStore}
-                    className="w-full py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer transition-all"
+                    className="w-full py-2 px-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{addingFollowStore ? 'Saving...' : 'Add Store Profile'}</span>
                   </button>
                 </form>
               ) : (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300">
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
                   Store slot quota reached ({typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} permitted). Contact admin to add more stores.
                 </div>
               )}
             </div>
 
             {/* Account Details Box */}
-
-            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-2.5">
-              <div className="flex items-center justify-between text-slate-400">
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-2.5">
+              <div className="flex items-center justify-between text-slate-600">
                 <span>Account Role</span>
-                <strong className="text-white capitalize">{profile?.role || 'Seller'}</strong>
+                <strong className="text-slate-900 capitalize">{profile?.role || 'Seller'}</strong>
               </div>
-              <div className="flex items-center justify-between text-slate-400">
+              <div className="flex items-center justify-between text-slate-600">
                 <span>Email Status</span>
-                <strong className="text-emerald-400 flex items-center gap-1">
+                <strong className="text-emerald-600 flex items-center gap-1 font-semibold">
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                 </strong>
               </div>
               {isMobileApp && (
-                <div className="flex items-center justify-between text-slate-400">
+                <div className="flex items-center justify-between text-slate-600">
                   <span>App Version</span>
                   <div className="flex items-center gap-2">
-                    <strong className="text-white font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
+                    <strong className="text-slate-900 font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
                     {installedVersionCode >= (Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE) ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                         <Check className="w-2.5 h-2.5" /> Up to date
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                         Update Available
                       </span>
                     )}
@@ -3275,7 +3307,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleInstallAppUpdate(appUpdateConfig?.downloadUrl)}
-                className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
                 <DownloadCloud className="w-3.5 h-3.5" />
                 Update App to v{appUpdateConfig?.versionName || CURRENT_APP_VERSION_NAME}
@@ -3284,31 +3316,31 @@ export default function App() {
 
             {/* App Update Broadcast Section (Super Admin Only) */}
             {isSuperAdmin && (
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Rocket className="w-4 h-4 text-cyan-400" />
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Rocket className="w-4 h-4 text-sky-600" />
                     App Update Broadcast
                   </span>
                   {broadcastActive ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                       Live v{broadcastVersionName}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                       Inactive
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <p className="text-[11px] text-slate-600 leading-relaxed">
                   Manage app releases, push in-app update notices, configure direct APK download link, and set force-lock deadlines for all clients.
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowBroadcastModal(true)}
-                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-850 text-cyan-300 border border-cyan-500/40 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                  className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                 >
-                  <Rocket className="w-3.5 h-3.5 text-cyan-400" />
+                  <Rocket className="w-3.5 h-3.5 text-sky-600" />
                   App Update Broadcast
                 </button>
               </div>
@@ -3316,34 +3348,34 @@ export default function App() {
 
             {/* Background Sync & Battery Optimization Card (Mobile App Only) */}
             {isMobileApp && (
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3">
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-sky-600" />
                     Background Sync & Permissions
                   </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
                     Android 24/7
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <p className="text-[11px] text-slate-600 leading-relaxed">
                   If background OTP alerts stop or you previously denied battery permissions, tap below to grant exemption and keep syncing 24/7.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={handleFixBatteryOptimization}
-                    className="w-full py-2.5 px-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="w-full py-2.5 px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+                    <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
                     Fix Battery Optimization
                   </button>
                   <button
                     type="button"
                     onClick={handleOpenSystemAppSettings}
-                    className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="w-full py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <Settings className="w-3.5 h-3.5 text-slate-500" />
                     App Settings / Permissions
                   </button>
                 </div>
@@ -3351,24 +3383,24 @@ export default function App() {
             )}
 
             {/* Actions Section */}
-            <div className="space-y-4 pt-2 border-t border-slate-800">
-              {/* 2. Sign Out button with icon (triggers confirmation dialog first) */}
+            <div className="space-y-4 pt-2 border-t border-slate-200">
+              {/* 2. Sign Out button with icon */}
               <button
                 type="button"
                 onClick={handlePromptLogout}
-                className="w-full py-3.5 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-md"
+                className="w-full py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 transition-colors shadow-xs"
               >
-                <LogOut className="w-4 h-4 text-cyan-400" />
+                <LogOut className="w-4 h-4 text-slate-600" />
                 Sign Out
               </button>
 
-              {/* 3. Delete this account in red font small letters (triggers confirmation dialog first) */}
+              {/* 3. Delete this account in red font small letters */}
               {!isSuperAdmin && (
                 <div className="text-center pt-1">
                   <button
                     type="button"
                     onClick={handlePromptDeleteAccount}
-                    className="text-xs text-rose-500 hover:text-rose-400 hover:underline transition-colors lowercase font-medium"
+                    className="text-xs text-rose-600 hover:text-rose-700 hover:underline transition-colors lowercase font-medium cursor-pointer"
                   >
                     delete this account
                   </button>
@@ -3840,11 +3872,11 @@ export default function App() {
           <>
             {/* Account Status Alerts */}
             {profile.status === 'on_hold' && (
-              <div className="bg-rose-500/10 border-2 border-rose-500/40 text-rose-200 p-4 rounded-2xl flex items-center gap-3.5 shadow-lg">
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+              <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-2xl flex items-center gap-3.5 shadow-xs">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
                 <div>
-                  <h3 className="font-bold text-sm text-white">Account On Hold</h3>
-                  <p className="text-xs text-rose-300 mt-0.5">
+                  <h3 className="font-bold text-sm text-rose-950">Account On Hold</h3>
+                  <p className="text-xs text-rose-700 mt-0.5">
                     Your account is currently on hold. Please contact admin to activate your service.
                   </p>
                 </div>
@@ -3852,12 +3884,12 @@ export default function App() {
             )}
 
             {profile.paymentAlert && profile.status !== 'on_hold' && (
-              <div className="bg-amber-500/10 border-2 border-amber-500/40 text-amber-200 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-lg">
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-3">
-                  <BellRing className="w-5 h-5 text-amber-400 shrink-0" />
+                  <BellRing className="w-5 h-5 text-amber-600 shrink-0" />
                   <div>
-                    <h4 className="font-bold text-xs text-white">Subscription Payment Due Alert</h4>
-                    <p className="text-xs text-amber-300 mt-0.5">
+                    <h4 className="font-bold text-xs text-amber-950">Subscription Payment Due Alert</h4>
+                    <p className="text-xs text-amber-800 mt-0.5">
                       Your payment of ₹{profile.paymentAmount || ((profile.maxAccounts || 1) * 249)} is due. Please pay to keep your stores active.
                     </p>
                   </div>
@@ -3865,15 +3897,77 @@ export default function App() {
               </div>
             )}
 
-            {/* Account Quota & Controls Bar (Desktop Only; on mobile/app it is shifted to Profile) */}
-            <div className="hidden md:flex glass-card border border-white/10 rounded-2xl p-4 md:p-5 items-center justify-between shadow-xl">
+            {/* Desktop Overview Metric Cards (3 Cards) */}
+            <div className="hidden md:grid md:grid-cols-3 gap-4">
+              {/* Metric 1: Connected Stores */}
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Connected Stores</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1 font-mono">
+                    {accounts.length} <span className="text-xs text-slate-400 font-normal font-sans">/ {profile.maxAccounts ?? 0} slots</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> All slots configured
+                  </div>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
+                  <Package className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* Metric 2: Live Return OTPs */}
+              {(() => {
+                const totalLiveOtps = accounts.reduce((sum, acc) => {
+                  const active = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
+                    ? acc.otpList.length
+                    : (acc.currentOtp && acc.currentOtp !== '----' ? 1 : 0);
+                  return sum + active;
+                }, 0);
+                return (
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Live Return OTPs</div>
+                      <div className="text-2xl font-black text-orange-600 mt-1 font-mono">
+                        {totalLiveOtps}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium mt-1">
+                        Ready for courier handover
+                      </div>
+                    </div>
+                    <div className="w-11 h-11 rounded-xl bg-sky-50 border border-sky-200/70 text-sky-600 flex items-center justify-center shrink-0">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Metric 3: Cloud Sync Engine */}
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Delivery Sync Engine</div>
+                  <div className="text-sm font-bold text-emerald-700 mt-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    24/7 Cloud Sync Active
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-medium mt-1">
+                    Secured via device vault
+                  </div>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200/70 text-emerald-600 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Account Quota & Controls Bar */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base md:text-lg font-black text-white">Connected Stores</h2>
-                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                <h2 className="text-base md:text-lg font-black text-slate-900">Connected Stores</h2>
+                <span className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
                   {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
                 </span>
                 {accounts.length >= (profile.maxAccounts ?? 0) && (
-                  <span className="text-[10px] text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full font-semibold">
                     Limit Reached
                   </span>
                 )}
@@ -3882,20 +3976,20 @@ export default function App() {
               {/* Action Button: Visible on Android App; on Web browser guides to Mobile App */}
               <div className="flex items-center gap-2.5">
                 {!isNativeMobile() ? (
-                  <div className="flex items-center gap-1.5 bg-sky-950/40 border border-sky-800/40 px-3 py-1.5 rounded-xl text-sky-300 text-xs font-medium">
-                    <Smartphone className="w-4 h-4 text-sky-400" />
+                  <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-xl text-sky-800 text-xs font-semibold">
+                    <Smartphone className="w-4 h-4 text-sky-600" />
                     <span>Add Store via Android App</span>
                   </div>
                 ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
-                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     Add Store
                   </button>
                 ) : (
-                  <span className="text-xs text-slate-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+                  <span className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl">
                     {profile.status === 'on_hold' ? 'Account On Hold' : 'Store Limit Reached'}
                   </span>
                 )}
@@ -3904,25 +3998,25 @@ export default function App() {
 
             {/* List of Store OTP Cards */}
             {accounts.length === 0 ? (
-              <div className="glass-card border border-dashed border-white/15 rounded-3xl p-10 text-center shadow-xl">
-                <Package className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-                <h3 className="text-base font-black text-white">No Meesho Accounts Linked Yet</h3>
+              <div className="bg-white border border-dashed border-slate-300 rounded-3xl p-10 text-center shadow-xs">
+                <Package className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                <h3 className="text-base font-black text-slate-800">No Meesho Accounts Linked Yet</h3>
                 {!isNativeMobile() ? (
-                  <div className="mt-4 p-5 bg-sky-950/30 border border-sky-800/40 rounded-2xl max-w-md mx-auto text-center space-y-2.5 shadow-inner">
-                    <div className="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto text-sky-400">
+                  <div className="mt-4 p-5 bg-sky-50 border border-sky-200/80 rounded-2xl max-w-md mx-auto text-center space-y-2.5 shadow-xs">
+                    <div className="w-10 h-10 rounded-full bg-sky-100 border border-sky-200 flex items-center justify-center mx-auto text-sky-600">
                       <Smartphone className="w-5 h-5" />
                     </div>
-                    <h4 className="text-sm font-bold text-white">Connect Store from Mobile App</h4>
-                    <p className="text-xs text-sky-200/80 leading-relaxed">
-                      Meesho accounts must be connected inside the <strong>OrderMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
+                    <h4 className="text-sm font-bold text-slate-900">Connect Store from Mobile App</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Meesho accounts must be connected inside the <strong>OrdersMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
                     </p>
-                    <p className="text-[11px] text-sky-300 font-medium">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
+                    <p className="text-[11px] text-sky-700 font-semibold">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
                     <div className="pt-1">
                       <a
                         href={broadcastUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 transition-all"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all"
                       >
                         <DownloadCloud className="w-4 h-4" />
                         Download Android App
@@ -3932,16 +4026,16 @@ export default function App() {
                 ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
-                    className="mt-4 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 cursor-pointer"
+                    className="mt-4 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 cursor-pointer"
                   >
                     + Add Your First Store
                   </button>
                 ) : (
-                  <p className="text-xs text-slate-400 mt-2">Contact admin to add store slots.</p>
+                  <p className="text-xs text-slate-500 mt-2">Contact admin to add store slots.</p>
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
                 {accounts.map((acc) => {
                   const isLive = acc.status === 'live';
                   const isOnHold = profile.status === 'on_hold';
@@ -3958,13 +4052,13 @@ export default function App() {
                   return (
                     <div 
                       key={acc.id} 
-                      className={`glass-card ${
+                      className={`bg-white border relative ${
                         isOnHold 
-                          ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' 
+                          ? 'border-rose-300 bg-rose-50/30' 
                           : isExpanded 
-                          ? 'border-sky-500/50 shadow-xl shadow-sky-950/40' 
-                          : 'hover:border-sky-500/30'
-                      } rounded-2xl p-4 transition-all shadow-lg`}
+                          ? 'border-[#083B82]/30 shadow-md ring-1 ring-[#083B82]/10' 
+                          : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'
+                      } rounded-2xl p-4.5 transition-all duration-200`}
                     >
                       {/* Inner Card Content (Blurred when on hold) */}
                       <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-25 select-none pointer-events-none' : ''}`}>
@@ -3976,23 +4070,23 @@ export default function App() {
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                               activeOtps.length > 0 
-                                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30' 
-                                : 'bg-white/5 text-slate-400 border border-white/5'
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200' 
+                                : 'bg-slate-100 text-slate-500 border border-slate-200'
                             }`}>
                               <Package className="w-4 h-4" />
                             </div>
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
+                                <span className="font-bold text-base text-slate-900 truncate hover:text-[#083B82] transition-colors">
                                   {acc.storeName}
                                 </span>
                                 {activeOtps.length > 0 ? (
-                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
                                     {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400 font-medium border border-white/5">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">
                                     No Return
                                   </span>
                                 )}
@@ -4010,10 +4104,10 @@ export default function App() {
                                   handleManualRefresh(acc.syncKey, acc.storeName);
                                 }}
                                 disabled={refreshingId === acc.syncKey}
-                                className="p-1.5 text-slate-400 hover:text-sky-400 transition-colors disabled:opacity-50 cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                                 title="Check for live OTP now"
                               >
-                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-sky-400' : ''}`} />
+                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-[#083B82]' : ''}`} />
                               </button>
                             )}
                             <button
@@ -4022,42 +4116,42 @@ export default function App() {
                                 e.stopPropagation();
                                 handleDeleteAccount(acc.id, acc.storeName);
                               }}
-                              className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                               title="Remove store"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <div className="p-1 text-slate-400">
-                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-[#083B82]' : ''}`} />
                             </div>
                           </div>
                         </div>
 
                         {/* Expanded Section: Single Row OTPs */}
                         {isExpanded && (
-                          <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-in fade-in duration-150">
+                          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-in fade-in duration-150">
                             {activeOtps.length > 0 ? (
                               activeOtps.map((item, idx) => (
                                 <div 
                                   key={idx} 
-                                  className="flex items-center justify-between gap-2 p-2.5 bg-[#040914]/80 border border-white/10 rounded-xl"
+                                  className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl hover:bg-slate-100/60 transition-colors"
                                 >
                                   {/* 1. Courier Name */}
                                   <div className="flex items-center gap-1.5 min-w-[90px] shrink-0">
-                                    <Truck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                                    <span className="font-bold text-xs text-white truncate max-w-[120px]">
+                                    <Truck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                    <span className="font-bold text-xs text-[#083B82] truncate max-w-[120px]">
                                       {item.courier || 'Courier'}
                                     </span>
                                   </div>
 
                                   {/* 2. Parcel Count */}
-                                  <div className="flex items-center gap-1 text-[11px] text-slate-300 shrink-0">
+                                  <div className="flex items-center gap-1 text-[11px] text-slate-600 shrink-0">
                                     <Package className="w-3 h-3 text-slate-400" />
                                     <span>{item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}</span>
                                   </div>
 
                                   {/* 3. OTP Code */}
-                                  <div className="font-mono font-black text-base md:text-lg text-orange-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-orange-500/15 rounded-lg border border-orange-500/30 shadow-sm shadow-orange-500/10">
+                                  <div className="font-mono font-black text-base md:text-lg text-orange-600 tracking-wider shrink-0 px-2.5 py-0.5 bg-orange-100/90 rounded-lg border border-orange-300/80 shadow-xs">
                                     {item.otp || '----'}
                                   </div>
 
@@ -4069,7 +4163,7 @@ export default function App() {
                                         e.stopPropagation();
                                         handleCopy(item.otp, `${acc.id}-${idx}`);
                                       }}
-                                      className="p-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 active:scale-95 text-orange-300 border border-orange-500/30 transition-all shrink-0 cursor-pointer"
+                                      className="p-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-xs transition-all shrink-0 cursor-pointer"
                                       title="Copy OTP"
                                     >
                                       {copiedId === `${acc.id}-${idx}` ? (
@@ -4084,12 +4178,12 @@ export default function App() {
                                 </div>
                               ))
                             ) : (
-                              <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/50 rounded-xl text-xs text-slate-500">
+                              <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-500">
                                 <span className="flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                   No active return courier right now
                                 </span>
-                                <span className="font-mono text-slate-500 font-bold">----</span>
+                                <span className="font-mono text-slate-400 font-bold">----</span>
                               </div>
                             )}
 
@@ -4097,11 +4191,11 @@ export default function App() {
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {acc.dateTime || 'Just now'}</span>
                               {isAutoSync ? (
-                                <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                                <span className="flex items-center gap-1 text-emerald-600 font-medium">
                                   Auto-Sync Active
                                 </span>
                               ) : (
-                                <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                <span className="flex items-center gap-1 text-slate-500 font-medium">
                                   Connected
                                 </span>
                               )}
@@ -4112,14 +4206,14 @@ export default function App() {
 
                       {/* On Hold Overlay Badge */}
                       {isOnHold && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 bg-slate-950/60 backdrop-blur-[2px] text-center select-none">
-                          <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 mb-2 shadow-xl shadow-rose-950/50">
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px] rounded-2xl text-center select-none">
+                          <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 mb-2 shadow-lg">
                             <PauseCircle className="w-6 h-6 animate-pulse" />
                           </div>
                           <span className="text-sm font-bold text-white tracking-wider uppercase">
                             Account On Hold
                           </span>
-                          <span className="text-xs text-rose-300 mt-0.5">
+                          <span className="text-xs text-rose-200 mt-0.5">
                             OTP service paused
                           </span>
                         </div>
@@ -4129,6 +4223,29 @@ export default function App() {
                 })}
               </div>
             )}
+
+            {/* Desktop Operational Guide Cards (2 Cards) */}
+            <div className="hidden md:grid md:grid-cols-2 gap-4 pt-2">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#083B82]">
+                  <Truck className="w-4 h-4 text-sky-600" />
+                  Courier Handover Best Practice
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Always verify that the parcel count announced by the delivery partner matches the parcel count displayed next to their courier name before sharing the OTP.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#083B82]">
+                  <Smartphone className="w-4 h-4 text-orange-500" />
+                  OrdersMunim Mobile App
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Keep the Android app installed on your smartphone to ensure background OTP sync continues seamlessly even when your PC is turned off.
+                </p>
+              </div>
+            </div>
           </>
         )}
           </>
@@ -4138,29 +4255,29 @@ export default function App() {
 
       {/* ================= ADD STORE MODAL (CREDENTIALS) ================= */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="glass-panel border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
 
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                <Package className="w-5 h-5 text-sky-400" />
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Package className="w-5 h-5 text-sky-600" />
                 {connectStep === 1 ? 'Add Meesho Store' : 'Install Chrome Extension'}
               </h3>
               <button type="button" onClick={handleCloseConnectModal}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Error banner */}
             {modalError && (
-              <div className="bg-rose-500/15 border border-rose-500/40 text-rose-200 p-3.5 rounded-2xl text-xs flex items-start justify-between gap-2.5 animate-in fade-in duration-200">
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-2xl text-xs flex items-start justify-between gap-2.5 animate-in fade-in duration-200">
                 <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span className="font-medium leading-relaxed">{modalError}</span>
                 </div>
-                <button type="button" onClick={() => setModalError('')} className="text-rose-400 hover:text-white p-0.5 rounded transition-colors cursor-pointer">
+                <button type="button" onClick={() => setModalError('')} className="text-rose-600 hover:text-rose-800 p-0.5 rounded transition-colors cursor-pointer">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -4171,7 +4288,7 @@ export default function App() {
               <form onSubmit={handleCreateAccount} className="space-y-4">
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
                     Meesho Registered Email or Mobile
                   </label>
                   <input
@@ -4180,12 +4297,12 @@ export default function App() {
                     placeholder="seller@example.com or 9876543210"
                     value={meeshoEmail}
                     onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
                     Meesho Password
                   </label>
                   <input
@@ -4194,33 +4311,33 @@ export default function App() {
                     placeholder="••••••••••••"
                     value={meeshoPass}
                     onChange={(e) => { setMeeshoPass(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                    Store Nickname <span className="text-slate-500 font-normal">(Optional)</span>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                    Store Nickname <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
                     placeholder="e.g. Kaanchan Export (leave empty to auto-detect)"
                     value={newStoreName}
                     onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
                   />
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button type="button" onClick={handleCloseConnectModal}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer">
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
                     Cancel
                   </button>
                   <button type="submit" disabled={syncingAccount}
-                    className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer">
+                    className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer">
                     {syncingAccount ? (
                       <span className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
                         <span>Verifying Store (~15s)...</span>
                       </span>
                     ) : (
@@ -4229,7 +4346,7 @@ export default function App() {
                   </button>
                 </div>
                 {syncingAccount && (
-                  <p className="text-[11px] text-cyan-400/80 text-center animate-pulse pt-1">
+                  <p className="text-[11px] text-sky-700 text-center animate-pulse pt-1">
                     Verifying credentials and fetching return OTPs from Meesho. Please wait ~15 seconds...
                   </p>
                 )}
@@ -4241,14 +4358,14 @@ export default function App() {
             {connectStep === 2 && (
               <div className="space-y-4">
                 {/* Sync key display */}
-                <div className="bg-slate-950 border border-cyan-500/40 rounded-2xl p-4 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Your Sync Key</p>
+                <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Your Sync Key</p>
                   <div className="flex items-center justify-center gap-3">
-                    <span className="text-2xl font-mono font-bold text-cyan-400 tracking-widest">{generatedSyncKey}</span>
+                    <span className="text-2xl font-mono font-bold text-[#083B82] tracking-widest">{generatedSyncKey}</span>
                     <button
                       type="button"
                       onClick={() => { navigator.clipboard.writeText(generatedSyncKey); showToast('Sync key copied!', 'success'); }}
-                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                      className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -4264,9 +4381,9 @@ export default function App() {
                     { n: 3, text: `Open supplier.meesho.com and log in to your Meesho account` },
                     { n: 4, text: 'Go to Returns page — OTP will sync to this dashboard automatically!' },
                   ].map(step => (
-                    <div key={step.n} className="flex items-start gap-3 bg-slate-800/50 rounded-xl p-3">
-                      <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-bold flex items-center justify-center shrink-0">{step.n}</span>
-                      <span className="text-xs text-slate-300 leading-relaxed">{step.text}</span>
+                    <div key={step.n} className="flex items-start gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+                      <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center shrink-0">{step.n}</span>
+                      <span className="text-xs text-slate-700 leading-relaxed">{step.text}</span>
                     </div>
                   ))}
                 </div>
@@ -4276,7 +4393,7 @@ export default function App() {
                   href="https://github.com/RRTraders/meesho-otp/raw/main/extension/meesho-otp-extension.zip"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Download Chrome Extension
@@ -4287,7 +4404,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleCloseConnectModal}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition-colors"
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
                   >
                     Done — Close
                   </button>
@@ -4300,32 +4417,32 @@ export default function App() {
 
       {/* ================= RECONNECT STORE MODAL (MULTI-DEVICE) ================= */}
       {showReconnectModal && reconnectAccount && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-cyan-400" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-sky-600" />
                 Connect Store on this Phone
               </h3>
               <button
                 type="button"
                 onClick={() => { setShowReconnectModal(false); setReconnectAccount(null); }}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {reconnectError && (
-              <div className="bg-rose-500/15 border border-rose-500/40 text-rose-200 p-3.5 rounded-2xl text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-2xl text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <span className="font-medium leading-relaxed">{reconnectError}</span>
               </div>
             )}
 
             <form onSubmit={handleReconnectSubmit} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Store Name
                 </label>
                 <input
@@ -4333,12 +4450,12 @@ export default function App() {
                   readOnly
                   disabled
                   value={reconnectAccount.storeName || 'Meesho Store'}
-                  className="w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-300 text-sm font-semibold opacity-80"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm font-semibold opacity-90"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Meesho Registered Email or Mobile
                 </label>
                 <input
@@ -4346,12 +4463,12 @@ export default function App() {
                   readOnly
                   disabled
                   value={reconnectAccount.email || ''}
-                  className="w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-300 text-sm opacity-80 font-mono"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm opacity-90 font-mono"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
                   Enter Meesho Password
                 </label>
                 <input
@@ -4360,10 +4477,10 @@ export default function App() {
                   placeholder="••••••••••••"
                   value={reconnectPass}
                   onChange={(e) => { setReconnectPass(e.target.value); setReconnectError(''); }}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
                 />
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  Enter once to activate direct live OTP monitoring & 24/7 background alerts on this phone.
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Enter once to activate direct live OTP monitoring &amp; 24/7 background alerts on this phone.
                 </p>
               </div>
 
@@ -4371,18 +4488,18 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => { setShowReconnectModal(false); setReconnectAccount(null); }}
-                  className="w-1/2 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-colors"
+                  className="w-1/2 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={reconnectLoading || !reconnectPass}
-                  className="w-1/2 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                  className="w-1/2 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl text-sm shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {reconnectLoading ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
                       Connecting...
                     </>
                   ) : (
@@ -4429,8 +4546,8 @@ export default function App() {
         </div>
       )}
 
-      {/* ================= BOTTOM NAVIGATION BAR (3 TABS) ================= */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-white/10 px-4 py-2 shadow-2xl backdrop-blur-2xl">
+      {/* ================= BOTTOM NAVIGATION BAR (3 TABS - MOBILE ONLY) ================= */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 border-t border-slate-200/90 px-4 py-2 shadow-lg backdrop-blur-md">
         <div className="max-w-md mx-auto flex items-center justify-around">
           {/* Tab 1: OTP */}
           <button
@@ -4438,13 +4555,13 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab !== 'cropper' && activeTab !== 'profile'
-                ? 'text-orange-400 font-black'
-                : 'text-slate-400 hover:text-white font-medium'
+                ? 'text-orange-600 font-black'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab !== 'cropper' && activeTab !== 'profile'
-                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
+                ? 'bg-orange-50 text-orange-600 border border-orange-200'
                 : 'text-slate-400'
             }`}>
               <Package className="w-5 h-5" />
@@ -4458,13 +4575,13 @@ export default function App() {
             onClick={() => setActiveTab('cropper')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab === 'cropper'
-                ? 'text-sky-400 font-black'
-                : 'text-slate-400 hover:text-white font-medium'
+                ? 'text-orange-600 font-black'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab === 'cropper'
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-400/30'
+                ? 'bg-orange-50 text-orange-600 border border-orange-200'
                 : 'text-slate-400'
             }`}>
               <Scissors className="w-5 h-5" />
@@ -4478,13 +4595,13 @@ export default function App() {
             onClick={() => setActiveTab('profile')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab === 'profile'
-                ? 'text-sky-400 font-black'
-                : 'text-slate-400 hover:text-white font-medium'
+                ? 'text-[#083B82] font-black'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab === 'profile'
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-400/30'
+                ? 'bg-sky-50 text-sky-600 border border-sky-200'
                 : 'text-slate-400'
             }`}>
               <User className="w-5 h-5" />
