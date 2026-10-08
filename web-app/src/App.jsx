@@ -4058,8 +4058,8 @@ export default function App() {
               );
             })()}
           </div>
-        ) : (
-          /* ================= MAIN DASHBOARD TAB ================= */
+        ) : activeTab === 'otp' ? (
+          /* ================= OTP FEATURE TAB (CONNECTED STORES & LIVE OTPS) ================= */
           <>
             {/* Account Status Alerts */}
             {profile.status === 'on_hold' && (
@@ -4438,6 +4438,259 @@ export default function App() {
               </div>
             </div>
           </>
+        ) : (
+          /* ================= HOME DASHBOARD VIEW (ORDERMUNIM HUB) ================= */
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* 1. Hero / Welcome Banner */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#083B82] via-[#0A4EA3] to-[#032352] rounded-3xl p-6 md:p-8 text-white shadow-xl">
+              <div className="relative z-10 max-w-2xl space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-orange-300">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                  Smart E-Commerce Order &amp; Dispatch Operating Hub
+                </div>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white leading-tight">
+                  Welcome to <span className="text-orange-400">OrderMunim</span>
+                </h1>
+                <p className="text-sm md:text-base text-slate-200 leading-relaxed">
+                  Your all-in-one automation platform for multi-marketplace thermal label cropping, SKU sorting, real-time return OTP tracking, and dispatch video recording.
+                </p>
+                <div className="pt-2 flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('otp')}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-lg shadow-orange-500/30 flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Package className="w-4 h-4" />
+                    <span>Open Live OTP Hub</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('cropper')}
+                    className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs backdrop-blur-md flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Scissors className="w-4 h-4" />
+                    <span>Process Shipping Labels</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Decorative Subtle Background Graphics */}
+              <div className="absolute -right-10 -bottom-10 w-64 h-64 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+              <div className="absolute right-10 top-1/2 -translate-y-1/2 hidden lg:flex items-center justify-center opacity-15 pointer-events-none">
+                <img src="/ordermunim_logo.png" alt="" className="w-56 h-56 object-contain" />
+              </div>
+            </div>
+
+            {/* 2. Core Modules / Features Grid (4 Main Tools) */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">Core Services &amp; Tools</h2>
+                  <p className="text-xs text-slate-500">Access each specialized OrderMunim module below</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Module 1: Live Return OTP Hub */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-orange-300 transition-all flex flex-col justify-between group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shadow-xs">
+                        <Package className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 uppercase tracking-wider">
+                        {accounts.length} Store{accounts.length === 1 ? '' : 's'} Linked
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-orange-600 transition-colors">
+                        Live Return OTP Hub
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                        Automated 24/7 capture of Meesho courier return delivery OTPs across all your linked seller stores without manually checking each phone or login portal.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 font-medium">
+                      <span className="flex items-center gap-1 text-emerald-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> 24/7 Cloud Sync
+                      </span>
+                      <span>•</span>
+                      <span>Courier Handover Tags</span>
+                    </div>
+                  </div>
+                  <div className="pt-5 border-t border-slate-100 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('otp')}
+                      className="w-full py-2.5 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <span>Access OTP Feature</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Module 2: E-Commerce Label Cropper */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-sky-300 transition-all flex flex-col justify-between group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200/70 text-[#083B82] flex items-center justify-center shadow-xs">
+                        <Scissors className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 uppercase tracking-wider">
+                        5 Marketplaces
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-[#083B82] transition-colors">
+                        E-Commerce Label Cropper &amp; Sorter
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                        High-speed 4x6 thermal cropping, invoice merging, and SKU-based automatic parcel sorting for Meesho, Flipkart, Amazon, Ajio, and Myntra orders.
+                      </p>
+                    </div>
+                    {/* Marketplace chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      {['Meesho', 'Flipkart', 'Amazon', 'Ajio', 'Myntra'].map(p => (
+                        <span key={p} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-5 border-t border-slate-100 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('cropper')}
+                      className="w-full py-2.5 px-4 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#083B82] font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <span>Open Label Cropper</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Module 3: Packaging & Dispatch Webcam Recorder */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-emerald-300 transition-all flex flex-col justify-between group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200/70 text-emerald-600 flex items-center justify-center shadow-xs">
+                        <Video className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
+                        Anti-Fraud Protection
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        Packaging &amp; Dispatch Video Recorder
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                        Record packing and handover videos synced with shipping barcode scans to provide undeniable proof against false customer claims and damaged returns.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 font-medium">
+                      <span>Barcode Scan Sync</span>
+                      <span>•</span>
+                      <span>Full HD Video Storage</span>
+                    </div>
+                  </div>
+                  <div className="pt-5 border-t border-slate-100 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveCropperMarketplace('webcam');
+                        try { localStorage.setItem('om_selected_marketplace', 'webcam'); } catch {}
+                        setActiveTab('cropper');
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <span>Launch Webcam Recorder</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Module 4: PDF Tools (Coming Soon) */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-amber-300 transition-all flex flex-col justify-between group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center shadow-xs">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 rounded-md uppercase tracking-wider">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
+                        PDF Manifest &amp; Label Tools
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                        Batch PDF merge, manifest split, thermal page rotation, file compression, and multi-seller label organizers built specifically for Indian e-commerce.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 font-medium">
+                      <span>Manifest Splitting</span>
+                      <span>•</span>
+                      <span>PDF Compression</span>
+                    </div>
+                  </div>
+                  <div className="pt-5 border-t border-slate-100 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfComingSoonModal(true)}
+                      className="w-full py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <span>Explore PDF Tools</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Quick Stats & System Health Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Connected Stores</div>
+                  <div className="text-xl font-black text-slate-900 mt-1 font-mono">
+                    {accounts.length} <span className="text-xs text-slate-400 font-normal font-sans">/ {profile.maxAccounts ?? 0} slots</span>
+                  </div>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                  <Package className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Live Return OTP Feed</div>
+                  <div className="text-xl font-black text-slate-900 mt-1 font-mono">
+                    {accounts.reduce((sum, acc) => sum + ((Array.isArray(acc.otpList) && acc.otpList.length > 0) ? acc.otpList.length : (acc.currentOtp && acc.currentOtp !== '----' ? 1 : 0)), 0)}
+                    <span className="text-xs text-slate-400 font-normal font-sans ml-1.5">Pending</span>
+                  </div>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+                  <Truck className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cloud Engine</div>
+                  <div className="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    24/7 Active
+                  </div>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
           </>
         )}
@@ -5098,15 +5351,15 @@ export default function App() {
           {/* Tab 1: OTP */}
           <button
             type="button"
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => setActiveTab('otp')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
-              activeTab !== 'cropper' && activeTab !== 'profile'
+              activeTab === 'otp'
                 ? 'text-orange-600 font-black'
                 : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
-              activeTab !== 'cropper' && activeTab !== 'profile'
+              activeTab === 'otp'
                 ? 'bg-orange-50 text-orange-600 border border-orange-200'
                 : 'text-slate-400'
             }`}>
@@ -5159,7 +5412,7 @@ export default function App() {
 
       {/* ================= MOBILE APP FLOATING ACTION BUTTON (FAB) ================= */}
       {/* Positioned at right bottom above navigation bar, visible strictly on Android native app */}
-      {isNativeMobile() && activeTab === 'dashboard' && (
+      {isNativeMobile() && (activeTab === 'otp' || activeTab === 'dashboard') && (
         <button
           type="button"
           onClick={() => {
