@@ -946,6 +946,9 @@ export default function App() {
           if (polledIdentifiers.has(dedupKey)) continue;
           polledIdentifiers.add(dedupKey);
 
+          const targetAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key);
+          const targetDocId = targetAcc?.id || key;
+
           // Restore credentials from encrypted local vault if missing
           if (!sess.password) {
             const vaultCred = findCredentialsForAccount({ id: key, syncKey: key, ...sess });
@@ -965,7 +968,7 @@ export default function App() {
               sessions[key].storeName = fresh.storeName;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
               setLocalSessions(sessions);
-              await updateDoc(doc(db, 'accounts', key), {
+              await updateDoc(doc(db, 'accounts', targetDocId), {
                 cookies: fresh.cookies,
                 identifier: fresh.identifier,
                 supplierId: fresh.supplierId,
@@ -1000,7 +1003,7 @@ export default function App() {
                   setLocalSessions({ ...sessions });
                   syncBackgroundSessions(sessions);
                 } catch {}
-                await updateDoc(doc(db, 'accounts', key), {
+                await updateDoc(doc(db, 'accounts', targetDocId), {
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
@@ -1067,7 +1070,7 @@ export default function App() {
           };
 
           // Update Firestore immediately so UI and all devices reflect current OTP instantly
-          await updateDoc(doc(db, 'accounts', key), {
+          await updateDoc(doc(db, 'accounts', targetDocId), {
             currentOtp: newOtp,
             courier: newCourier,
             handoverCount: newCount,
