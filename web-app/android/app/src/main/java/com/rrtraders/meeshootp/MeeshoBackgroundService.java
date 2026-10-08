@@ -171,9 +171,9 @@ public class MeeshoBackgroundService extends Service {
 
     /**
      * Smart battery saver:
-     * - Active courier delivery hours (08:30 AM to 08:30 PM): 60 seconds interval
-     * - Night / non-delivery hours (08:30 PM to 08:30 AM): 180 seconds (3 min) interval
-     * Saves ~70% radio wakeup cycles and CPU battery consumption while keeping OTPs instant during delivery hours.
+     * - Active courier delivery hours (10:00 AM to 06:00 PM): 60 seconds interval
+     * - Night / non-delivery hours (06:00 PM to next day 10:00 AM): 3600 seconds (1 hour) interval
+     * Eliminates overnight battery drain almost entirely while keeping OTPs responsive during active return hours.
      */
     private long getDynamicPollDelaySeconds() {
         try {
@@ -182,13 +182,13 @@ public class MeeshoBackgroundService extends Service {
             int minute = cal.get(java.util.Calendar.MINUTE);
             int timeInMinutes = hour * 60 + minute;
 
-            int dayStart = 8 * 60 + 30;  // 08:30 AM
-            int dayEnd = 20 * 60 + 30;   // 08:30 PM
+            int dayStart = 10 * 60; // 10:00 AM (600 minutes)
+            int dayEnd = 18 * 60;   // 06:00 PM (1080 minutes)
 
-            if (timeInMinutes >= dayStart && timeInMinutes <= dayEnd) {
-                return 60; // 60 seconds during active return delivery hours
+            if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
+                return 60; // 60 seconds during daytime active delivery hours (10 AM to 6 PM)
             } else {
-                return 180; // 3 minutes during night/off hours to prevent battery drain
+                return 3600; // 1 hour (3600 seconds) during night & morning off-hours (6 PM to next day 10 AM)
             }
         } catch (Exception e) {
             return 60;
