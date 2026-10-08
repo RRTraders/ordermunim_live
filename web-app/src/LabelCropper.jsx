@@ -5360,25 +5360,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
           </div>
 
-          {/* Top Instructions & Action Bar */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-amber-500" />
-                Ajio Customer-Matched PDF Merger
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Automatically reads the customer name after <strong className="text-slate-700">"Ship To :"</strong> on each 1-page label and attaches all matching invoice pages (1, 2, or more) next to that label.
-              </p>
-            </div>
+          {/* Top Title & Action Bar (Single Row) */}
+          <div className="p-3 px-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-500" />
+              <span>Ajio Customer-Matched PDF Merger</span>
+            </h3>
             {(ajioState.labelFiles?.length > 0 || ajioState.invoiceFiles?.length > 0 || ajioState.excelFile) && (
               <button
                 type="button"
                 onClick={clearAllAjio}
-                className="self-start md:self-auto text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Clear All
+                <span>Clear All</span>
               </button>
             )}
           </div>
