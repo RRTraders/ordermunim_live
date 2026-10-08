@@ -293,6 +293,19 @@ export default function App() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [showPdfComingSoonModal, setShowPdfComingSoonModal] = useState(false);
   const [ecomDropdownOpen, setEcomDropdownOpen] = useState(false);
+  const ecomDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!ecomDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (ecomDropdownRef.current && !ecomDropdownRef.current.contains(e.target)) {
+        setEcomDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [ecomDropdownOpen]);
+
   const [staffShareKey, setStaffShareKey] = useState('');
   const [expandedStoreIds, setExpandedStoreIds] = useState({});
 
@@ -3077,7 +3090,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
       {/* Top Navigation / Desktop & Mobile Toolbar */}
       <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-2.5 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left: App Logo & Branding (Image 2 OrderMunim) */}
           <div 
             onClick={() => setActiveTab('dashboard')}
@@ -3113,28 +3126,29 @@ export default function App() {
               }`} />
             </button>
 
-            {/* 2. E Commerce with Vertical Hover Menu (Ajio, Amazon, Flipkart, Meesho, Myntra) */}
+            {/* 2. E Commerce with Vertical Hover & Click Menu (Ajio, Amazon, Flipkart, Meesho, Myntra) */}
             <div
+              ref={ecomDropdownRef}
               className="relative"
               onMouseEnter={() => setEcomDropdownOpen(true)}
               onMouseLeave={() => setEcomDropdownOpen(false)}
             >
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('cropper');
-                  setEcomDropdownOpen(false);
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEcomDropdownOpen(prev => !prev);
                 }}
                 className={`relative py-1.5 flex items-center gap-1 transition-colors cursor-pointer group ${
-                  activeTab === 'cropper' && activeCropperMarketplace !== 'webcam'
+                  (activeTab === 'cropper' && activeCropperMarketplace !== 'webcam') || ecomDropdownOpen
                     ? 'text-[#083B82] font-bold'
                     : 'hover:text-[#083B82]'
                 }`}
               >
                 <span>E Commerce</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform" />
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform ${ecomDropdownOpen ? 'rotate-180 text-[#083B82]' : ''}`} />
                 <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
-                  activeTab === 'cropper' && activeCropperMarketplace !== 'webcam'
+                  (activeTab === 'cropper' && activeCropperMarketplace !== 'webcam') || ecomDropdownOpen
                     ? 'scale-x-100'
                     : 'scale-x-0 group-hover:scale-x-100 origin-left'
                 }`} />
@@ -3249,7 +3263,7 @@ export default function App() {
 
           {/* Right: Audio Mute & Profile Trigger (Opens Vertical Right Drawer) */}
           <div className="flex items-center gap-2 shrink-0">
-            {!isSuperAdmin && (
+            {isMobileApp && !isSuperAdmin && (
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 title={soundEnabled ? "Mute OTP Audio" : "Enable OTP Audio"}
@@ -3259,27 +3273,14 @@ export default function App() {
               </button>
             )}
 
-            {/* Profile Button - Opens Vertical Drawer From Right */}
+            {/* Profile Button - Opens Vertical Drawer From Right (Icon Only) */}
             <button
               type="button"
               onClick={() => setIsProfileDrawerOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 cursor-pointer transition-all shadow-xs"
-              title="Open Profile Drawer"
+              className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-700 transition-all shadow-xs cursor-pointer group"
+              title="Open Profile"
             >
-              <div className="w-6 h-6 rounded-lg bg-orange-500/10 text-orange-600 font-black text-xs flex items-center justify-center">
-                {(profile?.name || user?.displayName || 'S')[0]}
-              </div>
-              <div className="text-left text-xs leading-none hidden sm:block">
-                <span className="font-bold text-slate-800 block truncate max-w-[120px]">
-                  {profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Profile')}
-                </span>
-                {isSuperAdmin ? (
-                  <span className="text-[9px] text-orange-600 font-extrabold uppercase tracking-wider">Super Admin</span>
-                ) : (
-                  <span className="text-[9px] text-slate-400 font-medium">Profile</span>
-                )}
-              </div>
-              <User className="w-3.5 h-3.5 text-slate-500 ml-0.5" />
+              <User className="w-5 h-5 text-slate-600 group-hover:text-orange-600 transition-colors" />
             </button>
           </div>
         </div>
