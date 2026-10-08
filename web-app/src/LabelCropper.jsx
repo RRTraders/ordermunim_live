@@ -4574,12 +4574,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   };
 
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-800 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl">
+    <div className="glass-panel min-h-screen text-slate-100 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl border border-white/10 shadow-2xl">
       {/* ================= MARKETPLACE HORIZONTAL SCROLLVIEW ================= */}
-      <div className="mb-6 pb-3 border-b border-slate-200">
+      <div className="mb-6 pb-3 border-b border-white/10">
         <div className="flex items-center justify-between mb-2.5 px-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-sky-300 uppercase tracking-wider">
               Marketplace
             </span>
             <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
@@ -4587,7 +4587,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </span>
           </div>
           {!activeMarketplace?.ready && (
-            <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+            <span className="text-[10px] font-semibold bg-orange-500/20 text-orange-300 px-2.5 py-0.5 rounded-full border border-orange-500/30 animate-pulse">
               In Development
             </span>
           )}
@@ -4621,8 +4621,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 onClick={() => handleSelectMarketplace(mp.id)}
                 className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl whitespace-nowrap text-xs md:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer shadow-sm ${
                   isSelected
-                    ? 'bg-slate-900 text-white shadow-md shadow-slate-900/25 ring-2 ring-slate-900 ring-offset-2 ring-offset-slate-50 scale-[1.02]'
-                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/90 border border-slate-200'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25 ring-2 ring-orange-400/50 scale-[1.02]'
+                    : 'glass-card text-slate-300 hover:text-white hover:bg-white/10 border border-white/10'
                 }`}
               >
                 {/* Marketplace Mini Badge */}
@@ -4633,22 +4633,22 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
                 {mpFilesCount > 0 && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    isSelected ? 'bg-white/20 text-white' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
                   }`}>
                     {mpFilesCount} {mpFilesCount === 1 ? 'file' : 'files'}
                   </span>
                 )}
 
                 {mpIsProcessing && (
-                  <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                  <RefreshCw className="w-3 h-3 animate-spin text-orange-400" />
                 )}
 
                 {mpHasDownload && !mpIsProcessing && (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                 )}
 
                 {mp.ready ? null : (
-                  <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200 ml-0.5">
+                  <span className="text-[9px] font-medium bg-white/5 text-slate-400 px-1.5 py-0.5 rounded-md border border-white/10 ml-0.5">
                     Soon
                   </span>
                 )}
@@ -4661,16 +4661,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart') ? (
         <>
           {/* ================= HEADER SECTION ================= */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
                 {activeMarketplace?.name} Label Cropping and sorting tools
               </h1>
             </div>
 
             {/* Active Marketplace Logo Badge */}
             <div className="flex items-center gap-2">
-              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-md`}>
+              <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center ${activeMarketplace?.badgeStyle} shadow-lg border border-white/10`}>
                 <span className="font-extrabold text-base leading-none">{activeMarketplace?.iconLetter}</span>
                 <span className="text-[7.5px] font-semibold tracking-tighter opacity-90">{activeMarketplace?.badgeText}</span>
               </div>
@@ -4678,21 +4678,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           </div>
 
       {/* ================= TOP PROCESSING REPORT CARD ================= */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm mb-6 overflow-hidden transition-all">
+      <div className="glass-card border border-white/10 rounded-2xl shadow-xl mb-6 overflow-hidden transition-all">
         <div 
           onClick={() => setReportOpen(!reportOpen)}
-          className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
+          className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors"
         >
-          <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
-            {/* Bar chart red icon */}
-            <svg className="w-4 h-4 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div className="flex items-center gap-2 font-bold text-sm text-white">
+            <svg className="w-4 h-4 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="20" x2="18" y2="10" />
               <line x1="12" y1="20" x2="12" y2="4" />
               <line x1="6" y1="20" x2="6" y2="14" />
             </svg>
             Processing Report
           </div>
-          <button type="button" className="text-slate-400 hover:text-slate-600 p-1">
+          <button type="button" className="text-slate-400 hover:text-white p-1 cursor-pointer">
             {reportOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
@@ -4700,14 +4699,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         {reportOpen && (
           <div className="p-4 md:p-5 grid grid-cols-2 md:grid-cols-4 gap-3.5">
             {/* Total Labels */}
-            <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-500">Total Labels</div>
-                  <div className="text-lg font-bold text-blue-600 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-sky-200/70">Total Labels</div>
+                  <div className="text-lg font-bold text-sky-400 font-mono leading-tight">
                     {metrics.success} <span className="text-slate-400 text-xs font-normal">/ {metrics.totalLabels}</span>
                   </div>
                 </div>
@@ -4715,14 +4714,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* Success */}
-            <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-500">Success</div>
-                  <div className="text-lg font-bold text-emerald-600 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-orange-200/70">Success</div>
+                  <div className="text-lg font-bold text-orange-400 font-mono leading-tight">
                     {metrics.success}
                   </div>
                 </div>
@@ -4732,7 +4731,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   type="button" 
                   onClick={() => setShowSkuModal(true)} 
                   title="View SKU Summary"
-                  className="text-emerald-400 hover:text-emerald-700 transition-colors"
+                  className="text-orange-400 hover:text-orange-300 transition-colors cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
@@ -4740,14 +4739,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* Duplicates */}
-            <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center shrink-0">
                   <Copy className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-500">Duplicates</div>
-                  <div className="text-lg font-bold text-indigo-600 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-slate-400">Duplicates</div>
+                  <div className="text-lg font-bold text-white font-mono leading-tight">
                     {metrics.duplicates}
                   </div>
                 </div>
@@ -4755,9 +4754,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               {metrics.duplicates > 0 && (
                 <button 
                   type="button" 
-                  onClick={() => setShowDuplicateModal(true)}
+                  onClick={() => setShowDuplicateModal(true)} 
                   title="View duplicate labels"
-                  className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
@@ -4765,14 +4764,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* OCR Failed */}
-            <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-500">OCR Failed</div>
-                  <div className="text-lg font-bold text-rose-600 font-mono leading-tight">
+                  <div className="text-[11px] font-semibold text-rose-300/70">OCR Failed</div>
+                  <div className="text-lg font-bold text-rose-400 font-mono leading-tight">
                     {metrics.ocrFailed}
                   </div>
                 </div>
@@ -4780,17 +4779,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
             {/* Courier Breakdown Chips */}
             {Object.keys(courierSummary).length > 0 && (
-              <div className="col-span-2 md:col-span-4 mt-1 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mr-1">
-                  <Truck className="w-4 h-4 text-emerald-600" />
+              <div className="col-span-2 md:col-span-4 mt-1 pt-3.5 border-t border-white/10 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5 mr-1">
+                  <Truck className="w-4 h-4 text-sky-400" />
                   Rearranged by Courier:
                 </span>
                 {Object.entries(courierSummary).sort((a, b) => a[0].localeCompare(b[0])).map(([cName, count]) => (
                   <span
                     key={cName}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-900 shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-sky-500/10 border border-sky-400/30 text-xs font-semibold text-sky-300 shadow-sm"
                   >
-                    {cName}: <span className="font-mono text-indigo-700 font-bold">{count} labels</span>
+                    {cName}: <span className="font-mono text-orange-400 font-bold">{count} labels</span>
                   </span>
                 ))}
               </div>
@@ -4813,7 +4812,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               e.stopPropagation();
               if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
             }}
-            className="border-2 border-dashed border-rose-200 bg-rose-50/20 hover:bg-rose-50/40 rounded-2xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
+            className="border-2 border-dashed border-sky-400/30 bg-sky-500/5 hover:bg-sky-500/10 rounded-2xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
           >
             <input
               ref={fileInputRef}
@@ -4823,22 +4822,22 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               onChange={(e) => handleFiles(e.target.files)}
               className="hidden"
             />
-            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
               <UploadCloud className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-slate-800">
+            <h3 className="text-sm font-black text-white">
               Upload PDF Files
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-sky-200/70 mt-0.5">
               Drag & drop or click to select files
             </p>
           </div>
 
           {/* PDF Files Container Card */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
-                <FileText className="w-4 h-4 text-rose-500" />
+          <div className="glass-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
+              <div className="flex items-center gap-2 font-bold text-xs text-white">
+                <FileText className="w-4 h-4 text-orange-400" />
                 PDF Files {files.length > 0 && `(${files.length})`}
               </div>
 
@@ -4847,7 +4846,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={clearAllFiles}
-                    className="text-xs text-rose-500 hover:text-rose-700 px-2.5 py-1 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-1"
+                    className="text-xs text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg hover:bg-rose-500/10 transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Clear
                   </button>
@@ -4855,9 +4854,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-semibold text-slate-200 hover:bg-white/10 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                  <UploadCloud className="w-3.5 h-3.5 text-sky-400" />
                   Select PDFs
                 </button>
               </div>
@@ -4872,16 +4871,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               ) : (
                 <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
                   {files.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#040914]/80 border border-white/10 text-xs">
                       <div className="flex items-center gap-3 truncate max-w-[85%]">
-                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-semibold text-slate-800 truncate">{file.name}</span>
+                        <FileCheck className="w-4 h-4 text-sky-400 shrink-0" />
+                        <span className="font-semibold text-white truncate">{file.name}</span>
                         <span className="text-slate-400 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors"
+                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -4892,21 +4891,21 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
           </div>
 
-          {/* Primary Action Button (Matching screenshot) */}
+          {/* Primary Action Button */}
           <button
             type="button"
             disabled={files.length === 0 || isProcessing}
             onClick={processCropAndSort}
-            className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+            className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white text-sm font-black rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
           >
             {isProcessing ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
                 Processing Labels ({processingProgress}%)...
               </>
             ) : (
               <>
-                <Scissors className="w-4 h-4" />
+                <Scissors className="w-4 h-4 text-white" />
                 Start Crop & Sort Process
               </>
             )}
@@ -6899,19 +6898,19 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           </div>
 
           {/* Main Webcam Recording Stage */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm space-y-5">
+          <div className="glass-card border border-white/10 rounded-3xl p-5 md:p-6 shadow-2xl space-y-5">
             {/* Camera Selection & Status Bar */}
-            <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 flex-wrap">
+            <div className="flex items-center justify-between gap-2 pb-3 border-b border-white/10 flex-wrap">
               <div className="flex items-center gap-2">
                 {isWebcamActive ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 text-xs font-bold">
                     Camera Live
                   </span>
                 ) : null}
 
                 {isRecording && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-300 text-rose-700 text-xs font-black animate-pulse">
-                    <Circle className="w-2.5 h-2.5 fill-rose-600 text-rose-600" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/30 text-rose-300 text-xs font-black animate-pulse">
+                    <Circle className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                     REC [{formatSecs(recordingDurationSec)}]
                   </span>
                 )}
@@ -6923,10 +6922,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={handleToggleFacingMode}
-                    className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 active:scale-95 shadow-2xs"
+                    className="px-3.5 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/15 text-white rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-white/15 active:scale-95 shadow-sm"
                     title="Switch between Rear (Back) and Front Camera"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
+                    <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
                     <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
                   </button>
                 )}
@@ -6940,7 +6939,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                         handleStartWebcam(e.target.value);
                       }
                     }}
-                    className="px-2.5 py-1 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    className="px-2.5 py-1 text-xs font-semibold bg-[#040914] border border-white/15 rounded-xl text-white focus:outline-none focus:border-sky-400 cursor-pointer"
                   >
                     {availableCameras.map((cam, idx) => (
                       <option key={cam.deviceId || idx} value={cam.deviceId}>
@@ -6953,7 +6952,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
 
             {/* Video Viewport Container */}
-            <div className="relative aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 shadow-2xl flex items-center justify-center">
+            <div className="relative aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-black/90 border border-white/15 shadow-2xl flex items-center justify-center">
               {isWebcamActive ? (
                 <>
                   <video
@@ -6964,10 +6963,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     className="w-full h-full object-cover"
                   />
 
-                  {/* Superimposed Live Timestamp HUD Overlay (Exact style from Image 2: Center Top, White font, light background) */}
+                  {/* Superimposed Live Timestamp HUD Overlay */}
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                    <div className="bg-slate-700/60 backdrop-blur-xs border border-white/20 rounded-md px-3.5 py-1.5 shadow-md flex items-center justify-center">
-                      <span className="font-mono text-xs sm:text-sm md:text-base font-extrabold text-white tracking-wide drop-shadow-sm select-none whitespace-nowrap">
+                    <div className="bg-black/65 backdrop-blur-md border border-white/20 rounded-xl px-3.5 py-1.5 shadow-lg flex items-center justify-center">
+                      <span className="font-mono text-xs sm:text-sm md:text-base font-black text-white tracking-wide drop-shadow-sm select-none whitespace-nowrap">
                         {currentIstTime}
                       </span>
                     </div>
@@ -6986,12 +6985,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               ) : (
                 /* Webcam Offline State */
                 <div className="text-center p-4 sm:p-6 space-y-3.5 max-w-md w-full">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
-                    <Camera className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400" />
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/10 text-orange-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Camera className="w-7 h-7 sm:w-8 sm:h-8 text-orange-400" />
                   </div>
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-white">Camera Ready</h3>
-                    <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-xs mx-auto">
+                    <p className="text-xs text-sky-200/70 mt-1 leading-relaxed max-w-xs mx-auto">
                       Tap below to start camera with live IST Date &amp; Time proof directly on video screen.
                     </p>
                   </div>
@@ -7002,7 +7001,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                         <span>Camera Access Notice:</span>
                       </div>
                       <p className="text-[11px] leading-relaxed text-slate-300">{webcamError}</p>
-                      <p className="text-[10px] text-amber-300/90 pt-1 border-t border-rose-500/20">
+                      <p className="text-[10px] text-orange-300/90 pt-1 border-t border-rose-500/20">
                         📱 <strong>On Mobile Phone / App:</strong> Open Phone <em>Settings &gt; Apps &gt; OrdersMunim (or Chrome) &gt; Permissions &gt; Camera</em> &rarr; Set to <strong>&quot;Allow&quot;</strong>.
                       </p>
                     </div>
@@ -7010,9 +7009,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={() => handleStartWebcam()}
-                    className="w-full sm:w-auto py-3.5 px-8 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 mx-auto cursor-pointer transition-all active:scale-95"
+                    className="w-full sm:w-auto py-3.5 px-8 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-sm shadow-xl shadow-orange-500/30 flex items-center justify-center gap-2.5 mx-auto cursor-pointer transition-all active:scale-95"
                   >
-                    <Play className="w-4 h-4 fill-slate-950 text-slate-950" />
+                    <Play className="w-4 h-4 fill-white text-white" />
                     <span>Start Camera &amp; Live Timer</span>
                   </button>
                 </div>
@@ -7046,18 +7045,18 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={handleStopWebcam}
-                    className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                    className="py-3 px-5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 flex items-center gap-2 cursor-pointer transition-colors"
                   >
-                    <VideoOff className="w-4 h-4 text-slate-500" />
+                    <VideoOff className="w-4 h-4 text-slate-400" />
                     <span>Stop Webcam</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleOpenClockModal}
-                    className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                    className="py-3 px-5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 flex items-center gap-2 cursor-pointer transition-colors"
                   >
-                    <Edit3 className="w-4 h-4 text-cyan-600" />
+                    <Edit3 className="w-4 h-4 text-sky-400" />
                     <span>Edit Date &amp; Time</span>
                   </button>
                 </>
@@ -7066,20 +7065,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
             {/* Recorded Video Preview & Download Section */}
             {recordedVideoUrl && (
-              <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 text-white shadow-xl space-y-4 mt-4 animate-in fade-in duration-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="p-5 rounded-3xl glass-card border border-white/10 text-white shadow-xl space-y-4 mt-4 animate-in fade-in duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                      <Play className="w-5 h-5 fill-emerald-400" />
+                    <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center justify-center shrink-0">
+                      <Play className="w-5 h-5 fill-sky-400" />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
                         <span>Video Recorded Successfully!</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold">
                           Ready for Claim
                         </span>
                       </h4>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-sky-200/70">
                         Play and check the unboxing video below, then click Download to save it to your device.
                       </p>
                     </div>
@@ -7088,15 +7087,15 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={handleDownloadRecordedVideo}
-                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 cursor-pointer transition-all active:scale-95 shrink-0"
+                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 cursor-pointer transition-all active:scale-95 shrink-0"
                   >
-                    <Download className="w-4 h-4 text-slate-950" />
+                    <Download className="w-4 h-4 text-white" />
                     <span>Download Proof Video</span>
                   </button>
                 </div>
 
                 {/* Video Preview Player with native playback controls */}
-                <div className="relative aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl">
+                <div className="relative aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
                   <video
                     src={recordedVideoUrl}
                     controls
@@ -7128,27 +7127,27 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       ) : (
         <>
           {/* ================= UNDER DEVELOPMENT CARD ================= */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm text-center max-w-2xl mx-auto my-6">
-            <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center mb-4 bg-slate-100 text-slate-800 shadow-inner">
-              <Scissors className="w-8 h-8 text-slate-700" />
+          <div className="glass-card border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl text-center max-w-2xl mx-auto my-6 text-white">
+            <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center mb-4 bg-white/5 border border-white/10 text-orange-400 shadow-inner">
+              <Scissors className="w-8 h-8 text-orange-400" />
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30 mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-orange-400" />
               <span>In Active Development</span>
             </div>
 
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">
+            <h2 className="text-xl md:text-2xl font-black text-white mb-2">
               {activeMarketplace?.name} Label Cropper
             </h2>
 
-            <p className="text-xs md:text-sm text-slate-500 max-w-lg mx-auto mb-6 leading-relaxed">
-              We are fine-tuning the 4x6 thermal cropping layout and barcode parsing algorithms for <strong className="text-slate-800">{activeMarketplace?.name}</strong>. This module will be released in an upcoming update!
+            <p className="text-xs md:text-sm text-sky-200/70 max-w-lg mx-auto mb-6 leading-relaxed">
+              We are fine-tuning the 4x6 thermal cropping layout and barcode parsing algorithms for <strong className="text-white">{activeMarketplace?.name}</strong>. This module will be released in an upcoming update!
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-md mx-auto mb-8">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5 mb-1">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   4x6 Thermal Cropping
                 </div>

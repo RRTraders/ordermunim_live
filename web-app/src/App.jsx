@@ -2561,25 +2561,25 @@ export default function App() {
   // ===================== STAFF VIEW ONLY (WAREHOUSE DISPLAY) =====================
   if (activeTab === 'staff') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      <div className="min-h-screen text-slate-100 p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
             <div>
-              <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-cyan-400">
-                <Truck className="w-6 h-6 text-cyan-400" />
+              <h1 className="text-xl md:text-2xl font-black flex items-center gap-2.5 text-white tracking-tight">
+                <Truck className="w-6 h-6 text-sky-400" />
                 Warehouse Return OTPs
               </h1>
-              <p className="text-xs text-slate-400 mt-1">Live Feed • Ready for Courier Delivery Partners</p>
+              <p className="text-xs text-sky-200/70 mt-1">Live Feed • Ready for Courier Delivery Partners</p>
             </div>
-            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
+            <div className="flex items-center gap-2 bg-sky-500/10 border border-sky-400/30 text-sky-300 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm">
               Live Sync
             </div>
           </div>
 
           <div className="space-y-4">
             {accounts.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center text-slate-400">
-                <Package className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+              <div className="glass-card border border-white/10 p-8 rounded-2xl text-center text-slate-400">
+                <Package className="w-12 h-12 mx-auto mb-3 text-slate-500" />
                 No active return OTPs at this moment. Waiting for logistics delivery...
               </div>
             ) : (
@@ -2593,7 +2593,7 @@ export default function App() {
 
                 const isExpanded = Boolean(expandedStoreIds[acc.id]);
                 return (
-                  <div key={acc.id} className={`bg-slate-900 border ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-cyan-500/40 shadow-lg shadow-cyan-950/20' : 'border-slate-800 hover:border-slate-700/80'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
+                  <div key={acc.id} className={`glass-card ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
                     <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-30 select-none pointer-events-none' : ''}`}>
                       {/* Clickable Header Bar (Tap to Expand/Collapse) */}
                       <div 
@@ -2603,23 +2603,23 @@ export default function App() {
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                             activeOtps.length > 0 
-                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' 
-                              : 'bg-slate-800 text-slate-400'
+                              ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30' 
+                              : 'bg-white/5 text-slate-400 border border-white/5'
                           }`}>
                             <Package className="w-4 h-4" />
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-base text-white truncate hover:text-cyan-300 transition-colors">
+                              <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
                                 {acc.storeName}
                               </span>
                               {activeOtps.length > 0 ? (
-                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/30">
                                   {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
                                 </span>
                               ) : (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-medium">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400 font-medium border border-white/5">
                                   No Return
                                 </span>
                               )}
@@ -2628,35 +2628,35 @@ export default function App() {
                         </div>
 
                         <div className="p-1 text-slate-400">
-                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-cyan-400' : ''}`} />
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
                         </div>
                       </div>
 
                       {/* Expanded Section: Single Row OTPs */}
                       {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 animate-in fade-in duration-150">
+                        <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-in fade-in duration-150">
                           {activeOtps.length > 0 ? (
                             activeOtps.map((item, idx) => (
                               <div 
                                 key={idx} 
-                                className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-xl"
+                                className="flex items-center justify-between gap-2 p-2.5 bg-[#040914]/80 border border-white/10 rounded-xl"
                               >
                                 {/* 1. Courier Name */}
                                 <div className="flex items-center gap-1.5 min-w-[90px] shrink-0">
-                                  <Truck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                  <Truck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                                   <span className="font-bold text-xs text-white truncate max-w-[120px]">
                                     {item.courier || 'Courier'}
                                   </span>
                                 </div>
 
                                 {/* 2. Parcel Count */}
-                                <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
-                                  <Package className="w-3 h-3 text-slate-500" />
+                                <div className="flex items-center gap-1 text-[11px] text-slate-300 shrink-0">
+                                  <Package className="w-3 h-3 text-slate-400" />
                                   <span>{item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}</span>
                                 </div>
 
                                 {/* 3. OTP Code */}
-                                <div className="font-mono font-black text-base md:text-lg text-amber-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
+                                <div className="font-mono font-black text-base md:text-lg text-orange-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-orange-500/15 rounded-lg border border-orange-500/30 shadow-sm shadow-orange-500/10">
                                   {item.otp || '----'}
                                 </div>
 
@@ -2668,11 +2668,11 @@ export default function App() {
                                       e.stopPropagation();
                                       handleCopy(item.otp, `${acc.id}-${idx}`);
                                     }}
-                                    className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-300 border border-amber-500/30 transition-all shrink-0 cursor-pointer"
+                                    className="p-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 active:scale-95 text-orange-300 border border-orange-500/30 transition-all shrink-0 cursor-pointer"
                                     title="Copy OTP"
                                   >
                                     {copiedId === `${acc.id}-${idx}` ? (
-                                      <Check className="w-4 h-4 text-emerald-400" />
+                                      <Check className="w-4 h-4 text-white" />
                                     ) : (
                                       <Copy className="w-4 h-4" />
                                     )}
@@ -2683,7 +2683,7 @@ export default function App() {
                               </div>
                             ))
                           ) : (
-                            <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/50 rounded-xl text-xs text-slate-500">
+                            <div className="flex items-center justify-between p-2.5 bg-[#040914]/50 border border-white/5 rounded-xl text-xs text-slate-400">
                               <span className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
                                 No active return courier right now
@@ -2693,7 +2693,7 @@ export default function App() {
                           )}
 
                           {/* Footer Details */}
-                          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
                             <span>Checked: {acc.dateTime || 'Just now'}</span>
                             <span>Total: {acc.handoverCount || 0} parcels</span>
                           </div>
@@ -2702,7 +2702,7 @@ export default function App() {
                     </div>
 
                     {isOnHold && (
-                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 bg-slate-950/60 backdrop-blur-[2px] text-center select-none">
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm text-center select-none">
                         <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 mb-2 shadow-xl shadow-rose-950/50">
                           <PauseCircle className="w-6 h-6 animate-pulse" />
                         </div>
@@ -2727,33 +2727,33 @@ export default function App() {
   // ===================== EMAIL VERIFICATION REQUIRED SCREEN =====================
   if (user && emailNeedsVerification) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl text-center space-y-5">
-          <div className="w-16 h-16 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/25">
+      <div className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 shadow-2xl text-center space-y-5 border border-white/10">
+          <div className="w-16 h-16 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-sky-500/25 border border-white/20">
             <MailCheck className="w-8 h-8 text-white" />
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-white">Verify Your Email</h2>
-            <p className="text-xs text-slate-400 mt-1.5">
+            <h2 className="text-2xl font-black text-white tracking-tight">Verify Your Email</h2>
+            <p className="text-xs text-sky-200/70 mt-1.5">
               We have sent an official verification link to:
             </p>
-            <span className="inline-block mt-2 font-mono text-sm font-bold text-cyan-400 bg-cyan-950/70 border border-cyan-800/80 px-3.5 py-1.5 rounded-xl">
+            <span className="inline-block mt-2 font-mono text-sm font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 px-3.5 py-1.5 rounded-xl shadow-inner">
               {user.email}
             </span>
           </div>
 
-          <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-2.5">
+          <div className="bg-[#040914]/80 border border-white/10 rounded-2xl p-4 text-xs text-slate-300 text-left space-y-2.5">
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
               <span>Open your email inbox (also check Spam/Junk folder if not in Inbox).</span>
             </div>
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
               <span>Click the <strong>verification link</strong> sent by Firebase.</span>
             </div>
             <div className="flex items-start gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+              <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
               <span>Come back here and click <strong>"I Have Verified (Continue)"</strong> below.</span>
             </div>
           </div>
@@ -2762,23 +2762,23 @@ export default function App() {
             <button
               onClick={handleCheckVerified}
               disabled={authLoading}
-              className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4 text-white" />
               {authLoading ? 'Verifying status...' : 'I Have Verified (Continue)'}
             </button>
 
             <button
               onClick={handleResendVerificationEmail}
               disabled={authLoading}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+              className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold rounded-xl border border-white/10 transition-colors cursor-pointer"
             >
               Resend Verification Link
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full text-xs text-slate-500 hover:text-rose-400 transition-colors pt-2 block"
+              className="w-full text-xs text-slate-400 hover:text-rose-400 transition-colors pt-2 block cursor-pointer"
             >
               Log out / Use different account
             </button>
@@ -2791,14 +2791,14 @@ export default function App() {
   // ===================== AUTH SCREEN (CUSTOMER & SUPER ADMIN) =====================
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl">
+      <div className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 shadow-2xl border border-white/10">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-3 overflow-hidden bg-white p-1 border border-slate-700">
+            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-sky-500/25 mb-3 overflow-hidden bg-white p-1 border border-white/20">
               <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">OrdersMunim</h1>
-            <p className="text-xs text-slate-400 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
+            <h1 className="text-2xl font-black tracking-tight text-white">OrdersMunim</h1>
+            <p className="text-xs text-sky-200/70 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
           </div>
 
           {authError && (
@@ -2812,14 +2812,14 @@ export default function App() {
           <div>
             {/* Mode Tabs (Sign In vs Create Account) */}
               {authMode !== 'forgot' && (
-                <div className="flex items-center justify-center gap-6 border-b border-slate-800 pb-3 mb-5">
+                <div className="flex items-center justify-center gap-6 border-b border-white/10 pb-3 mb-5">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className={`text-sm font-bold pb-2 transition-all relative ${
+                    className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
                       authMode === 'login' 
-                        ? 'text-cyan-400 border-b-2 border-cyan-400' 
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'text-orange-400 border-b-2 border-orange-500' 
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     Sign In
@@ -2827,10 +2827,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { setAuthMode('signup'); setAuthError(''); }}
-                    className={`text-sm font-bold pb-2 transition-all relative ${
+                    className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
                       authMode === 'signup' 
-                        ? 'text-cyan-400 border-b-2 border-cyan-400' 
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'text-orange-400 border-b-2 border-orange-500' 
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     Sign Up
@@ -2846,14 +2846,14 @@ export default function App() {
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2866,20 +2866,20 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => { setAuthMode('forgot'); setAuthError(''); }}
-                        className="text-[11px] text-cyan-400 hover:underline"
+                        className="text-[11px] text-sky-400 hover:underline cursor-pointer"
                       >
                         Forgot Password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="password"
                         value={customerPassword}
                         onChange={(e) => setCustomerPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2887,7 +2887,7 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Signing In...' : 'Sign In to Dashboard'}
                   </button>
@@ -2898,7 +2898,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => { setAuthMode('signup'); setAuthError(''); }}
-                        className="text-cyan-400 font-bold hover:underline"
+                        className="text-orange-400 font-bold hover:underline cursor-pointer"
                       >
                         Sign Up
                       </button>
@@ -2915,14 +2915,14 @@ export default function App() {
                       Full Name
                     </label>
                     <div className="relative">
-                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         placeholder="e.g. Rajesh Kumar"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2932,14 +2932,14 @@ export default function App() {
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2949,7 +2949,7 @@ export default function App() {
                       Create Password (Min 6 Characters)
                     </label>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="password"
                         value={customerPassword}
@@ -2957,7 +2957,7 @@ export default function App() {
                         placeholder="••••••••"
                         required
                         minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -2967,7 +2967,7 @@ export default function App() {
                       Confirm Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="password"
                         value={customerConfirmPass}
@@ -2975,19 +2975,19 @@ export default function App() {
                         placeholder="••••••••"
                         required
                         minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 p-2.5 rounded-xl">
+                  <p className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 p-2.5 rounded-xl">
                     📧 An official verification link will be sent to your email. You must verify your email before accessing the dashboard.
                   </p>
 
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Creating Account...' : 'Sign Up & Send Verification Link'}
                   </button>
@@ -2998,7 +2998,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                        className="text-cyan-400 font-bold hover:underline"
+                        className="text-orange-400 font-bold hover:underline cursor-pointer"
                       >
                         Sign In
                       </button>
@@ -3012,7 +3012,7 @@ export default function App() {
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <div className="text-center mb-3">
                     <h3 className="font-bold text-white text-base">Reset Your Password</h3>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-xs text-sky-200/70 mt-1">
                       Enter your email address and we will send you a password reset link.
                     </p>
                   </div>
@@ -3022,14 +3022,14 @@ export default function App() {
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-500" />
+                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-sky-400/70" />
                       <input
                         type="email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="seller@example.com"
                         required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white font-medium focus:outline-none focus:border-sky-400 transition-colors text-sm"
                       />
                     </div>
                   </div>
@@ -3037,7 +3037,7 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50"
+                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black rounded-xl shadow-lg shadow-orange-500/25 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {authLoading ? 'Sending link...' : 'Send Password Reset Link'}
                   </button>
@@ -3045,7 +3045,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className="w-full text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1.5 pt-2"
+                    className="w-full text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1.5 pt-2 cursor-pointer"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     Back to Sign In
@@ -3061,17 +3061,17 @@ export default function App() {
 
   // ===================== LOGGED IN SELLER DASHBOARD =====================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen text-slate-100 flex flex-col">
       {/* Top Navigation / Mobile Toolbar */}
-      <header className="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30">
+      <header className="glass-panel border-b border-white/10 sticky top-0 z-30 shadow-lg shadow-black/30 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           {/* Left: Mobile App Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-md border border-slate-700/60 flex items-center justify-center p-0.5">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-md border border-white/20 flex items-center justify-center p-0.5">
               <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white">OrdersMunim</span>
+              <span className="text-xs font-black text-white tracking-wide">OrdersMunim</span>
             </div>
           </div>
 
@@ -3081,11 +3081,11 @@ export default function App() {
             className="flex-1 text-center px-1 truncate cursor-pointer group"
             title="Click to open your Profile"
           >
-            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block group-hover:text-cyan-300 transition-colors">
-              Welcome, <span className="text-cyan-400 group-hover:underline underline-offset-2">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
+            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate block group-hover:text-sky-300 transition-colors">
+              Welcome, <span className="text-orange-400 group-hover:underline underline-offset-2 font-black">{profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}</span>
             </span>
             {isSuperAdmin && (
-              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+              <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider block">
                 Super Admin
               </span>
             )}
@@ -3098,20 +3098,20 @@ export default function App() {
               title="Open Profile"
               className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'profile'
-                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm'
-                  : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40 shadow-sm shadow-sky-500/20'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
               }`}
             >
-              <User className="w-4 h-4 text-cyan-400" />
+              <User className="w-4 h-4 text-sky-400" />
               <span className="hidden sm:inline text-xs font-bold">Profile</span>
             </button>
             {!isSuperAdmin && (
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 title={soundEnabled ? "Mute OTP Audio" : "Enable OTP Audio"}
-                className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer"
               >
-                {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+                {soundEnabled ? <Volume2 className="w-4 h-4 text-sky-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
               </button>
             )}
           </div>
@@ -3121,28 +3121,28 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 pb-28 space-y-6">
         {activeTab === 'profile' ? (
-          <div className="max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in fade-in duration-200">
+          <div className="max-w-md mx-auto glass-panel border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in fade-in duration-200">
             {/* 1. Round Profile Picture */}
             <div className="flex flex-col items-center text-center space-y-3">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-cyan-500/25 border-4 border-slate-800 uppercase">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-sky-500 to-blue-700 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-sky-500/25 border-4 border-white/20 uppercase">
                 {(profile?.name || user?.displayName || user?.email || 'U')[0]}
               </div>
               <div>
                 <h3 className="font-bold text-lg text-white">
                   {profile?.name || user?.displayName || 'Seller User'}
                 </h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                <p className="text-xs text-sky-200/70 font-mono mt-0.5">
                   {user?.email || profile?.email || user?.phoneNumber || ''}
                 </p>
                 <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30 uppercase tracking-wider">
                     {profile.maxAccounts !== undefined ? `${profile.maxAccounts} Store Slots` : '0 Store Slots'}
                   </span>
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 uppercase tracking-wider">
                     {accounts.length} Linked Stores
                   </span>
                   {isSuperAdmin && (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase tracking-wider">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/40 uppercase tracking-wider">
                       Super Admin
                     </span>
                   )}
@@ -3151,17 +3151,17 @@ export default function App() {
             </div>
 
             {/* Connected Stores Quota Box */}
-            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between shadow-md">
+            <div className="glass-card border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-md">
               <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-cyan-400" />
+                <Package className="w-4 h-4 text-sky-400" />
                 <span className="font-bold text-sm text-white">Connected Stores</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
                   {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
                 </span>
                 {accounts.length >= (profile.maxAccounts ?? 0) && (
-                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-[10px] text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 rounded-full font-medium">
                     Limit Reached
                   </span>
                 )}
@@ -3169,13 +3169,13 @@ export default function App() {
             </div>
 
             {/* Follow Us Page Store Profiles (QR & Labels) */}
-            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-3.5 shadow-md">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+            <div className="glass-card border border-white/10 rounded-2xl p-4 text-xs space-y-3.5 shadow-md">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                 <div className="flex items-center gap-2">
-                  <QrCode className="w-4 h-4 text-cyan-400" />
+                  <QrCode className="w-4 h-4 text-sky-400" />
                   <span className="font-bold text-sm text-white">Follow Us Store Profiles</span>
                 </div>
-                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
                   {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} Stores Added
                 </span>
               </div>
@@ -3866,14 +3866,14 @@ export default function App() {
             )}
 
             {/* Account Quota & Controls Bar (Desktop Only; on mobile/app it is shifted to Profile) */}
-            <div className="hidden md:flex bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 items-center justify-between shadow-lg">
+            <div className="hidden md:flex glass-card border border-white/10 rounded-2xl p-4 md:p-5 items-center justify-between shadow-xl">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base md:text-lg font-bold text-white">Connected Stores</h2>
-                <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                <h2 className="text-base md:text-lg font-black text-white">Connected Stores</h2>
+                <span className="bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
                   {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
                 </span>
                 {accounts.length >= (profile.maxAccounts ?? 0) && (
-                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-[10px] text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 rounded-full font-medium">
                     Limit Reached
                   </span>
                 )}
@@ -3882,20 +3882,20 @@ export default function App() {
               {/* Action Button: Visible on Android App; on Web browser guides to Mobile App */}
               <div className="flex items-center gap-2.5">
                 {!isNativeMobile() ? (
-                  <div className="flex items-center gap-1.5 bg-cyan-950/40 border border-cyan-800/40 px-3 py-1.5 rounded-xl text-cyan-300 text-xs font-medium">
-                    <Smartphone className="w-4 h-4 text-cyan-400" />
+                  <div className="flex items-center gap-1.5 bg-sky-950/40 border border-sky-800/40 px-3 py-1.5 rounded-xl text-sky-300 text-xs font-medium">
+                    <Smartphone className="w-4 h-4 text-sky-400" />
                     <span>Add Store via Android App</span>
                   </div>
                 ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all"
+                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     Add Store
                   </button>
                 ) : (
-                  <span className="text-xs text-slate-400 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
+                  <span className="text-xs text-slate-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
                     {profile.status === 'on_hold' ? 'Account On Hold' : 'Store Limit Reached'}
                   </span>
                 )}
@@ -3904,25 +3904,25 @@ export default function App() {
 
             {/* List of Store OTP Cards */}
             {accounts.length === 0 ? (
-              <div className="bg-slate-900 border border-dashed border-slate-800 rounded-3xl p-10 text-center">
-                <Package className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-white">No Meesho Accounts Linked Yet</h3>
+              <div className="glass-card border border-dashed border-white/15 rounded-3xl p-10 text-center shadow-xl">
+                <Package className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                <h3 className="text-base font-black text-white">No Meesho Accounts Linked Yet</h3>
                 {!isNativeMobile() ? (
-                  <div className="mt-4 p-5 bg-cyan-950/30 border border-cyan-800/40 rounded-2xl max-w-md mx-auto text-center space-y-2.5">
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400">
+                  <div className="mt-4 p-5 bg-sky-950/30 border border-sky-800/40 rounded-2xl max-w-md mx-auto text-center space-y-2.5 shadow-inner">
+                    <div className="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto text-sky-400">
                       <Smartphone className="w-5 h-5" />
                     </div>
-                    <h4 className="text-sm font-semibold text-white">Connect Store from Mobile App</h4>
-                    <p className="text-xs text-slate-300 leading-relaxed">
+                    <h4 className="text-sm font-bold text-white">Connect Store from Mobile App</h4>
+                    <p className="text-xs text-sky-200/80 leading-relaxed">
                       Meesho accounts must be connected inside the <strong>OrderMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
                     </p>
-                    <p className="text-[11px] text-cyan-400 font-medium">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
+                    <p className="text-[11px] text-sky-300 font-medium">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
                     <div className="pt-1">
                       <a
                         href={broadcastUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 transition-all"
                       >
                         <DownloadCloud className="w-4 h-4" />
                         Download Android App
@@ -3932,7 +3932,7 @@ export default function App() {
                 ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
-                    className="mt-4 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold rounded-xl"
+                    className="mt-4 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/25 cursor-pointer"
                   >
                     + Add Your First Store
                   </button>
@@ -3958,13 +3958,13 @@ export default function App() {
                   return (
                     <div 
                       key={acc.id} 
-                      className={`bg-slate-900 border ${
+                      className={`glass-card ${
                         isOnHold 
                           ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' 
                           : isExpanded 
-                          ? 'border-cyan-500/40 shadow-lg shadow-cyan-950/20' 
-                          : 'border-slate-800 hover:border-slate-700/80'
-                      } rounded-2xl p-4 transition-all shadow-md`}
+                          ? 'border-sky-500/50 shadow-xl shadow-sky-950/40' 
+                          : 'hover:border-sky-500/30'
+                      } rounded-2xl p-4 transition-all shadow-lg`}
                     >
                       {/* Inner Card Content (Blurred when on hold) */}
                       <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-25 select-none pointer-events-none' : ''}`}>
@@ -3976,23 +3976,23 @@ export default function App() {
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                               activeOtps.length > 0 
-                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' 
-                                : 'bg-slate-800 text-slate-400'
+                                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30' 
+                                : 'bg-white/5 text-slate-400 border border-white/5'
                             }`}>
                               <Package className="w-4 h-4" />
                             </div>
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-base text-white truncate hover:text-cyan-300 transition-colors">
+                                <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
                                   {acc.storeName}
                                 </span>
                                 {activeOtps.length > 0 ? (
-                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/30">
                                     {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 font-medium">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400 font-medium border border-white/5">
                                     No Return
                                   </span>
                                 )}
@@ -4010,10 +4010,10 @@ export default function App() {
                                   handleManualRefresh(acc.syncKey, acc.storeName);
                                 }}
                                 disabled={refreshingId === acc.syncKey}
-                                className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors disabled:opacity-50"
+                                className="p-1.5 text-slate-400 hover:text-sky-400 transition-colors disabled:opacity-50 cursor-pointer"
                                 title="Check for live OTP now"
                               >
-                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-cyan-400' : ''}`} />
+                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-sky-400' : ''}`} />
                               </button>
                             )}
                             <button
@@ -4022,42 +4022,42 @@ export default function App() {
                                 e.stopPropagation();
                                 handleDeleteAccount(acc.id, acc.storeName);
                               }}
-                              className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
                               title="Remove store"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <div className="p-1 text-slate-400">
-                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-cyan-400' : ''}`} />
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
                             </div>
                           </div>
                         </div>
 
                         {/* Expanded Section: Single Row OTPs */}
                         {isExpanded && (
-                          <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 animate-in fade-in duration-150">
+                          <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-in fade-in duration-150">
                             {activeOtps.length > 0 ? (
                               activeOtps.map((item, idx) => (
                                 <div 
                                   key={idx} 
-                                  className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-xl"
+                                  className="flex items-center justify-between gap-2 p-2.5 bg-[#040914]/80 border border-white/10 rounded-xl"
                                 >
                                   {/* 1. Courier Name */}
                                   <div className="flex items-center gap-1.5 min-w-[90px] shrink-0">
-                                    <Truck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                    <Truck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                                     <span className="font-bold text-xs text-white truncate max-w-[120px]">
                                       {item.courier || 'Courier'}
                                     </span>
                                   </div>
 
                                   {/* 2. Parcel Count */}
-                                  <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
-                                    <Package className="w-3 h-3 text-slate-500" />
+                                  <div className="flex items-center gap-1 text-[11px] text-slate-300 shrink-0">
+                                    <Package className="w-3 h-3 text-slate-400" />
                                     <span>{item.handoverCount || 0} {item.handoverCount === 1 ? 'Parcel' : 'Parcels'}</span>
                                   </div>
 
                                   {/* 3. OTP Code */}
-                                  <div className="font-mono font-black text-base md:text-lg text-amber-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
+                                  <div className="font-mono font-black text-base md:text-lg text-orange-400 tracking-wider shrink-0 px-2.5 py-0.5 bg-orange-500/15 rounded-lg border border-orange-500/30 shadow-sm shadow-orange-500/10">
                                     {item.otp || '----'}
                                   </div>
 
@@ -4069,11 +4069,11 @@ export default function App() {
                                         e.stopPropagation();
                                         handleCopy(item.otp, `${acc.id}-${idx}`);
                                       }}
-                                      className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-300 border border-amber-500/30 transition-all shrink-0 cursor-pointer"
+                                      className="p-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 active:scale-95 text-orange-300 border border-orange-500/30 transition-all shrink-0 cursor-pointer"
                                       title="Copy OTP"
                                     >
                                       {copiedId === `${acc.id}-${idx}` ? (
-                                        <Check className="w-4 h-4 text-emerald-400" />
+                                        <Check className="w-4 h-4 text-white" />
                                       ) : (
                                         <Copy className="w-4 h-4" />
                                       )}
@@ -4138,17 +4138,17 @@ export default function App() {
 
       {/* ================= ADD STORE MODAL (CREDENTIALS) ================= */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-panel border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
 
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Package className="w-5 h-5 text-cyan-400" />
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                <Package className="w-5 h-5 text-sky-400" />
                 {connectStep === 1 ? 'Add Meesho Store' : 'Install Chrome Extension'}
               </h3>
               <button type="button" onClick={handleCloseConnectModal}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors">
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -4160,7 +4160,7 @@ export default function App() {
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <span className="font-medium leading-relaxed">{modalError}</span>
                 </div>
-                <button type="button" onClick={() => setModalError('')} className="text-rose-400 hover:text-white p-0.5 rounded transition-colors">
+                <button type="button" onClick={() => setModalError('')} className="text-rose-400 hover:text-white p-0.5 rounded transition-colors cursor-pointer">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -4180,7 +4180,7 @@ export default function App() {
                     placeholder="seller@example.com or 9876543210"
                     value={meeshoEmail}
                     onChange={(e) => { setMeeshoEmail(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
                   />
                 </div>
 
@@ -4194,7 +4194,7 @@ export default function App() {
                     placeholder="••••••••••••"
                     value={meeshoPass}
                     onChange={(e) => { setMeeshoPass(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
                   />
                 </div>
 
@@ -4207,17 +4207,17 @@ export default function App() {
                     placeholder="e.g. Kaanchan Export (leave empty to auto-detect)"
                     value={newStoreName}
                     onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full px-4 py-3 bg-[#040914]/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
                   />
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button type="button" onClick={handleCloseConnectModal}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer">
                     Cancel
                   </button>
                   <button type="submit" disabled={syncingAccount}
-                    className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all">
+                    className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer">
                     {syncingAccount ? (
                       <span className="flex items-center gap-2">
                         <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />
@@ -4430,7 +4430,7 @@ export default function App() {
       )}
 
       {/* ================= BOTTOM NAVIGATION BAR (3 TABS) ================= */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-4 py-2 shadow-2xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-white/10 px-4 py-2 shadow-2xl backdrop-blur-2xl">
         <div className="max-w-md mx-auto flex items-center justify-around">
           {/* Tab 1: OTP */}
           <button
@@ -4438,13 +4438,13 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab !== 'cropper' && activeTab !== 'profile'
-                ? 'text-cyan-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200 font-medium'
+                ? 'text-orange-400 font-black'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab !== 'cropper' && activeTab !== 'profile'
-                ? 'bg-cyan-500/20 text-cyan-400'
+                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
                 : 'text-slate-400'
             }`}>
               <Package className="w-5 h-5" />
@@ -4452,19 +4452,19 @@ export default function App() {
             <span className="text-[11px] tracking-tight">OTP</span>
           </button>
 
-          {/* Tab 2: Label Cropper (NO free text) */}
+          {/* Tab 2: Label Cropper */}
           <button
             type="button"
             onClick={() => setActiveTab('cropper')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab === 'cropper'
-                ? 'text-cyan-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200 font-medium'
+                ? 'text-sky-400 font-black'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab === 'cropper'
-                ? 'bg-cyan-500/20 text-cyan-400'
+                ? 'bg-sky-500/20 text-sky-400 border border-sky-400/30'
                 : 'text-slate-400'
             }`}>
               <Scissors className="w-5 h-5" />
@@ -4478,13 +4478,13 @@ export default function App() {
             onClick={() => setActiveTab('profile')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
               activeTab === 'profile'
-                ? 'text-cyan-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200 font-medium'
+                ? 'text-sky-400 font-black'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
               activeTab === 'profile'
-                ? 'bg-cyan-500/20 text-cyan-400'
+                ? 'bg-sky-500/20 text-sky-400 border border-sky-400/30'
                 : 'text-slate-400'
             }`}>
               <User className="w-5 h-5" />
@@ -4512,7 +4512,7 @@ export default function App() {
           }}
           aria-label="Add Meesho Store"
           title="Add Meesho Store"
-          className="fixed bottom-20 right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-90 text-white shadow-2xl shadow-cyan-500/50 flex items-center justify-center border-2 border-cyan-300/40 transition-transform duration-200 md:hidden cursor-pointer"
+          className="fixed bottom-20 right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 active:scale-90 text-white shadow-2xl shadow-orange-500/40 flex items-center justify-center border-2 border-white/20 transition-transform duration-200 md:hidden cursor-pointer"
         >
           <Plus className="w-7 h-7 stroke-[2.5]" />
         </button>
@@ -4520,8 +4520,8 @@ export default function App() {
 
       {/* ================= FANCY CONFIRMATION DIALOG ================= */}
       {confirmDialog && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-panel border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
               confirmDialog.icon === 'logout'
                 ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-400'
