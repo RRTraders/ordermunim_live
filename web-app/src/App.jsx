@@ -4649,52 +4649,246 @@ export default function App() {
                 </div>
               </div>
             </div>
-
-            {/* 3. Quick Stats & System Health Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Connected Stores</div>
-                  <div className="text-xl font-black text-slate-900 mt-1 font-mono">
-                    {accounts.length} <span className="text-xs text-slate-400 font-normal font-sans">/ {profile.maxAccounts ?? 0} slots</span>
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
-                  <Package className="w-5 h-5" />
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Live Return OTP Feed</div>
-                  <div className="text-xl font-black text-slate-900 mt-1 font-mono">
-                    {accounts.reduce((sum, acc) => sum + ((Array.isArray(acc.otpList) && acc.otpList.length > 0) ? acc.otpList.length : (acc.currentOtp && acc.currentOtp !== '----' ? 1 : 0)), 0)}
-                    <span className="text-xs text-slate-400 font-normal font-sans ml-1.5">Pending</span>
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
-                  <Truck className="w-5 h-5" />
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cloud Engine</div>
-                  <div className="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    24/7 Active
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
           </div>
         )}
           </>
         )}
       </main>
+
+      {/* ================= WEBSITE FOOTER (IMAGE 2 STRUCTURED, ORDERMUNIM THEMED) ================= */}
+      <footer className="mt-auto bg-[#061C3D] text-slate-300 border-t border-slate-800/80 pt-12 pb-24 md:pb-10">
+        <div className="max-w-6xl mx-auto px-4 md:px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-10 pb-10 border-b border-white/10">
+            {/* Col 1: Brand Info */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-sm">
+                  <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <span className="text-lg font-black text-white tracking-tight">OrderMunim</span>
+                  <p className="text-[10px] text-slate-400 font-medium">Smart Order &amp; OTP Hub</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                All-in-one automation platform for Indian e-commerce merchants across Meesho, Flipkart, Amazon, Ajio &amp; Myntra. Fast 4x6 thermal cropping, 24/7 delivery OTP monitoring, and dispatch proof recordings.
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowContactModal(true)}
+                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-orange-500 hover:text-white flex items-center justify-center text-slate-300 transition-colors cursor-pointer"
+                  title="Contact Support"
+                >
+                  <Mail className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowContactModal(true)}
+                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-orange-500 hover:text-white flex items-center justify-center text-slate-300 transition-colors cursor-pointer"
+                  title="Call Support"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAboutModal(true)}
+                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-orange-500 hover:text-white flex items-center justify-center text-slate-300 transition-colors cursor-pointer"
+                  title="About OrderMunim"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Col 2: Quick Links */}
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                Quick Links
+              </h4>
+              <ul className="space-y-2.5 text-xs text-slate-400">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('dashboard'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Home Dashboard
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    E Commerce Tools
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('otp'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Live OTP Hub
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('webcam'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Webcam Recorder
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setShowPdfComingSoonModal(true)}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    PDF Manifest Tools
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setShowAboutModal(true)}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    About Us
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setShowContactModal(true)}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Contact Support
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Col 3: Services & Marketplaces */}
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                Services &amp; Marketplaces
+              </h4>
+              <ul className="space-y-2.5 text-xs text-slate-400">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('meesho'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Meesho 4x6 Label Cropper
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('amazon'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Amazon Easy Ship Filter
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('flipcart'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Flipkart Thermal Cropper
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('ajio'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Ajio Label &amp; Invoice Merger
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('myntra'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Myntra Direct Downloader
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('otp'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    24/7 Delivery OTP Sync
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Col 4: Business Hours & Contact */}
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                Working Hours &amp; Contact
+              </h4>
+              <div className="space-y-3 text-xs text-slate-400">
+                <div>
+                  <span className="text-slate-500 block text-[11px]">Working Schedule:</span>
+                  <span className="text-slate-200 font-semibold">Monday – Saturday</span>
+                  <span className="text-orange-400 font-bold block mt-0.5">10:00 AM – 7:00 PM IST</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[11px]">Email Support:</span>
+                  <a href="mailto:rrtradersofficials@gmail.com" className="text-slate-200 hover:text-orange-400 font-mono transition-colors block break-all">
+                    rrtradersofficials@gmail.com
+                  </a>
+                </div>
+                <div className="pt-1">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    24/7 Cloud Background Monitoring
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Bar: Copyright & Attribution */}
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+            <p>© 2026 OrderMunim. All Rights Reserved. Engineered with precision for online merchants.</p>
+            <div className="flex items-center gap-4 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setShowAboutModal(true)}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                About Platform
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => setShowContactModal(true)}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                Contact Us
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
 
 
       {/* ================= ADD STORE MODAL (CREDENTIALS) ================= */}
