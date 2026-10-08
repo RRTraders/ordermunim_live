@@ -83,7 +83,12 @@ import {
   QrCode,
   Store,
   Edit3,
-  Calendar
+  Calendar,
+  Home,
+  ShoppingBag,
+  Video,
+  FileText,
+  Info
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
 
@@ -280,6 +285,14 @@ export default function App() {
   const [generatedSyncKey, setGeneratedSyncKey] = useState('');
 
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'admin' | 'staff'
+  const [activeCropperMarketplace, setActiveCropperMarketplace] = useState(() => {
+    return localStorage.getItem('om_selected_marketplace') || 'meesho';
+  });
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showPdfComingSoonModal, setShowPdfComingSoonModal] = useState(false);
+  const [ecomDropdownOpen, setEcomDropdownOpen] = useState(false);
   const [staffShareKey, setStaffShareKey] = useState('');
   const [expandedStoreIds, setExpandedStoreIds] = useState({});
 
@@ -3064,80 +3077,170 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
       {/* Top Navigation / Desktop & Mobile Toolbar */}
       <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Left: App Logo & Branding */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl overflow-hidden bg-white shadow-xs border border-slate-200 flex items-center justify-center p-0.5">
-              <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Left: App Logo & Branding (Image 2 OrderMunim) */}
+          <div 
+            onClick={() => setActiveTab('dashboard')}
+            className="flex items-center gap-2.5 shrink-0 cursor-pointer select-none group"
+            title="OrderMunim - Home"
+          >
+            <div className="w-10 h-10 rounded-xl overflow-hidden bg-white shadow-xs border border-slate-200/90 flex items-center justify-center p-0.5 group-hover:border-orange-300 transition-colors">
+              <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
-              <span className="text-base font-black tracking-tight text-[#083B82] leading-none">OrdersMunim</span>
-              <span className="text-[10px] text-slate-400 font-semibold leading-tight hidden sm:block">Smart Order &amp; OTP Hub</span>
+              <span className="text-base sm:text-lg font-black tracking-tight text-[#083B82] leading-none group-hover:text-orange-600 transition-colors">
+                OrderMunim
+              </span>
+              <span className="text-[10px] text-slate-400 font-semibold leading-tight hidden sm:block">
+                Smart Order &amp; OTP Hub
+              </span>
             </div>
           </div>
 
-          {/* Center: Desktop Navigation Bar */}
-          <div className="hidden md:flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+          {/* Center: Desktop Navigation Bar with All Items */}
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 text-xs font-bold text-slate-700">
+            {/* 1. Home */}
             <button
               type="button"
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab !== 'cropper' && activeTab !== 'profile'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                  : 'hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Package className="w-4 h-4" />
-              <span>OTP Dashboard</span>
+              <Home className="w-3.5 h-3.5" />
+              <span>Home</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('cropper')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'cropper'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
+            {/* 2. E Commerce with Vertical Hover Menu (Ajio, Amazon, Flipkart, Meesho, Myntra) */}
+            <div
+              className="relative"
+              onMouseEnter={() => setEcomDropdownOpen(true)}
+              onMouseLeave={() => setEcomDropdownOpen(false)}
             >
-              <Scissors className="w-4 h-4" />
-              <span>Label Cropper</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('cropper');
+                  setEcomDropdownOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'cropper' && activeCropperMarketplace !== 'webcam'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                    : 'hover:text-slate-900 hover:bg-white/70'
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>E Commerce</span>
+                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-700 transition-transform" />
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('profile')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'profile'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>Store Slots</span>
-            </button>
-          </div>
-
-          {/* Right: Welcome User & Action Controls */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div 
-              onClick={() => setActiveTab('profile')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
-              title="Click to open your Profile"
-            >
-              <div className="w-6 h-6 rounded-lg bg-orange-500/10 text-orange-600 font-black text-xs flex items-center justify-center">
-                {(profile?.name || user?.displayName || 'S')[0]}
-              </div>
-              <div className="text-left text-xs leading-none">
-                <span className="font-bold text-slate-800 block truncate max-w-[120px]">
-                  {profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Seller')}
-                </span>
-                {isSuperAdmin && (
-                  <span className="text-[9px] text-orange-600 font-extrabold uppercase tracking-wider">Super Admin</span>
-                )}
-              </div>
+              {ecomDropdownOpen && (
+                <div className="absolute top-full left-0 pt-1.5 z-50 w-52 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xl p-1.5 flex flex-col gap-0.5">
+                    {[
+                      { id: 'ajio', name: 'Ajio', letter: 'A', bg: 'bg-slate-900 text-amber-400', desc: 'Merge Labels & Invoices' },
+                      { id: 'amazon', name: 'Amazon', letter: 'a', bg: 'bg-[#131921] text-[#FF9900]', desc: 'Easy Ship Label Filter' },
+                      { id: 'flipcart', name: 'Flipkart', letter: 'F', bg: 'bg-[#2874F0] text-[#FFE500]', desc: '4x6 Thermal Cropping' },
+                      { id: 'meesho', name: 'Meesho', letter: 'm', bg: 'bg-fuchsia-800 text-white', desc: 'Label Crop & SKU Sort' },
+                      { id: 'myntra', name: 'Myntra', letter: 'M', bg: 'bg-[#FF3F6C] text-white', desc: 'Direct Label Downloader' }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveCropperMarketplace(item.id);
+                          try { localStorage.setItem('om_selected_marketplace', item.id); } catch {}
+                          setActiveTab('cropper');
+                          setEcomDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                          activeTab === 'cropper' && activeCropperMarketplace === item.id
+                            ? 'bg-orange-50 text-orange-700 font-bold'
+                            : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-lg ${item.bg} flex items-center justify-center text-xs font-black shrink-0`}>
+                          {item.letter}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold leading-tight text-slate-800">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{item.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* 3. OTP */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                  : 'hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>OTP</span>
+            </button>
+
+            {/* 4. Webcam (Webcam Recorder) */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCropperMarketplace('webcam');
+                try { localStorage.setItem('om_selected_marketplace', 'webcam'); } catch {}
+                setActiveTab('cropper');
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'cropper' && activeCropperMarketplace === 'webcam'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                  : 'hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Webcam (Recorder)</span>
+            </button>
+
+            {/* 5. PDF Tools (Coming Soon) */}
+            <button
+              type="button"
+              onClick={() => setShowPdfComingSoonModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              <span>PDF Tools</span>
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-md">Soon</span>
+            </button>
+
+            {/* 6. About Us */}
+            <button
+              type="button"
+              onClick={() => setShowAboutModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+            >
+              <Info className="w-3.5 h-3.5 text-slate-500" />
+              <span>About Us</span>
+            </button>
+
+            {/* 7. Contact Us */}
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:text-slate-900 hover:bg-white/70 transition-all cursor-pointer"
+            >
+              <Phone className="w-3.5 h-3.5 text-slate-500" />
+              <span>Contact Us</span>
+            </button>
+          </nav>
+
+          {/* Right: Audio Mute & Profile Trigger (Opens Vertical Right Drawer) */}
+          <div className="flex items-center gap-2 shrink-0">
             {!isSuperAdmin && (
               <button
                 onClick={() => setSoundEnabled(!soundEnabled)}
@@ -3147,6 +3250,29 @@ export default function App() {
                 {soundEnabled ? <Volume2 className="w-4 h-4 text-orange-500" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
               </button>
             )}
+
+            {/* Profile Button - Opens Vertical Drawer From Right */}
+            <button
+              type="button"
+              onClick={() => setIsProfileDrawerOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 cursor-pointer transition-all shadow-xs"
+              title="Open Profile Drawer"
+            >
+              <div className="w-6 h-6 rounded-lg bg-orange-500/10 text-orange-600 font-black text-xs flex items-center justify-center">
+                {(profile?.name || user?.displayName || 'S')[0]}
+              </div>
+              <div className="text-left text-xs leading-none hidden sm:block">
+                <span className="font-bold text-slate-800 block truncate max-w-[120px]">
+                  {profile?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Profile')}
+                </span>
+                {isSuperAdmin ? (
+                  <span className="text-[9px] text-orange-600 font-extrabold uppercase tracking-wider">Super Admin</span>
+                ) : (
+                  <span className="text-[9px] text-slate-400 font-medium">Profile</span>
+                )}
+              </div>
+              <User className="w-3.5 h-3.5 text-slate-500 ml-0.5" />
+            </button>
           </div>
         </div>
       </header>
@@ -3414,6 +3540,7 @@ export default function App() {
               showToast={showToast}
               followStores={profile?.followStores || []}
               onNavigateTab={setActiveTab}
+              activeMarketplaceId={activeCropperMarketplace}
             />
           </CropperErrorBoundary>
 
@@ -4512,9 +4639,364 @@ export default function App() {
         </div>
       )}
 
+      {/* ================= VERTICAL PROFILE DRAWER (OPENS FROM RIGHT) ================= */}
+      {isProfileDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div 
+            onClick={() => setIsProfileDrawerOpen(false)}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+          />
 
+          {/* Right-Side Drawer Panel */}
+          <aside className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 border-l border-slate-200 animate-in slide-in-from-right duration-300 overflow-hidden">
+            {/* Drawer Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#083B82] to-sky-600 flex items-center justify-center text-white text-base font-black shadow-xs">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm leading-tight">Seller Profile</h3>
+                  <p className="text-[11px] text-slate-500">OrderMunim Account &amp; Settings</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProfileDrawerOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                title="Close Profile"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-      {/* ================= FANCY TOAST NOTIFICATION ================= */}
+            {/* Drawer Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 text-slate-900">
+              {/* Profile Avatar & Info */}
+              <div className="flex flex-col items-center text-center space-y-2.5 p-4 rounded-2xl bg-gradient-to-b from-slate-50 to-white border border-slate-200/90 shadow-2xs">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#083B82] to-sky-600 flex items-center justify-center text-white text-2xl font-black shadow-md border-4 border-white uppercase">
+                  {(profile?.name || user?.displayName || user?.email || 'U')[0]}
+                </div>
+                <div>
+                  <h4 className="font-bold text-base text-slate-900">
+                    {profile?.name || user?.displayName || 'Seller User'}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    {user?.email || profile?.email || user?.phoneNumber || ''}
+                  </p>
+                  <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 uppercase tracking-wider">
+                      {profile.maxAccounts !== undefined ? `${profile.maxAccounts} Store Slots` : '0 Store Slots'}
+                    </span>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 uppercase tracking-wider">
+                      {accounts.length} Linked Stores
+                    </span>
+                    {isSuperAdmin && (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+                        Super Admin
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Connected Stores Quota Box */}
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-sky-600" />
+                  <span className="font-bold text-xs text-slate-900">Connected Stores</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                    {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
+                  </span>
+                  {accounts.length >= (profile.maxAccounts ?? 0) && (
+                    <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full font-semibold">
+                      Limit
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Follow Us Store Profiles */}
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-sky-600" />
+                    <span className="font-bold text-xs text-slate-900">Follow Us Store Profiles</span>
+                  </div>
+                  <span className="bg-sky-50 border border-sky-200 text-sky-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {(profile?.followStores || []).map((store) => (
+                    <div key={store.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="font-bold text-slate-900 text-xs truncate">{store.name}</div>
+                        <div className="text-[10px] text-sky-700 font-mono truncate">{store.url}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFollowStore(store.id)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Remove store profile"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {(profile?.followStores || []).length < (typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)) ? (
+                  <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-200/80 space-y-2">
+                    <input
+                      type="text"
+                      value={newFollowStoreName}
+                      onChange={(e) => setNewFollowStoreName(e.target.value)}
+                      placeholder="Store Name (e.g. RR Traders)"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500"
+                    />
+                    <input
+                      type="url"
+                      value={newFollowStoreUrl}
+                      onChange={(e) => setNewFollowStoreUrl(e.target.value)}
+                      placeholder="Profile URL"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={addingFollowStore}
+                      className="w-full py-1.5 px-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{addingFollowStore ? 'Saving...' : 'Add Store Profile'}</span>
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+
+              {/* Account Details & Version */}
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 text-xs space-y-2">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Account Role</span>
+                  <strong className="text-slate-900 capitalize">{profile?.role || 'Seller'}</strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Email Status</span>
+                  <strong className="text-emerald-600 flex items-center gap-1 font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                  </strong>
+                </div>
+                {isMobileApp && (
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>App Version</span>
+                    <strong className="text-slate-900 font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
+                  </div>
+                )}
+              </div>
+
+              {/* Broadcast for Admin */}
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileDrawerOpen(false);
+                    setShowBroadcastModal(true);
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Rocket className="w-3.5 h-3.5 text-sky-600" />
+                  App Update Broadcast Console
+                </button>
+              )}
+
+              {/* Battery optimization & permissions on Android */}
+              {isMobileApp && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleFixBatteryOptimization}
+                    className="py-2.5 px-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                  >
+                    <RefreshCw className="w-3 h-3 text-sky-600" />
+                    <span>Battery Saver</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenSystemAppSettings}
+                    className="py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                  >
+                    <Settings className="w-3 h-3 text-slate-500" />
+                    <span>App Settings</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Sign Out Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileDrawerOpen(false);
+                  handlePromptLogout();
+                }}
+                className="w-full py-3 px-4 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 text-slate-600" />
+                Sign Out
+              </button>
+
+              {!isSuperAdmin && (
+                <div className="text-center pt-1 pb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileDrawerOpen(false);
+                      handlePromptDeleteAccount();
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 hover:underline transition-colors lowercase font-medium cursor-pointer"
+                  >
+                    delete this account
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* ================= PDF TOOLS (COMING SOON) MODAL ================= */}
+      {showPdfComingSoonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 border border-orange-200 flex items-center justify-center mx-auto shadow-xs">
+              <FileText className="w-8 h-8" />
+            </div>
+            <div>
+              <span className="text-[10px] font-black uppercase px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full tracking-wider">
+                Feature In Development
+              </span>
+              <h3 className="text-xl font-bold text-slate-900 mt-2">PDF Tools Coming Soon!</h3>
+              <p className="text-xs text-slate-600 leading-relaxed mt-2">
+                We are building powerful e-commerce PDF tools including bulk invoice mergers, multi-page label splitters, shipping manifest generators, and custom PDF watermark editors.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPdfComingSoonModal(false)}
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 cursor-pointer transition-all"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= ABOUT US MODAL ================= */}
+      {showAboutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-slate-200 p-0.5">
+                  <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base leading-tight">About OrderMunim</h3>
+                  <p className="text-[11px] text-slate-500">Smart E-Commerce Order &amp; OTP Hub</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAboutModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="text-xs text-slate-600 leading-relaxed space-y-3 max-h-80 overflow-y-auto pr-1">
+              <p>
+                <strong className="text-slate-900">OrderMunim</strong> is an all-in-one automation platform built specifically for Indian e-commerce sellers across Meesho, Flipkart, Amazon, Ajio, and Myntra.
+              </p>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="font-bold text-slate-800">What we do:</div>
+                <ul className="list-disc list-inside space-y-1 text-slate-600">
+                  <li><strong>Instant Return Handover OTPs:</strong> Never miss courier delivery returns with 24/7 background OTP monitoring.</li>
+                  <li><strong>Thermal Label Cropper:</strong> Automatically crop, SKU-sort, and print 4x6 labels without tax invoice clutter.</li>
+                  <li><strong>Webcam Unboxing Studio:</strong> Live video recording with real-time Indian timestamp proof for marketplace damage/wrong return claims.</li>
+                  <li><strong>Multi-Account Vault:</strong> High-security credential storage kept directly on your phone.</li>
+                </ul>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Created with ❤️ by RR Traders to empower modern marketplace merchants.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAboutModal(false)}
+              className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CONTACT US MODAL ================= */}
+      {showContactModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base leading-tight">Contact Us</h3>
+                  <p className="text-[11px] text-slate-500">OrderMunim Support Team</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContactModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2 text-slate-800 font-bold">
+                  <Mail className="w-4 h-4 text-orange-600" />
+                  <span>Email Support</span>
+                </div>
+                <div className="font-mono text-sky-700 pl-6 select-all">rrtradersofficials@gmail.com</div>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2 text-slate-800 font-bold">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                  <span>Working Hours</span>
+                </div>
+                <div className="text-slate-600 pl-6">Monday to Saturday: 10:00 AM – 7:00 PM IST</div>
+              </div>
+              <p className="text-[11px] text-slate-500 text-center">
+                For store quota upgrades, API integrations, or onboarding queries, feel free to email our admin team directly.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContactModal(false)}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 cursor-pointer transition-all"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
       {toast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] sm:w-full animate-in fade-in slide-in-from-top-4 duration-300">
           <div className={`p-4 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 ${
@@ -4592,15 +5074,15 @@ export default function App() {
           {/* Tab 3: Profile */}
           <button
             type="button"
-            onClick={() => setActiveTab('profile')}
+            onClick={() => setIsProfileDrawerOpen(true)}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'profile'
+              isProfileDrawerOpen
                 ? 'text-[#083B82] font-black'
                 : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
             <div className={`p-1 rounded-xl transition-all ${
-              activeTab === 'profile'
+              isProfileDrawerOpen
                 ? 'bg-sky-50 text-sky-600 border border-sky-200'
                 : 'text-slate-400'
             }`}>

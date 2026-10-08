@@ -444,11 +444,20 @@ const createInitialMarketplaceState = () => ({
   addPackingSlip: false,
 });
 
-export default function LabelCropper({ showToast, followStores = [], onNavigateTab }) {
+export default function LabelCropper({ showToast, followStores = [], onNavigateTab, activeMarketplaceId }) {
   // Selected marketplace state (default Meesho as developed)
   const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
-    return localStorage.getItem('om_selected_marketplace') || 'meesho';
+    return activeMarketplaceId || localStorage.getItem('om_selected_marketplace') || 'meesho';
   });
+
+  useEffect(() => {
+    if (activeMarketplaceId && activeMarketplaceId !== selectedMarketplace) {
+      setSelectedMarketplace(activeMarketplaceId);
+      try {
+        localStorage.setItem('om_selected_marketplace', activeMarketplaceId);
+      } catch {}
+    }
+  }, [activeMarketplaceId]);
 
   // Isolated workspace states for each marketplace (keeps Meesho, Flipkart, Amazon, etc. 100% separate)
   const [marketplaceStates, setMarketplaceStates] = useState(() => ({
