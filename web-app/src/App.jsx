@@ -433,6 +433,7 @@ export default function App() {
     versionName: CURRENT_APP_VERSION_NAME,
     packageName: isNativeMobile() ? 'com.rrtraders.meeshootp' : null
   }));
+  const [liveCheckedTimes, setLiveCheckedTimes] = useState({});
 
   useEffect(() => {
     getAppVersionInfo().then((info) => {
@@ -1075,6 +1076,12 @@ export default function App() {
             }
           }
 
+          if (!sess.cookies && targetAcc?.cookies) {
+            sess.cookies = targetAcc.cookies;
+            if (targetAcc.identifier && !sess.identifier) sess.identifier = targetAcc.identifier;
+            if (targetAcc.supplierId && !sess.supplierId) sess.supplierId = targetAcc.supplierId;
+          }
+
           if (!sess.cookies) continue;
 
           let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
@@ -1146,6 +1153,16 @@ export default function App() {
           const newCourier = otpRes.courier || 'No Return';
           const newCount = otpRes.handoverCount || 0;
           const newOtpListJson = JSON.stringify(otpRes.otpList || []);
+          const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          // Instantly update live timestamp on this device
+          setLiveCheckedTimes(prev => ({
+            ...prev,
+            [key]: currentTimeStr,
+            [targetDocId]: currentTimeStr,
+            ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
+            ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
+          }));
 
           // Check if data is already identical in Firestore or in our last synced cache
           const existingAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key);
@@ -1158,10 +1175,10 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Check how long ago lastUpdated was written in Firestore
+          // Check how long ago lastUpdated was written in Firestore (sync every 60 seconds)
           const lastUpdatedMs = existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0;
           const timeSinceLastUpdateMs = Date.now() - lastUpdatedMs;
-          const isStaleTimestamp = !lastUpdatedMs || timeSinceLastUpdateMs > 10 * 60 * 1000; // > 10 mins old or yesterday
+          const isStaleTimestamp = !lastUpdatedMs || timeSinceLastUpdateMs >= 60 * 1000; // Fresh check every 60 seconds
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             lastSyncedDocRef.current[key] = {
@@ -1173,7 +1190,7 @@ export default function App() {
             continue;
           }
 
-          // Data has changed OR timestamp is older than 10 mins (or from yesterday)
+          // Data has changed OR timestamp is 60s+ old (or from yesterday)
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1186,7 +1203,7 @@ export default function App() {
             currentOtp: newOtp,
             courier: newCourier,
             handoverCount: newCount,
-            dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            dateTime: currentTimeStr,
             otpList: otpRes.otpList || [],
             status: 'live',
             lastUpdated: new Date().toISOString()
@@ -1739,12 +1756,20 @@ export default function App() {
             const newOtp = otpRes.otp || '----';
             const newCourier = otpRes.courier || 'No Return';
             const newCount = otpRes.handoverCount || 0;
+            const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            setLiveCheckedTimes(prev => ({
+              ...prev,
+              [syncKey]: currentTimeStr,
+              ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
+              ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
+            }));
 
             await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
               currentOtp: newOtp,
               courier: newCourier,
               handoverCount: newCount,
-              dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              dateTime: currentTimeStr,
               otpList: otpRes.otpList || [],
               status: 'live',
               lastUpdated: new Date().toISOString()
@@ -2863,7 +2888,7 @@ export default function App() {
 
                           {/* Footer Details */}
                           <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-                            <span>Checked: {acc.dateTime || 'Just now'}</span>
+                            <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
                             {acc.status === 'session_expired' ? (
                               <span className="flex items-center gap-1 text-amber-400 font-semibold">
                                 <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
@@ -4487,7 +4512,7 @@ export default function App() {
 
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
-                              <span>Checked: {acc.dateTime || 'Just now'}</span>
+                              <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
                               {acc.status === 'session_expired' || localSess?.expired ? (
                                 <button
                                   type="button"
