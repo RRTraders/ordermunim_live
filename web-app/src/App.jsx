@@ -883,6 +883,7 @@ export default function App() {
 
         if (!existing && (acc.cookies || restoredPassword || restoredEmail || acc.email)) {
           const newSess = {
+            docId: acc.id || '',
             email: restoredEmail,
             password: restoredPassword,
             identifier: acc.identifier || (vaultCred?.identifier || ''),
@@ -899,6 +900,7 @@ export default function App() {
           }
           changed = true;
         } else if (existing) {
+          if (acc.id) existing.docId = acc.id;
           if (!existing.password && restoredPassword) {
             existing.password = restoredPassword;
             changed = true;
@@ -1071,6 +1073,7 @@ export default function App() {
                 cookies: fresh.cookies,
                 identifier: fresh.identifier,
                 supplierId: fresh.supplierId,
+                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -1112,6 +1115,7 @@ export default function App() {
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
+                  dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                   lastUpdated: new Date().toISOString()
                 }).catch(() => {});
                 otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
@@ -1175,27 +1179,22 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Check how long ago lastUpdated was written in Firestore (sync every 60 seconds)
-          const lastUpdatedMs = existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0;
-          const timeSinceLastUpdateMs = Date.now() - lastUpdatedMs;
-          const isStaleTimestamp = !lastUpdatedMs || timeSinceLastUpdateMs >= 60 * 1000; // Fresh check every 60 seconds
+          // Check how long ago last write to Firestore happened (sync every 60 seconds)
+          const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
+          const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 60 * 1000; // Fresh check every 60 seconds
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
-            lastSyncedDocRef.current[key] = {
-              currentOtp: newOtp,
-              courier: newCourier,
-              handoverCount: newCount,
-              otpListJson: newOtpListJson
-            };
             continue;
           }
 
-          // Data has changed OR timestamp is 60s+ old (or from yesterday)
+          // Data has changed OR 60 seconds elapsed since last Firestore write
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
             handoverCount: newCount,
-            otpListJson: newOtpListJson
+            otpListJson: newOtpListJson,
+            syncedAt: Date.now()
           };
 
           // Update Firestore immediately so UI and all devices reflect current OTP and fresh timestamp

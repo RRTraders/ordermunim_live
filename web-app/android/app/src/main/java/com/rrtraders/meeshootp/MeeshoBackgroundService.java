@@ -285,6 +285,7 @@ public class MeeshoBackgroundService extends Service {
             String storeName = sess.optString("storeName", "Meesho Store");
             String email = sess.optString("email", "");
             String password = sess.optString("password", "");
+            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
 
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
                 cookies = autoRelogin(email, password, syncKey);
@@ -355,6 +356,7 @@ public class MeeshoBackgroundService extends Service {
                 }
 
                 if (otps != null && otps.length() > 0) {
+                    boolean firstFound = false;
                     for (int i = 0; i < otps.length(); i++) {
                         JSONObject item = otps.getJSONObject(i);
                         String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "")));
@@ -394,6 +396,11 @@ public class MeeshoBackgroundService extends Service {
                             triggerOtpAlert(syncKey, storeName, courier, otp, count, i + 1);
                             prefs.edit().putString(lastNotifiedKey, currentSig).apply();
                         }
+
+                        if (!firstFound) {
+                            firstFound = true;
+                            syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
+                        }
                     }
                 } else {
                     // Reset notified flags when no returns are pending
@@ -404,6 +411,14 @@ public class MeeshoBackgroundService extends Service {
                         }
                     }
                     editor.apply();
+
+                    // Sync fresh timestamp to Firestore every 60 seconds even while running silently in background
+                    String lastSyncKey = "last_fs_sync_" + syncKey;
+                    long lastSyncMs = prefs.getLong(lastSyncKey, 0);
+                    if (System.currentTimeMillis() - lastSyncMs >= 60 * 1000) {
+                        syncToFirestore(sess.optString("docId", syncKey), "----", "No Return", 0, timeStr, "live");
+                        prefs.edit().putLong(lastSyncKey, System.currentTimeMillis()).apply();
+                    }
                 }
             }
         } catch (Exception ignored) {
@@ -412,6 +427,45 @@ public class MeeshoBackgroundService extends Service {
                 try {
                     conn.disconnect();
                 } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status) {
+        if (docId == null || docId.trim().isEmpty()) return;
+        HttpURLConnection conn = null;
+        try {
+            String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
+            URL url = new URL("https://firestore.googleapis.com/v1/projects/meesho-otp-app/databases/(default)/documents/accounts/" + encodedDocId + "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated&key=AIzaSyBXcH8anFAy8xWfQnfHcb1Pyf9J1aM0DDE");
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setDoOutput(true);
+
+            JSONObject fields = new JSONObject();
+            JSONObject fOtp = new JSONObject(); fOtp.put("stringValue", otp != null ? otp : "----"); fields.put("currentOtp", fOtp);
+            JSONObject fCourier = new JSONObject(); fCourier.put("stringValue", courier != null ? courier : "No Return"); fields.put("courier", fCourier);
+            JSONObject fCount = new JSONObject(); fCount.put("integerValue", String.valueOf(count)); fields.put("handoverCount", fCount);
+            JSONObject fTime = new JSONObject(); fTime.put("stringValue", dateTime != null ? dateTime : ""); fields.put("dateTime", fTime);
+            JSONObject fStatus = new JSONObject(); fStatus.put("stringValue", status != null ? status : "live"); fields.put("status", fStatus);
+            SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            JSONObject fLast = new JSONObject(); fLast.put("stringValue", iso.format(new Date())); fields.put("lastUpdated", fLast);
+
+            JSONObject body = new JSONObject();
+            body.put("fields", fields);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            conn.getResponseCode();
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Exception ignored) {}
             }
         }
     }
