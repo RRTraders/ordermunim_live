@@ -785,10 +785,16 @@ export default function App() {
   const initialLoadDoneRef = useRef(false);
   const accountsRef = useRef(accounts);
   const lastSyncedDocRef = useRef({});
+  const isPollingRef = useRef(false);
+  const userRef = useRef(user);
 
   useEffect(() => {
     accountsRef.current = accounts;
   }, [accounts]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
@@ -1014,6 +1020,8 @@ export default function App() {
     })();
 
     const pollAllNativeSessions = async () => {
+      if (isPollingRef.current) return;
+      isPollingRef.current = true;
       try {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
         let sessions = {};
@@ -1026,7 +1034,7 @@ export default function App() {
           for (const acc of accountsRef.current) {
             const key = acc.syncKey || acc.id;
             if (key && !sessions[key]) {
-              const vaultCred = findCredentialsForAccount(acc, user?.uid);
+              const vaultCred = findCredentialsForAccount(acc, userRef.current?.uid);
               sessions[key] = {
                 email: acc.email || vaultCred?.email || '',
                 password: vaultCred?.password || '',
@@ -1210,6 +1218,8 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Native OTP poll error:', err);
+      } finally {
+        isPollingRef.current = false;
       }
     };
 
@@ -1807,13 +1817,25 @@ export default function App() {
               localStorage.setItem('native_meesho_sessions', JSON.stringify(curSess));
               setLocalSessions(curSess);
               syncBackgroundSessions(curSess);
+              const otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
+              const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              setLiveCheckedTimes(prev => ({
+                ...prev,
+                [syncKey]: currentTimeStr,
+                ...(targetAcc.id ? { [targetAcc.id]: currentTimeStr } : {})
+              }));
               await updateDoc(doc(db, 'accounts', targetAcc.id), {
                 cookies: fresh.cookies,
                 identifier: freshIdent,
                 supplierId: freshSupId,
+                currentOtp: otpRes.otp || '----',
+                courier: otpRes.courier || 'No Return',
+                handoverCount: otpRes.handoverCount || 0,
+                dateTime: currentTimeStr,
+                otpList: otpRes.otpList || [],
+                status: 'live',
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
-              const otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
               if (otpRes.otp && otpRes.otp !== '----') {
                 showToast(`Return OTP for ${storeName}: ${otpRes.otp} (${otpRes.courier || 'Courier'})`, 'success');
               } else {
