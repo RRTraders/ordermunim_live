@@ -48,19 +48,23 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onBackPressed() {
-        if (bridge != null && bridge.getWebView() != null) {
-            bridge.getWebView().evaluateJavascript(
-                "(function() { try { if (window.handleAndroidBackButton) { return window.handleAndroidBackButton(); } } catch(e){} return 'default'; })()",
-                value -> {
-                    if ("\"default\"".equals(value) || "null".equals(value) || value == null) {
-                        runOnUiThread(() -> finish());
-                    } else if ("\"exit\"".equals(value)) {
-                        finishAffinity();
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().evaluateJavascript(
+                    "(function() { try { if (window.handleAndroidBackButton) { return window.handleAndroidBackButton(); } } catch(e){} return 'default'; })()",
+                    value -> {
+                        try {
+                            if ("\"default\"".equals(value) || "null".equals(value) || value == null) {
+                                runOnUiThread(() -> finish());
+                            } else if ("\"exit\"".equals(value)) {
+                                finishAffinity();
+                            }
+                        } catch (Exception ignored) {}
                     }
-                }
-            );
-            return;
-        }
+                );
+                return;
+            }
+        } catch (Exception ignored) {}
         super.onBackPressed();
     }
 }

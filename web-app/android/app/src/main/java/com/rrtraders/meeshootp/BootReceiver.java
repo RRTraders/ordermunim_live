@@ -12,8 +12,7 @@ public class BootReceiver extends BroadcastReceiver {
         String action = intent != null ? intent.getAction() : null;
         if (Intent.ACTION_BOOT_COMPLETED.equals(action) || 
             Intent.ACTION_MY_PACKAGE_REPLACED.equals(action) ||
-            "android.intent.action.QUICKBOOT_POWERON".equals(action) ||
-            "com.rrtraders.meeshootp.ALARM_POLL".equals(action)) {
+            "android.intent.action.QUICKBOOT_POWERON".equals(action)) {
             try {
                 Intent serviceIntent = new Intent(context, MeeshoBackgroundService.class);
                 ContextCompat.startForegroundService(context, serviceIntent);

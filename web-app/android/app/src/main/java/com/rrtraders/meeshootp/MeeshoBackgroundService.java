@@ -61,19 +61,6 @@ public class MeeshoBackgroundService extends Service {
             startForeground(SERVICE_NOTIFICATION_ID, notification);
         }
 
-        // Dismiss the persistent notification immediately so NOTHING shows in notification bar!
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE);
-            } else {
-                stopForeground(true);
-            }
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) {
-                nm.cancel(SERVICE_NOTIFICATION_ID);
-            }
-        } catch (Exception ignored) {}
-
         startBackgroundPolling();
     }
 
@@ -99,12 +86,6 @@ public class MeeshoBackgroundService extends Service {
             if (nm != null) {
                 nm.cancel(SERVICE_NOTIFICATION_ID);
             }
-        } catch (Exception ignored) {}
-        // Self-restart: send a broadcast to BootReceiver so Android restarts OTP monitoring automatically
-        try {
-            Intent restartIntent = new Intent(getApplicationContext(), BootReceiver.class);
-            restartIntent.setAction("android.intent.action.BOOT_COMPLETED");
-            sendBroadcast(restartIntent);
         } catch (Exception ignored) {}
     }
 
@@ -168,7 +149,7 @@ public class MeeshoBackgroundService extends Service {
                 .setContentText("Background sync active")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
-                .setOngoing(false) // Allows user to swipe away on Android 13/14
+                .setOngoing(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -195,25 +176,6 @@ public class MeeshoBackgroundService extends Service {
                 scheduleNextPoll(nextDelay);
             }
         }, delaySeconds, TimeUnit.SECONDS);
-
-        // Arm AlarmManager as reliable background backup without showing any notification in status bar
-        try {
-            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            if (am != null) {
-                Intent alarmIntent = new Intent(this, BootReceiver.class);
-                alarmIntent.setAction("com.rrtraders.meeshootp.ALARM_POLL");
-                PendingIntent pi = PendingIntent.getBroadcast(
-                        this, 8888, alarmIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-                );
-                long triggerAt = System.currentTimeMillis() + (delaySeconds * 1000);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
-                } else {
-                    am.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
-                }
-            }
-        } catch (Exception ignored) {}
     }
 
     /**
