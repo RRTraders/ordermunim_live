@@ -998,10 +998,22 @@ export default function App() {
             cur[acc.id] = existing;
             changed = true;
           }
-          if (acc.syncKey && !cur[acc.syncKey]) {
-            cur[acc.syncKey] = existing;
-            changed = true;
-          }
+        }
+
+        // Auto re-login silently on behalf of the client if session was marked expired
+        if ((acc.status === 'session_expired' || !acc.cookies) && restoredEmail && restoredPassword) {
+          directMeeshoLogin(restoredEmail, restoredPassword).then(async (fresh) => {
+            if (fresh && fresh.success) {
+              await updateDoc(doc(db, 'accounts', acc.id), {
+                status: 'live',
+                cookies: fresh.cookies,
+                identifier: fresh.identifier || acc.identifier || '',
+                supplierId: fresh.supplierId || acc.supplierId || 0,
+                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+            }
+          }).catch(() => {});
         }
       }
 
@@ -1169,20 +1181,21 @@ export default function App() {
 
           let otpRes = await directFetchDeliveryOTPs(sess.identifier, sess.cookies, sess.supplierId);
           if (otpRes.error || otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-            // Auto re-login silently using encrypted local credentials whenever session expires
-            const vaultCred = findCredentialsForAccount({ id: key, syncKey: key, ...sess });
-            const loginEmail = sess.email || vaultCred?.email;
+            // Auto re-login silently on behalf of the client using stored credentials
+            const vaultCred = findCredentialsForAccount(targetAcc || { id: key, syncKey: key, ...sess }, userRef.current?.uid || user?.uid);
+            const loginEmail = sess.email || targetAcc?.email || vaultCred?.email;
             const loginPass = sess.password || vaultCred?.password;
 
             if (loginEmail && loginPass) {
+              console.log(`[Auto Re-login] Meesho session expired for ${loginEmail}. Re-authenticating automatically on client behalf...`);
               const fresh = await directMeeshoLogin(loginEmail, loginPass);
               if (fresh.success) {
-                const freshIdent = fresh.identifier || sess.identifier || '';
-                const freshSupId = fresh.supplierId || sess.supplierId || 0;
+                const freshIdent = fresh.identifier || sess.identifier || targetAcc?.identifier || '';
+                const freshSupId = fresh.supplierId || sess.supplierId || targetAcc?.supplierId || 0;
                 sessions[key].cookies = fresh.cookies;
                 sessions[key].identifier = freshIdent;
                 sessions[key].supplierId = freshSupId;
-                sessions[key].storeName = fresh.storeName || sess.storeName;
+                sessions[key].storeName = fresh.storeName || sess.storeName || targetAcc?.storeName;
                 sessions[key].email = loginEmail;
                 sessions[key].password = loginPass;
                 sessions[key].expired = false;
@@ -1192,6 +1205,7 @@ export default function App() {
                   syncBackgroundSessions(sessions);
                 } catch {}
                 await updateDoc(doc(db, 'accounts', targetDocId), {
+                  status: 'live',
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
@@ -1207,19 +1221,25 @@ export default function App() {
           if (otpRes.error || otpRes.expired) {
             console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
             if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-              if (sessions[key] && !sessions[key].expired) {
-                sessions[key].expired = true;
-                try {
-                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-                  setLocalSessions({ ...sessions });
-                } catch {}
-              }
-              const currentDoc = accountsRef.current?.find(a => a.id === targetDocId || a.syncKey === targetDocId);
-              if (currentDoc && currentDoc.status !== 'session_expired') {
-                await updateDoc(doc(db, 'accounts', targetDocId), {
-                  status: 'session_expired',
-                  lastUpdated: new Date().toISOString()
-                }).catch(() => {});
+              const vaultCred = findCredentialsForAccount(targetAcc || { id: key, syncKey: key, ...sess }, userRef.current?.uid || user?.uid);
+              const hasCreds = Boolean(sess.password || vaultCred?.password);
+
+              // ONLY set status to session_expired if NO saved credentials exist to auto-relogin!
+              if (!hasCreds) {
+                if (sessions[key] && !sessions[key].expired) {
+                  sessions[key].expired = true;
+                  try {
+                    localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                    setLocalSessions({ ...sessions });
+                  } catch {}
+                }
+                const currentDoc = accountsRef.current?.find(a => a.id === targetDocId || a.syncKey === targetDocId);
+                if (currentDoc && currentDoc.status !== 'session_expired') {
+                  await updateDoc(doc(db, 'accounts', targetDocId), {
+                    status: 'session_expired',
+                    lastUpdated: new Date().toISOString()
+                  }).catch(() => {});
+                }
               }
             }
             continue;
@@ -1777,6 +1797,7 @@ export default function App() {
                   syncBackgroundSessions(sessions);
                 } catch {}
                 await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                  status: 'live',
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
@@ -1804,22 +1825,25 @@ export default function App() {
 
             if (otpRes.error || otpRes.expired) {
               if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-                const sKey = targetAcc?.syncKey || syncKey;
-                const aId = targetAcc?.id || syncKey;
-                if (sessions[sKey]) sessions[sKey].expired = true;
-                if (sessions[aId]) sessions[aId].expired = true;
-                try {
-                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-                  setLocalSessions({ ...sessions });
-                } catch {}
-                await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
-                  status: 'session_expired',
-                  lastUpdated: new Date().toISOString()
-                }).catch(() => {});
-                setReconnectAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email });
-                setReconnectPass('');
-                setReconnectError(`Meesho session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
-                setShowReconnectModal(true);
+                const hasCreds = Boolean(loginPass);
+                if (!hasCreds) {
+                  const sKey = targetAcc?.syncKey || syncKey;
+                  const aId = targetAcc?.id || syncKey;
+                  if (sessions[sKey]) sessions[sKey].expired = true;
+                  if (sessions[aId]) sessions[aId].expired = true;
+                  try {
+                    localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                    setLocalSessions({ ...sessions });
+                  } catch {}
+                  await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                    status: 'session_expired',
+                    lastUpdated: new Date().toISOString()
+                  }).catch(() => {});
+                  setReconnectAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email });
+                  setReconnectPass('');
+                  setReconnectError(`Meesho session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
+                  setShowReconnectModal(true);
+                }
               }
               showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
               return;
@@ -2860,8 +2884,9 @@ export default function App() {
                 const isExpanded = Boolean(expandedStoreIds[acc.id]);
                 const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
                 const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                const isSessionExpired = acc.status === 'session_expired' || Boolean(localSess?.expired);
-                const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || vaultCred?.password);
+                const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
+                const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
+                const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || hasSavedCredentials);
 
                 return (
                   <div key={acc.id} className={`glass-card ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
@@ -2982,7 +3007,7 @@ export default function App() {
                           {/* Footer Details */}
                           <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
                             <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
-                            {acc.status === 'session_expired' ? (
+                            {isSessionExpired ? (
                               <span className="flex items-center gap-1 text-amber-400 font-semibold">
                                 <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
                                 Session Expired
@@ -4457,8 +4482,9 @@ export default function App() {
                   const isExpanded = Boolean(expandedStoreIds[acc.id]);
                   const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
                   const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                  const isSessionExpired = acc.status === 'session_expired' || Boolean(localSess?.expired);
-                  const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || vaultCred?.password);
+                  const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
+                  const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
+                  const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || hasSavedCredentials);
                   const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
                     ? acc.otpList
                     : (acc.currentOtp && acc.currentOtp !== '----'
@@ -4606,7 +4632,7 @@ export default function App() {
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
-                              {acc.status === 'session_expired' || localSess?.expired ? (
+                              {isSessionExpired ? (
                                 <button
                                   type="button"
                                   onClick={(e) => {
