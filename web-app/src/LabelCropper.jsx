@@ -6343,54 +6343,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   </form>
                 </div>
 
-                {/* Extension Download Card & Guide */}
-                <div className="mt-6 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 text-xs text-slate-300 space-y-4 shadow-xl">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FF3F6C] to-[#F16521] text-white flex items-center justify-center text-xs font-black shadow-md">
-                        M
-                      </div>
-                      <div>
-                        <div className="font-extrabold text-white text-sm">OrdersMunim Chrome Extension</div>
-                        <div className="text-[11px] text-emerald-400 font-semibold">Virtual QZ Bypass &amp; 1-Click PDF Downloader</div>
-                      </div>
-                    </div>
-                    <a
-                      href="/ordersmunim-extension.zip"
-                      download="ordersmunim-extension.zip"
-                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#FF3F6C] to-[#F16521] hover:opacity-90 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Extension (.ZIP)</span>
-                    </a>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      How to use on Myntra (Zero QZ Tray Errors):
-                    </div>
-                    <ol className="list-decimal pl-4 space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
-                      <li>Download and extract the zip file, then open <code className="text-white bg-slate-800 px-1 py-0.5 rounded">chrome://extensions</code> in Chrome.</li>
-                      <li>Enable <strong className="text-slate-300">Developer mode</strong> (top right) and click <strong className="text-slate-300">Load unpacked</strong>, then select the extracted folder.</li>
-                      <li>Click the OrdersMunim extension icon and sign in with your account to activate your license.</li>
-                      <li>Open <a href="https://mdirect.myntrainfo.com/Orders/Search" target="_blank" rel="noreferrer" className="text-rose-400 underline font-semibold">mdirect.myntrainfo.com/Orders/Search</a> — select orders and click Download. Labels download as PDF directly without QZ Tray errors!</li>
-                    </ol>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Protected by OrdersMunim License • Auto-expires when plan ends</span>
-                    <a
-                      href="https://mdirect.myntrainfo.com/Orders/Search"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Open Myntra Portal</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
+                {/* Extension Download Card & Guide hidden */}
               </div>
             </div>
 
