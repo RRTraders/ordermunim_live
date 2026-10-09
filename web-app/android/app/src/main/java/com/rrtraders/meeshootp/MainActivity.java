@@ -45,4 +45,22 @@ public class MainActivity extends BridgeActivity {
             ContextCompat.startForegroundService(this, serviceIntent);
         } catch (Exception ignored) {}
     }
+
+    @Override
+    public void onBackPressed() {
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().evaluateJavascript(
+                "(function() { try { if (window.handleAndroidBackButton) { return window.handleAndroidBackButton(); } } catch(e){} return 'default'; })()",
+                value -> {
+                    if ("\"default\"".equals(value) || "null".equals(value) || value == null) {
+                        runOnUiThread(() -> finish());
+                    } else if ("\"exit\"".equals(value)) {
+                        finishAffinity();
+                    }
+                }
+            );
+            return;
+        }
+        super.onBackPressed();
+    }
 }

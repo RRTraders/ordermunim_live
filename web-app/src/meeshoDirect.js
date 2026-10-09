@@ -232,4 +232,18 @@ export async function getAppVersionInfo() {
   };
 }
 
+/**
+ * Cleanly exit the native Android application
+ */
+export async function exitApp() {
+  if (isNativeMobile()) {
+    try {
+      await NativeMeesho.exitApp();
+    } catch (err) {
+      console.warn('[Native Meesho] exitApp error:', err);
+    }
+  }
+}
+
+
 

@@ -811,6 +811,16 @@ public class MeeshoDirectPlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void exitApp(PluginCall call) {
+        try {
+            if (getActivity() != null) {
+                getActivity().finishAffinity();
+            }
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
+
     private String readStream(InputStream is) {
         if (is == null) return "";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {

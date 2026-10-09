@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo, exitApp } from './meeshoDirect';
 import { 
   saveEncryptedStoreCredentials, 
   getDecryptedStoreCredentials, 
@@ -434,6 +434,78 @@ export default function App() {
     packageName: isNativeMobile() ? 'com.rrtraders.meeshootp' : null
   }));
   const [liveCheckedTimes, setLiveCheckedTimes] = useState({});
+
+  // ================= ANDROID HARDWARE / GESTURE BACK BUTTON INTERCEPTOR =================
+  const backButtonHandlerRef = useRef(null);
+  backButtonHandlerRef.current = () => {
+    // 1. If Exit/Logout/Delete confirmation dialog is open, close it
+    if (confirmDialog) {
+      setConfirmDialog(null);
+      return 'handled';
+    }
+
+    // 2. If Profile Drawer is open, close it and return to active app screen
+    if (isProfileDrawerOpen) {
+      setIsProfileDrawerOpen(false);
+      return 'handled';
+    }
+
+    // 3. If any modal is open, close it
+    if (showAddModal) {
+      setShowAddModal(false);
+      return 'handled';
+    }
+    if (showReconnectModal) {
+      setShowReconnectModal(false);
+      return 'handled';
+    }
+    if (showAboutModal) {
+      setShowAboutModal(false);
+      return 'handled';
+    }
+    if (showContactModal) {
+      setShowContactModal(false);
+      return 'handled';
+    }
+    if (showBroadcastModal) {
+      setShowBroadcastModal(false);
+      return 'handled';
+    }
+    if (showPdfComingSoonModal) {
+      setShowPdfComingSoonModal(false);
+      return 'handled';
+    }
+
+    // 4. If on secondary tab (cropper, admin, staff), navigate back to main OTP tab
+    if (activeTab !== 'dashboard' && activeTab !== 'otp') {
+      setActiveTab(isNativeMobile() ? 'otp' : 'dashboard');
+      return 'handled';
+    }
+
+    // 5. At the root screen: show confirmation dialog "Are you sure you want to exit app?"
+    setConfirmDialog({
+      title: 'Exit App',
+      message: 'Are you sure you want to exit OrderMunim?',
+      confirmText: 'Exit App',
+      icon: 'exit',
+      onConfirm: async () => {
+        await exitApp();
+      }
+    });
+    return 'handled';
+  };
+
+  useEffect(() => {
+    window.handleAndroidBackButton = () => {
+      if (backButtonHandlerRef.current) {
+        return backButtonHandlerRef.current();
+      }
+      return 'default';
+    };
+    return () => {
+      delete window.handleAndroidBackButton;
+    };
+  }, []);
 
   useEffect(() => {
     getAppVersionInfo().then((info) => {
@@ -5796,73 +5868,76 @@ export default function App() {
       )}
 
       {/* ================= BOTTOM NAVIGATION BAR (3 TABS - MOBILE ONLY) ================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 border-t border-slate-200/90 px-4 py-2 shadow-lg backdrop-blur-md">
-        <div className="max-w-md mx-auto flex items-center justify-around">
-          {/* Tab 1: OTP */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('otp')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'otp'
-                ? 'text-orange-600 font-black'
-                : 'text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            <div className={`p-1 rounded-xl transition-all ${
-              activeTab === 'otp'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200'
-                : 'text-slate-400'
-            }`}>
-              <Package className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] tracking-tight">OTP</span>
-          </button>
+      {!isProfileDrawerOpen && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 border-t border-slate-200/90 px-4 py-2 shadow-lg backdrop-blur-md">
+          <div className="max-w-md mx-auto flex items-center justify-around">
+            {/* Tab 1: OTP */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('otp')}
+              className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'otp'
+                  ? 'text-orange-600 font-black'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-xl transition-all ${
+                activeTab === 'otp'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                  : 'text-slate-400'
+              }`}>
+                <Package className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] tracking-tight">OTP</span>
+            </button>
 
-          {/* Tab 2: Label Cropper */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('cropper')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'cropper'
-                ? 'text-orange-600 font-black'
-                : 'text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            <div className={`p-1 rounded-xl transition-all ${
-              activeTab === 'cropper'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200'
-                : 'text-slate-400'
-            }`}>
-              <Scissors className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] tracking-tight">Label Cropper</span>
-          </button>
+            {/* Tab 2: Label Cropper */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('cropper')}
+              className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'cropper'
+                  ? 'text-orange-600 font-black'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-xl transition-all ${
+                activeTab === 'cropper'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                  : 'text-slate-400'
+              }`}>
+                <Scissors className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] tracking-tight">Label Cropper</span>
+            </button>
 
-          {/* Tab 3: Profile */}
-          <button
-            type="button"
-            onClick={() => setIsProfileDrawerOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
-              isProfileDrawerOpen
-                ? 'text-[#083B82] font-black'
-                : 'text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            <div className={`p-1 rounded-xl transition-all ${
-              isProfileDrawerOpen
-                ? 'bg-sky-50 text-sky-600 border border-sky-200'
-                : 'text-slate-400'
-            }`}>
-              <User className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] tracking-tight">Profile</span>
-          </button>
-        </div>
-      </nav>
+            {/* Tab 3: Profile */}
+            <button
+              type="button"
+              onClick={() => setIsProfileDrawerOpen(true)}
+              className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-xl transition-all cursor-pointer ${
+                isProfileDrawerOpen
+                  ? 'text-[#083B82] font-black'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-xl transition-all ${
+                isProfileDrawerOpen
+                  ? 'bg-sky-50 text-sky-600 border border-sky-200'
+                  : 'text-slate-400'
+              }`}>
+                <User className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] tracking-tight">Profile</span>
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* ================= MOBILE APP FLOATING ACTION BUTTON (FAB) ================= */}
+      {/* ================= MOBILE APP FLOATING ACTION BUTTON (FAB) ================= */}
       {/* Positioned at right bottom above navigation bar, visible strictly on Android native app */}
-      {isNativeMobile() && (activeTab === 'otp' || activeTab === 'dashboard') && (
+      {!isProfileDrawerOpen && isNativeMobile() && (activeTab === 'otp' || activeTab === 'dashboard') && (
         <button
           type="button"
           onClick={() => {
@@ -5885,32 +5960,34 @@ export default function App() {
       )}
 
       {/* ================= DIRECT WHATSAPP SUPPORT FLOATING ACTION BUTTON (FAB) ================= */}
-      <a
-        href="https://wa.me/919484636090?text=Hello%20OrderMunim%20Support%2C%20I%20need%20help"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Direct WhatsApp Message Support (+91 94846 36090)"
-        title="Direct WhatsApp Message Support"
-        className={`fixed z-40 group flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white shadow-2xl shadow-emerald-600/40 hover:shadow-emerald-600/60 transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer border-2 border-white/50 ${
-          isNativeMobile() && (activeTab === 'otp' || activeTab === 'dashboard')
-            ? 'bottom-36 right-5 md:bottom-6 md:right-6'
-            : 'bottom-20 right-4 md:bottom-6 md:right-6'
-        }`}
-      >
-        {/* Subtle pulsing background effect */}
-        <span className="absolute inset-0 rounded-full bg-[#25D366] opacity-30 group-hover:opacity-50 animate-ping -z-10 pointer-events-none" />
+      {!isProfileDrawerOpen && (
+        <a
+          href="https://wa.me/919484636090?text=Hello%20OrderMunim%20Support%2C%20I%20need%20help"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Direct WhatsApp Message Support (+91 94846 36090)"
+          title="Direct WhatsApp Message Support"
+          className={`fixed z-40 group flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white shadow-2xl shadow-emerald-600/40 hover:shadow-emerald-600/60 transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer border-2 border-white/50 ${
+            isNativeMobile() && (activeTab === 'otp' || activeTab === 'dashboard')
+              ? 'bottom-36 right-5 md:bottom-6 md:right-6'
+              : 'bottom-20 right-4 md:bottom-6 md:right-6'
+          }`}
+        >
+          {/* Subtle pulsing background effect */}
+          <span className="absolute inset-0 rounded-full bg-[#25D366] opacity-30 group-hover:opacity-50 animate-ping -z-10 pointer-events-none" />
 
-        {/* Desktop Tooltip */}
-        <span className="hidden md:group-hover:flex absolute right-16 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900/95 text-white text-xs font-semibold rounded-xl shadow-xl border border-slate-700 whitespace-nowrap items-center gap-1.5 pointer-events-none animate-in fade-in duration-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>WhatsApp Support</span>
-        </span>
+          {/* Desktop Tooltip */}
+          <span className="hidden md:group-hover:flex absolute right-16 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900/95 text-white text-xs font-semibold rounded-xl shadow-xl border border-slate-700 whitespace-nowrap items-center gap-1.5 pointer-events-none animate-in fade-in duration-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>WhatsApp Support</span>
+          </span>
 
-        {/* WhatsApp Icon */}
-        <svg className="w-8 h-8 fill-current drop-shadow-xs" viewBox="0 0 24 24">
-          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-        </svg>
-      </a>
+          {/* WhatsApp Icon */}
+          <svg className="w-8 h-8 fill-current drop-shadow-xs" viewBox="0 0 24 24">
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+          </svg>
+        </a>
+      )}
 
       {/* ================= FANCY CONFIRMATION DIALOG ================= */}
       {confirmDialog && (
@@ -5919,9 +5996,11 @@ export default function App() {
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
               confirmDialog.icon === 'logout'
                 ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-400'
+                : confirmDialog.icon === 'exit'
+                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
                 : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
             }`}>
-              {confirmDialog.icon === 'logout' ? <LogOut className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+              {confirmDialog.icon === 'logout' || confirmDialog.icon === 'exit' ? <LogOut className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
             </div>
             <div className="text-center space-y-1.5">
               <h3 className="text-base font-bold text-white">{confirmDialog.title}</h3>
@@ -5931,7 +6010,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setConfirmDialog(null)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition-colors"
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -5942,9 +6021,11 @@ export default function App() {
                   setConfirmDialog(null);
                   action();
                 }}
-                className={`flex-1 py-2.5 text-white font-bold text-xs rounded-xl shadow-lg transition-all ${
+                className={`flex-1 py-2.5 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer ${
                   confirmDialog.icon === 'logout'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-cyan-500/25'
+                    : confirmDialog.icon === 'exit'
+                    ? 'bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 shadow-amber-500/25'
                     : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 shadow-rose-500/25'
                 }`}
               >
