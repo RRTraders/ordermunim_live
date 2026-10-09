@@ -1,6 +1,7 @@
 import CryptoJS from 'crypto-js';
 
-// Device-bound salt
+// Permanent master encryption key for reliable offline device encryption
+const MASTER_VAULT_KEY = 'ORDERMUNIM_LOCAL_DB_SECURE_MEESHO_VAULT_PERMANENT_KEY_v2';
 const VAULT_SALT = 'ORDERMUNIM_LOCAL_DB_SECURE_MEESHO_VAULT_v1';
 const VAULT_STORAGE_KEY = 'om_encrypted_credentials_vault';
 
@@ -13,32 +14,51 @@ const getVaultKey = () => {
 };
 
 /**
- * Encrypt sensitive plain text using AES-256 with device-bound key
+ * Encrypt sensitive plain text using AES-256 with permanent stable key
  */
 export const encryptSecret = (plainText) => {
   if (!plainText) return '';
   try {
-    const key = getVaultKey();
-    return CryptoJS.AES.encrypt(String(plainText), key).toString();
+    return CryptoJS.AES.encrypt(String(plainText), MASTER_VAULT_KEY).toString();
   } catch (e) {
     console.error('[Vault] Encryption error:', e);
-    return '';
+    return String(plainText);
   }
 };
 
 /**
- * Decrypt AES-256 cipher text using device-bound key
+ * Decrypt AES-256 cipher text trying current and all legacy keys so credentials never get lost
  */
 export const decryptSecret = (cipherText) => {
   if (!cipherText) return '';
-  try {
-    const key = getVaultKey();
-    const bytes = CryptoJS.AES.decrypt(cipherText, key);
-    return bytes.toString(CryptoJS.enc.Utf8);
-  } catch (e) {
-    console.error('[Vault] Decryption error:', e);
-    return '';
+  const text = String(cipherText);
+  
+  // List of keys to try (new permanent key first, followed by legacy device-bound variations)
+  let devId = 'generic_device';
+  try { devId = localStorage.getItem('om_unique_device_id') || 'om_dev_default'; } catch {}
+  const keysToTry = [
+    MASTER_VAULT_KEY,
+    `${VAULT_SALT}__${devId}`,
+    `${VAULT_SALT}__om_dev_default`,
+    `${VAULT_SALT}__generic_device`,
+    VAULT_SALT
+  ];
+
+  for (const k of keysToTry) {
+    try {
+      const bytes = CryptoJS.AES.decrypt(text, k);
+      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+      if (decrypted && decrypted.length > 0) {
+        return decrypted;
+      }
+    } catch {}
   }
+
+  // If text is not AES encrypted (raw password), return as-is
+  if (!text.startsWith('U2F') && !text.includes(' ') && text.length < 80) {
+    return text;
+  }
+  return '';
 };
 
 /**
@@ -124,6 +144,44 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
       return cred;
     }
   }
+
+  // Resilient Fallback: Check native_meesho_sessions stored locally on device
+  try {
+    const rawSessions = localStorage.getItem('native_meesho_sessions');
+    if (rawSessions) {
+      const parsed = JSON.parse(rawSessions);
+      for (const k of candidates) {
+        if (parsed[k] && parsed[k].password) {
+          return {
+            userId: targetUserId,
+            email: parsed[k].email || acc.email || '',
+            password: parsed[k].password,
+            identifier: parsed[k].identifier || acc.identifier || '',
+            supplierId: parsed[k].supplierId || acc.supplierId || 0,
+            storeName: parsed[k].storeName || acc.storeName || ''
+          };
+        }
+      }
+      for (const [sKey, sVal] of Object.entries(parsed)) {
+        if (sVal && sVal.password) {
+          const matchEmail = acc.email && sVal.email && acc.email.trim().toLowerCase() === sVal.email.trim().toLowerCase();
+          const matchSup = acc.supplierId && sVal.supplierId && String(acc.supplierId) === String(sVal.supplierId);
+          const matchIdent = acc.identifier && sVal.identifier && acc.identifier === sVal.identifier;
+          if (matchEmail || matchSup || matchIdent) {
+            return {
+              userId: targetUserId,
+              email: sVal.email || acc.email || '',
+              password: sVal.password,
+              identifier: sVal.identifier || acc.identifier || '',
+              supplierId: sVal.supplierId || acc.supplierId || 0,
+              storeName: sVal.storeName || acc.storeName || ''
+            };
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   return null;
 };
 

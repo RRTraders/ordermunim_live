@@ -69,12 +69,26 @@ export async function directFetchDeliveryOTPs(identifier, cookies, supplierId) {
 /**
  * Sync active accounts to Android native background service for 24/7 background alerts
  */
-export async function syncBackgroundSessions(sessionsObj) {
+export async function syncBackgroundSessions(sessionsObj, forceWipe = false) {
   try {
     if (!isNativeMobile()) return;
-    await NativeMeesho.syncSessions({ sessions: sessionsObj });
+    await NativeMeesho.syncSessions({ sessions: sessionsObj, forceWipe: Boolean(forceWipe) });
   } catch (err) {
     console.warn('[Native Meesho] syncSessions failed:', err);
+  }
+}
+
+/**
+ * Retrieve persistent sessions and credentials from Android native SharedPreferences
+ */
+export async function getNativeStoredSessions() {
+  try {
+    if (!isNativeMobile()) return {};
+    const res = await NativeMeesho.getStoredSessions();
+    return res && res.sessions ? res.sessions : {};
+  } catch (err) {
+    console.warn('[Native Meesho] getStoredSessions error:', err);
+    return {};
   }
 }
 
@@ -188,16 +202,16 @@ export async function getAppVersionInfo() {
       console.warn('[Native Meesho] getAppInfo error:', err);
     }
     return {
-      versionCode: 19,
-      versionName: '2.9',
+      versionCode: 20,
+      versionName: '3.0',
       packageName: 'com.rrtraders.meeshootp',
       isNative: true,
       platform: 'android'
     };
   }
   return {
-    versionCode: 19,
-    versionName: '2.9',
+    versionCode: 20,
+    versionName: '3.0',
     packageName: null,
     isNative: false,
     platform: 'web'

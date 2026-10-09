@@ -477,9 +477,52 @@ public class MeeshoDirectPlugin extends Plugin {
     public void syncSessions(PluginCall call) {
         try {
             JSObject sessionsObj = call.getObject("sessions");
+            boolean forceWipe = call.getBoolean("forceWipe", false);
+            SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+
+            if (forceWipe) {
+                prefs.edit().putString("sessions", "{}").apply();
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                call.resolve(ret);
+                return;
+            }
+
             if (sessionsObj != null) {
-                SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
-                prefs.edit().putString("sessions", sessionsObj.toString()).apply();
+                // Read existing sessions to NEVER lose stored passwords across updates
+                String existingStr = prefs.getString("sessions", "{}");
+                JSONObject existingJson = new JSONObject(existingStr);
+                JSONObject incomingJson = new JSONObject(sessionsObj.toString());
+
+                // If incoming is completely empty, do NOT wipe existing sessions!
+                if (incomingJson.length() == 0 && existingJson.length() > 0) {
+                    JSObject ret = new JSObject();
+                    ret.put("success", true);
+                    call.resolve(ret);
+                    return;
+                }
+
+                // Merge incoming sessions with existing so password is never deleted
+                for (java.util.Iterator<String> it = incomingJson.keys(); it.hasNext(); ) {
+                    String k = it.next();
+                    JSONObject newSess = incomingJson.getJSONObject(k);
+                    if (existingJson.has(k)) {
+                        JSONObject oldSess = existingJson.getJSONObject(k);
+                        String newPass = newSess.optString("password", "");
+                        String oldPass = oldSess.optString("password", "");
+                        if (newPass.isEmpty() && !oldPass.isEmpty()) {
+                            newSess.put("password", oldPass);
+                        }
+                        String newEmail = newSess.optString("email", "");
+                        String oldEmail = oldSess.optString("email", "");
+                        if (newEmail.isEmpty() && !oldEmail.isEmpty()) {
+                            newSess.put("email", oldEmail);
+                        }
+                    }
+                    existingJson.put(k, newSess);
+                }
+
+                prefs.edit().putString("sessions", existingJson.toString()).apply();
 
                 // Ensure background service is running
                 try {
@@ -497,6 +540,20 @@ public class MeeshoDirectPlugin extends Plugin {
             return;
         }
         call.reject("sessions object required");
+    }
+
+    @PluginMethod
+    public void getStoredSessions(PluginCall call) {
+        try {
+            SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            String sessionsStr = prefs.getString("sessions", "{}");
+            JSONObject sessionsJson = new JSONObject(sessionsStr);
+            JSObject ret = new JSObject();
+            ret.put("sessions", new JSObject(sessionsJson.toString()));
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get stored sessions: " + e.getMessage());
+        }
     }
 
     @PluginMethod

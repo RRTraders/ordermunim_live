@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
   saveEncryptedStoreCredentials, 
   getDecryptedStoreCredentials, 
@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 19;
-const CURRENT_APP_VERSION_NAME = "2.9";
+const CURRENT_APP_VERSION_CODE = 20;
+const CURRENT_APP_VERSION_NAME = "3.0";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -603,11 +603,10 @@ export default function App() {
         setEmailNeedsVerification(false);
         setLoading(false);
         setAccounts([]);
-        setLocalSessions({});
+        // Never wipe local sessions or native Android credentials on startup when auth is temporarily resolving
         if (isNativeMobile()) {
           try {
             stopBackgroundMonitoring();
-            syncBackgroundSessions({});
           } catch {}
         }
         return;
@@ -622,7 +621,7 @@ export default function App() {
           localStorage.removeItem('cached_user_profile');
           clearVault();
           if (isNativeMobile()) {
-            syncBackgroundSessions({});
+            syncBackgroundSessions({}, true);
           }
         } catch {}
         setLocalSessions({});
@@ -839,7 +838,7 @@ export default function App() {
 
   // 1. Multi-Device Session Hydration (Firestore -> Phone localStorage & Background Service)
   useEffect(() => {
-    if (!isNativeMobile() || !user) return;
+    if (!isNativeMobile() || !user || !accounts || accounts.length === 0) return;
     try {
       const rawSessions = localStorage.getItem('native_meesho_sessions');
       const cur = rawSessions ? JSON.parse(rawSessions) : {};
@@ -847,17 +846,30 @@ export default function App() {
 
       // Filter accounts strictly by the current logged-in user's UID
       const myAccounts = accounts.filter(acc => acc.userId === user.uid);
+      if (myAccounts.length === 0) return;
+
       const validKeys = new Set();
       myAccounts.forEach(acc => {
         if (acc.id) validKeys.add(acc.id);
         if (acc.syncKey) validKeys.add(acc.syncKey);
+        if (acc.identifier) validKeys.add(acc.identifier);
+        if (acc.supplierId) validKeys.add(`sup_${acc.supplierId}`);
       });
 
-      // STRICT PURGE: Remove any session keys that do NOT belong to this user's current stores
-      for (const k of Object.keys(cur)) {
-        if (!validKeys.has(k)) {
-          delete cur[k];
-          changed = true;
+      // SAFE PURGE: Only remove session keys that definitely do not match any of this user's accounts
+      if (validKeys.size > 0) {
+        for (const k of Object.keys(cur)) {
+          if (!validKeys.has(k)) {
+            const matchesAny = myAccounts.some(acc => 
+              acc.id === k || acc.syncKey === k || acc.identifier === k || 
+              (acc.supplierId && `sup_${acc.supplierId}` === k) ||
+              (acc.email && acc.email.trim().toLowerCase() === k.toLowerCase())
+            );
+            if (!matchesAny) {
+              delete cur[k];
+              changed = true;
+            }
+          }
         }
       }
 
@@ -881,11 +893,17 @@ export default function App() {
           cur[key] = newSess;
           if (acc.id) cur[acc.id] = newSess;
           if (acc.syncKey) cur[acc.syncKey] = newSess;
+          if (restoredPassword) {
+            saveEncryptedStoreCredentials(key, newSess, user.uid);
+          }
           changed = true;
         } else if (existing) {
           if (!existing.password && restoredPassword) {
             existing.password = restoredPassword;
             changed = true;
+          }
+          if (existing.password) {
+            saveEncryptedStoreCredentials(key, existing, user.uid);
           }
           if (!existing.email && restoredEmail) {
             existing.email = restoredEmail;
@@ -906,7 +924,7 @@ export default function App() {
         }
       }
 
-      if (changed || myAccounts.length === 0) {
+      if (changed) {
         localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
         setLocalSessions(cur);
         syncBackgroundSessions(cur);
@@ -940,14 +958,57 @@ export default function App() {
   useEffect(() => {
     if (!isNativeMobile()) return;
 
-    try {
-      const rawSessions = localStorage.getItem('native_meesho_sessions');
-      if (rawSessions) {
-        const sessions = JSON.parse(rawSessions);
-        syncBackgroundSessions(sessions);
+    // Immediately restore sessions from Android Native SharedPreferences (survives app updates & restarts)
+    (async () => {
+      try {
+        const nativeStored = await getNativeStoredSessions();
+        if (nativeStored && typeof nativeStored === 'object' && Object.keys(nativeStored).length > 0) {
+          const rawLocal = localStorage.getItem('native_meesho_sessions');
+          let merged = rawLocal ? JSON.parse(rawLocal) : {};
+          let hasUpdates = false;
+
+          for (const [k, v] of Object.entries(nativeStored)) {
+            if (!v) continue;
+            if (!merged[k]) {
+              merged[k] = v;
+              hasUpdates = true;
+            } else {
+              if (!merged[k].password && v.password) {
+                merged[k].password = v.password;
+                hasUpdates = true;
+              }
+              if (!merged[k].email && v.email) {
+                merged[k].email = v.email;
+                hasUpdates = true;
+              }
+              if (!merged[k].cookies && v.cookies) {
+                merged[k].cookies = v.cookies;
+                hasUpdates = true;
+              }
+            }
+            if (v.password) {
+              saveEncryptedStoreCredentials(k, v, user?.uid);
+            }
+          }
+
+          if (hasUpdates || !rawLocal) {
+            localStorage.setItem('native_meesho_sessions', JSON.stringify(merged));
+            setLocalSessions(merged);
+          }
+        }
+      } catch (err) {
+        console.warn('[Native App] getNativeStoredSessions restoration error:', err);
       }
-      startBackgroundMonitoring();
-    } catch (e) {}
+
+      try {
+        const rawSessions = localStorage.getItem('native_meesho_sessions');
+        if (rawSessions) {
+          const sessions = JSON.parse(rawSessions);
+          syncBackgroundSessions(sessions);
+        }
+        startBackgroundMonitoring();
+      } catch (e) {}
+    })();
 
     const pollAllNativeSessions = async () => {
       try {
@@ -1513,7 +1574,7 @@ export default function App() {
     if (isNativeMobile()) {
       try {
         await stopBackgroundMonitoring();
-        await syncBackgroundSessions({});
+        await syncBackgroundSessions({}, true);
       } catch {}
     }
     try {
