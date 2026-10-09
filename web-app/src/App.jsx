@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 21;
-const CURRENT_APP_VERSION_NAME = "3.1";
+const CURRENT_APP_VERSION_CODE = 22;
+const CURRENT_APP_VERSION_NAME = "3.2";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -475,11 +475,11 @@ export default function App() {
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastVersionCode, setBroadcastVersionCode] = useState(21);
-  const [broadcastVersionName, setBroadcastVersionName] = useState('3.1');
-  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v3.1)!');
-  const [broadcastMessage, setBroadcastMessage] = useState('Version 3.1 brings permanent Meesho credential retention across APK updates, auto-reconnect, and silent background return OTP monitoring. Please update your app.');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk');
+  const [broadcastVersionCode, setBroadcastVersionCode] = useState(22);
+  const [broadcastVersionName, setBroadcastVersionName] = useState('3.2');
+  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v3.2)!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Version 3.2 completely silences background sync with 0% notification bar presence while keeping instant high-priority return OTP alerts.');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.2/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
@@ -2262,7 +2262,7 @@ export default function App() {
         versionName: broadcastVersionName.trim() || '1.1',
         title: broadcastTitle.trim() || 'New Update Available!',
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk',
+        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.2/meesho_otp.apk',
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -2332,7 +2332,7 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.2/meesho_otp.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
@@ -5492,32 +5492,22 @@ export default function App() {
 
               {/* Battery optimization & permissions on Android */}
               {isMobileApp && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={handleFixBatteryOptimization}
-                      className="py-2.5 px-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
-                    >
-                      <RefreshCw className="w-3 h-3 text-sky-600" />
-                      <span>Battery Saver</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleOpenSystemAppSettings}
-                      className="py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
-                    >
-                      <Settings className="w-3 h-3 text-slate-500" />
-                      <span>App Settings</span>
-                    </button>
-                  </div>
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={handleOpenSystemNotificationSettings}
-                    className="w-full py-2.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    onClick={handleFixBatteryOptimization}
+                    className="py-2.5 px-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
                   >
-                    <BellRing className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Notification Settings (Hide Status Bar)</span>
+                    <RefreshCw className="w-3 h-3 text-sky-600" />
+                    <span>Battery Saver</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenSystemAppSettings}
+                    className="py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                  >
+                    <Settings className="w-3 h-3 text-slate-500" />
+                    <span>App Settings</span>
                   </button>
                 </div>
               )}
