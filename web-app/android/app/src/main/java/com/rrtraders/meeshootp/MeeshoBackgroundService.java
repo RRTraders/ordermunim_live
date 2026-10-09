@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MeeshoBackgroundService extends Service {
 
-    public static final String CHANNEL_SERVICE = "meesho_bg_service_channel";
+    public static final String CHANNEL_SERVICE = "meesho_silent_sync_v4";
     public static final String CHANNEL_ALERT = "meesho_otp_alert_channel";
     private static final int SERVICE_NOTIFICATION_ID = 9001;
 
@@ -54,7 +54,7 @@ public class MeeshoBackgroundService extends Service {
         prefs = getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
         createNotificationChannels();
 
-        Notification notification = buildServiceNotification("Meesho OTP Service • Active Monitoring");
+        Notification notification = buildServiceNotification();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(SERVICE_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
@@ -94,16 +94,24 @@ public class MeeshoBackgroundService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            // 1. Silent Background Service Channel (MIN importance hides status bar icon and minimizes notification)
+            // Delete legacy channels so Android clears out any old visible settings
+            try {
+                nm.deleteNotificationChannel("meesho_bg_service_channel");
+                nm.deleteNotificationChannel("meesho_bg_service_channel_v2");
+                nm.deleteNotificationChannel("meesho_bg_silent_sync_v3");
+            } catch (Exception ignored) {}
+
+            // 1. Silent Background Service Channel (MIN importance suppresses status bar icon and sound)
             NotificationChannel serviceChannel = new NotificationChannel(
                     CHANNEL_SERVICE,
-                    "Meesho Background Sync",
+                    "OrderMunim Background Sync",
                     NotificationManager.IMPORTANCE_MIN
             );
             serviceChannel.setDescription("Keeps Meesho OTP monitoring active silently");
             serviceChannel.setShowBadge(false);
             serviceChannel.setSound(null, null);
             serviceChannel.enableVibration(false);
+            serviceChannel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
             nm.createNotificationChannel(serviceChannel);
 
             // 2. High-Priority Alert Channel for Live OTPs
@@ -128,7 +136,7 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private Notification buildServiceNotification(String text) {
+    private Notification buildServiceNotification() {
         Intent launchIntent = new Intent(this, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
@@ -137,13 +145,14 @@ public class MeeshoBackgroundService extends Service {
         );
 
         return new NotificationCompat.Builder(this, CHANNEL_SERVICE)
-                .setContentTitle("Meesho OTP Monitor")
-                .setContentText(text)
+                .setContentTitle("OrderMunim")
+                .setContentText("Background sync active")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
-                .setOngoing(true)
+                .setOngoing(false) // Allows user to swipe away on Android 13/14
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setVisibility(NotificationCompat.VISIBILITY_SECRET)
                 .build();
     }

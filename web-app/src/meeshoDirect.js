@@ -145,6 +145,20 @@ export async function openAppSettings() {
 }
 
 /**
+ * Open Android system Notification Settings for OrderMunim
+ */
+export async function openNotificationSettings() {
+  try {
+    if (!isNativeMobile()) return { isNative: false };
+    const res = await NativeMeesho.openNotificationSettings();
+    return res || { success: true };
+  } catch (err) {
+    console.warn('[Native Meesho] openNotificationSettings failed:', err);
+    throw err;
+  }
+}
+
+/**
  * In-App APK Downloader & Installer (Zero Browser, Direct Android Package Installer)
  */
 export async function downloadAndInstallApk(url, onProgress) {
@@ -202,16 +216,16 @@ export async function getAppVersionInfo() {
       console.warn('[Native Meesho] getAppInfo error:', err);
     }
     return {
-      versionCode: 20,
-      versionName: '3.0',
+      versionCode: 21,
+      versionName: '3.1',
       packageName: 'com.rrtraders.meeshootp',
       isNative: true,
       platform: 'android'
     };
   }
   return {
-    versionCode: 20,
-    versionName: '3.0',
+    versionCode: 21,
+    versionName: '3.1',
     packageName: null,
     isNative: false,
     platform: 'web'

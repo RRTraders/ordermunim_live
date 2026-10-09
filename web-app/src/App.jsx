@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo } from './meeshoDirect';
 import { 
   saveEncryptedStoreCredentials, 
   getDecryptedStoreCredentials, 
@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 20;
-const CURRENT_APP_VERSION_NAME = "3.0";
+const CURRENT_APP_VERSION_CODE = 21;
+const CURRENT_APP_VERSION_NAME = "3.1";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -2484,6 +2484,20 @@ export default function App() {
     }
   };
 
+  // Handle Open Notification Settings (allows user to hide background notification without affecting OTP alerts)
+  const handleOpenSystemNotificationSettings = async () => {
+    if (isNativeMobile()) {
+      try {
+        await openNotificationSettings();
+        showToast('Opening Notification Settings. You can turn off "OrderMunim Background Sync" to hide background bar while keeping OTP alerts active.', 'info');
+      } catch (err) {
+        showToast(`Could not open notification settings: ${err.message}`, 'error');
+      }
+    } else {
+      showToast('Notifications are managed via browser permissions.', 'info');
+    }
+  };
+
   // Admin: load all users and all platform stores only when Admin tab is active & unlocked
   useEffect(() => {
     if (activeTab !== 'admin' || !adminAuthenticated) return;
@@ -2726,6 +2740,11 @@ export default function App() {
                       : []);
 
                 const isExpanded = Boolean(expandedStoreIds[acc.id]);
+                const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
+                const vaultCred = findCredentialsForAccount(acc, user?.uid);
+                const isSessionExpired = acc.status === 'session_expired' || Boolean(localSess?.expired);
+                const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || vaultCred?.password);
+
                 return (
                   <div key={acc.id} className={`glass-card ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
                     <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-30 select-none pointer-events-none' : ''}`}>
@@ -2762,18 +2781,20 @@ export default function App() {
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
-                            }}
-                            disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
-                            className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                            title="Check live returns now"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-sky-400' : ''}`} />
-                          </button>
+                          {(!isAutoSync || refreshingId === acc.syncKey || refreshingId === acc.id) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
+                              }}
+                              disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
+                              className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Check live returns now"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-sky-400' : ''}`} />
+                            </button>
+                          )}
                           <div className="p-1 text-slate-400">
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
                           </div>
@@ -4318,7 +4339,8 @@ export default function App() {
                   const isExpanded = Boolean(expandedStoreIds[acc.id]);
                   const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
                   const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                  const isAutoSync = Boolean(localSess || acc.cookies || vaultCred?.password);
+                  const isSessionExpired = acc.status === 'session_expired' || Boolean(localSess?.expired);
+                  const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || vaultCred?.password);
                   const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
                     ? acc.otpList
                     : (acc.currentOtp && acc.currentOtp !== '----'
@@ -4372,18 +4394,20 @@ export default function App() {
 
                           {/* Actions & Chevron */}
                           <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
-                              }}
-                              disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
-                              className="p-1.5 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                              title="Check live returns now"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-[#083B82]' : ''}`} />
-                            </button>
+                            {(!isAutoSync || refreshingId === acc.syncKey || refreshingId === acc.id) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
+                                }}
+                                disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
+                                className="p-1.5 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                                title="Check live returns now"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-[#083B82]' : ''}`} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -5468,22 +5492,32 @@ export default function App() {
 
               {/* Battery optimization & permissions on Android */}
               {isMobileApp && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleFixBatteryOptimization}
+                      className="py-2.5 px-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                    >
+                      <RefreshCw className="w-3 h-3 text-sky-600" />
+                      <span>Battery Saver</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenSystemAppSettings}
+                      className="py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                    >
+                      <Settings className="w-3 h-3 text-slate-500" />
+                      <span>App Settings</span>
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleFixBatteryOptimization}
-                    className="py-2.5 px-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
+                    onClick={handleOpenSystemNotificationSettings}
+                    className="w-full py-2.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <RefreshCw className="w-3 h-3 text-sky-600" />
-                    <span>Battery Saver</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleOpenSystemAppSettings}
-                    className="py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer text-center"
-                  >
-                    <Settings className="w-3 h-3 text-slate-500" />
-                    <span>App Settings</span>
+                    <BellRing className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Notification Settings (Hide Status Bar)</span>
                   </button>
                 </div>
               )}

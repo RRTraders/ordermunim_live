@@ -573,8 +573,6 @@ public class MeeshoDirectPlugin extends Plugin {
     public void stopBackgroundService(PluginCall call) {
         try {
             Context ctx = getContext();
-            SharedPreferences prefs = ctx.getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
-            prefs.edit().putString("sessions", "{}").apply();
             Intent serviceIntent = new Intent(ctx, MeeshoBackgroundService.class);
             ctx.stopService(serviceIntent);
             JSObject ret = new JSObject();
@@ -582,6 +580,28 @@ public class MeeshoDirectPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Failed to stop background service: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.getPackageName());
+            } else {
+                intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(android.net.Uri.parse("package:" + ctx.getPackageName()));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to open notification settings: " + e.getMessage());
         }
     }
 
