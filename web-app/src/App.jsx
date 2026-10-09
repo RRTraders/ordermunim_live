@@ -475,11 +475,11 @@ export default function App() {
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastVersionCode, setBroadcastVersionCode] = useState(19);
-  const [broadcastVersionName, setBroadcastVersionName] = useState('2.9');
-  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.9)!');
-  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.9 improves auto-sync reliability, adds manual one-tap store refresh, auto session reconnect, and updated delivery polling. Please update your app.');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk');
+  const [broadcastVersionCode, setBroadcastVersionCode] = useState(21);
+  const [broadcastVersionName, setBroadcastVersionName] = useState('3.1');
+  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v3.1)!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Version 3.1 brings permanent Meesho credential retention across APK updates, auto-reconnect, and silent background return OTP monitoring. Please update your app.');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
@@ -2262,7 +2262,7 @@ export default function App() {
         versionName: broadcastVersionName.trim() || '1.1',
         title: broadcastTitle.trim() || 'New Update Available!',
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk',
+        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk',
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -2332,7 +2332,7 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.1/meesho_otp.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
