@@ -182,13 +182,13 @@ public class MeeshoBackgroundService extends Service {
             int minute = cal.get(java.util.Calendar.MINUTE);
             int timeInMinutes = hour * 60 + minute;
 
-            int dayStart = 10 * 60; // 10:00 AM (600 minutes)
-            int dayEnd = 18 * 60;   // 06:00 PM (1080 minutes)
+            int dayStart = 8 * 60; // 08:00 AM (480 minutes)
+            int dayEnd = 21 * 60;  // 09:00 PM (1260 minutes)
 
             if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 60; // 60 seconds during daytime active delivery hours (10 AM to 6 PM)
+                return 45; // 45 seconds during daytime active delivery hours (8 AM to 9 PM)
             } else {
-                return 3600; // 1 hour (3600 seconds) during night & morning off-hours (6 PM to next day 10 AM)
+                return 300; // 5 minutes during night & early morning off-hours (9 PM to 8 AM)
             }
         } catch (Exception e) {
             return 60;
@@ -257,6 +257,8 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
+            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+            conn.setRequestProperty("browser-id", browserId);
             if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");
@@ -418,7 +420,7 @@ public class MeeshoBackgroundService extends Service {
             JSONObject postData = new JSONObject();
             postData.put("email", email);
             postData.put("password", password);
-            postData.put("device_id", deviceId);
+            postData.put("device_id", email);
             postData.put("instance", "inst_" + System.currentTimeMillis());
 
             URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
@@ -429,9 +431,13 @@ public class MeeshoBackgroundService extends Service {
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
+            conn.setRequestProperty("identifier", "login");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
+            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+            conn.setRequestProperty("browser-id", browserId);
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");
+            conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
             try (OutputStream os = conn.getOutputStream()) {

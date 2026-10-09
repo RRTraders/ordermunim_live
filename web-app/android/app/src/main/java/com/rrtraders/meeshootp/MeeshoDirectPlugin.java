@@ -62,7 +62,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 JSONObject postData = new JSONObject();
                 postData.put("email", email);
                 postData.put("password", password);
-                postData.put("device_id", deviceId);
+                postData.put("device_id", email);
                 postData.put("instance", instanceId);
 
                 URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
@@ -79,6 +79,8 @@ public class MeeshoDirectPlugin extends Plugin {
                 conn.setRequestProperty("identifier", "login");
                 conn.setRequestProperty("client-type", "d-web");
                 conn.setRequestProperty("client-package-version", "1.0.41");
+                String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+                conn.setRequestProperty("browser-id", browserId);
                 conn.setRequestProperty("Origin", "https://supplier.meesho.com");
                 conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
@@ -331,6 +333,8 @@ public class MeeshoDirectPlugin extends Plugin {
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
+            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+            conn.setRequestProperty("browser-id", browserId);
             if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");

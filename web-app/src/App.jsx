@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 18;
-const CURRENT_APP_VERSION_NAME = "2.8";
+const CURRENT_APP_VERSION_CODE = 19;
+const CURRENT_APP_VERSION_NAME = "2.9";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -475,10 +475,10 @@ export default function App() {
 
   // Admin Broadcast Controls
   const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastVersionCode, setBroadcastVersionCode] = useState(18);
-  const [broadcastVersionName, setBroadcastVersionName] = useState('2.8');
-  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.8)!');
-  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.8 brings high-efficiency battery optimization with smart polling and silent background OTP monitoring. High-priority return alerts pop up instantly. Please update your app.');
+  const [broadcastVersionCode, setBroadcastVersionCode] = useState(19);
+  const [broadcastVersionName, setBroadcastVersionName] = useState('2.9');
+  const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v2.9)!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Version 2.9 improves auto-sync reliability, adds manual one-tap store refresh, auto session reconnect, and updated delivery polling. Please update your app.');
   const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
@@ -1054,6 +1054,22 @@ export default function App() {
           // Guard: Never overwrite Firestore if fetch encountered a network error
           if (otpRes.error || otpRes.expired) {
             console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
+            if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
+              if (sessions[key] && !sessions[key].expired) {
+                sessions[key].expired = true;
+                try {
+                  localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+                  setLocalSessions({ ...sessions });
+                } catch {}
+              }
+              const currentDoc = accountsRef.current?.find(a => a.id === targetDocId || a.syncKey === targetDocId);
+              if (currentDoc && currentDoc.status !== 'session_expired') {
+                await updateDoc(doc(db, 'accounts', targetDocId), {
+                  status: 'session_expired',
+                  lastUpdated: new Date().toISOString()
+                }).catch(() => {});
+              }
+            }
             continue;
           } else {
             if (sessions[key] && sessions[key].expired) {
@@ -1081,14 +1097,12 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          const isSameAsPrev = prevSynced && (
-            prevSynced.currentOtp === newOtp &&
-            prevSynced.courier === newCourier &&
-            prevSynced.handoverCount === newCount &&
-            prevSynced.otpListJson === newOtpListJson
-          );
+          // Check how long ago lastUpdated was written in Firestore
+          const lastUpdatedMs = existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0;
+          const timeSinceLastUpdateMs = Date.now() - lastUpdatedMs;
+          const isStaleTimestamp = !lastUpdatedMs || timeSinceLastUpdateMs > 10 * 60 * 1000; // > 10 mins old or yesterday
 
-          if (isSameAsExisting || isSameAsPrev) {
+          if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             lastSyncedDocRef.current[key] = {
               currentOtp: newOtp,
               courier: newCourier,
@@ -1098,7 +1112,7 @@ export default function App() {
             continue;
           }
 
-          // Data has ACTUALLY changed (new OTP arrived or delivery completed)
+          // Data has changed OR timestamp is older than 10 mins (or from yesterday)
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1106,13 +1120,14 @@ export default function App() {
             otpListJson: newOtpListJson
           };
 
-          // Update Firestore immediately so UI and all devices reflect current OTP instantly
+          // Update Firestore immediately so UI and all devices reflect current OTP and fresh timestamp
           await updateDoc(doc(db, 'accounts', targetDocId), {
             currentOtp: newOtp,
             courier: newCourier,
             handoverCount: newCount,
             dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             otpList: otpRes.otpList || [],
+            status: 'live',
             lastUpdated: new Date().toISOString()
           }).catch(() => {});
         }
@@ -1638,16 +1653,14 @@ export default function App() {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions({ ...sessions });
                 } catch {}
-                // Only open reconnect modal if password is NOT present in local database
-                if (!loginPass) {
-                  const hasActiveOtp = targetAcc?.currentOtp && targetAcc.currentOtp !== '----';
-                  if (targetAcc && !hasActiveOtp) {
-                    setReconnectAccount(targetAcc);
-                    setReconnectPass('');
-                    setReconnectError(`Session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
-                    setShowReconnectModal(true);
-                  }
-                }
+                await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                  status: 'session_expired',
+                  lastUpdated: new Date().toISOString()
+                }).catch(() => {});
+                setReconnectAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email });
+                setReconnectPass('');
+                setReconnectError(`Meesho session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
+                setShowReconnectModal(true);
               }
               showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
               return;
@@ -1665,26 +1678,16 @@ export default function App() {
             const newOtp = otpRes.otp || '----';
             const newCourier = otpRes.courier || 'No Return';
             const newCount = otpRes.handoverCount || 0;
-            const newOtpListJson = JSON.stringify(otpRes.otpList || []);
 
-            const currentAcc = accountsRef.current?.find(a => a.id === (targetAcc?.id || syncKey) || a.syncKey === syncKey);
-            const isSame = currentAcc && (
-              (currentAcc.currentOtp || '----') === newOtp &&
-              (currentAcc.courier || 'No Return') === newCourier &&
-              (currentAcc.handoverCount || 0) === newCount &&
-              JSON.stringify(currentAcc.otpList || []) === newOtpListJson
-            );
-
-            if (!isSame) {
-              await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
-                currentOtp: newOtp,
-                courier: newCourier,
-                handoverCount: newCount,
-                dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                otpList: otpRes.otpList || [],
-                lastUpdated: new Date().toISOString()
-              }).catch(() => {});
-            }
+            await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+              currentOtp: newOtp,
+              courier: newCourier,
+              handoverCount: newCount,
+              dateTime: otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              otpList: otpRes.otpList || [],
+              status: 'live',
+              lastUpdated: new Date().toISOString()
+            }).catch(() => {});
 
             if (otpRes.otp && otpRes.otp !== '----') {
               showToast(`Return OTP for ${storeName}: ${otpRes.otp} (${otpRes.courier || 'Courier'})`, 'success');
@@ -2697,8 +2700,22 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="p-1 text-slate-400">
-                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
+                            }}
+                            disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
+                            className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                            title="Check live returns now"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-sky-400' : ''}`} />
+                          </button>
+                          <div className="p-1 text-slate-400">
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-400' : ''}`} />
+                          </div>
                         </div>
                       </div>
 
@@ -2765,7 +2782,14 @@ export default function App() {
                           {/* Footer Details */}
                           <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
                             <span>Checked: {acc.dateTime || 'Just now'}</span>
-                            <span>Total: {acc.handoverCount || 0} parcels</span>
+                            {acc.status === 'session_expired' ? (
+                              <span className="flex items-center gap-1 text-amber-400 font-semibold">
+                                <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+                                Session Expired
+                              </span>
+                            ) : (
+                              <span>Total: {acc.handoverCount || 0} parcels</span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -4287,20 +4311,18 @@ export default function App() {
 
                           {/* Actions & Chevron */}
                           <div className="flex items-center gap-1 shrink-0">
-                            {!isAutoSync && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleManualRefresh(acc.syncKey, acc.storeName);
-                                }}
-                                disabled={refreshingId === acc.syncKey}
-                                className="p-1.5 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                                title="Check for live OTP now"
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === acc.syncKey ? 'animate-spin text-[#083B82]' : ''}`} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManualRefresh(acc.syncKey || acc.id, acc.storeName);
+                              }}
+                              disabled={refreshingId === acc.syncKey || refreshingId === acc.id}
+                              className="p-1.5 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Check live returns now"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${(refreshingId === acc.syncKey || refreshingId === acc.id) ? 'animate-spin text-[#083B82]' : ''}`} />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -4381,8 +4403,25 @@ export default function App() {
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {acc.dateTime || 'Just now'}</span>
-                              {isAutoSync ? (
+                              {acc.status === 'session_expired' || localSess?.expired ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReconnectAccount(acc);
+                                    setReconnectPass('');
+                                    setReconnectError('');
+                                    setShowReconnectModal(true);
+                                  }}
+                                  className="flex items-center gap-1 text-amber-600 hover:text-amber-700 font-bold cursor-pointer underline"
+                                  title="Meesho session expired. Tap to reconnect."
+                                >
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                                  Session Expired • Reconnect
+                                </button>
+                              ) : isAutoSync ? (
                                 <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                   Auto-Sync Active
                                 </span>
                               ) : (
