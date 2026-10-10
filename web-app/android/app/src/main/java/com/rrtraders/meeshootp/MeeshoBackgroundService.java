@@ -331,8 +331,7 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
-            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
-            conn.setRequestProperty("browser-id", browserId);
+            conn.setRequestProperty("browser-id", getStableBrowserId());
             if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");
@@ -583,7 +582,7 @@ public class MeeshoBackgroundService extends Service {
             postData.put("email", email);
             postData.put("password", password);
             postData.put("device_id", email);
-            postData.put("instance", "inst_" + System.currentTimeMillis());
+            postData.put("instance", getStableInstanceId());
 
             URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
             conn = (HttpURLConnection) url.openConnection();
@@ -596,8 +595,7 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("identifier", "login");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
-            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
-            conn.setRequestProperty("browser-id", browserId);
+            conn.setRequestProperty("browser-id", getStableBrowserId());
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");
             conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
@@ -656,6 +654,34 @@ public class MeeshoBackgroundService extends Service {
             }
         }
         return "";
+    }
+
+    private String getStableBrowserId() {
+        try {
+            if (prefs == null) prefs = getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            String bid = prefs.getString("stable_browser_id", "");
+            if (bid.isEmpty()) {
+                bid = android.util.Base64.encodeToString(("om_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+                prefs.edit().putString("stable_browser_id", bid).apply();
+            }
+            return bid;
+        } catch (Exception e) {
+            return "b21fc3RhYmxlX21lZXNob19vdHA=";
+        }
+    }
+
+    private String getStableInstanceId() {
+        try {
+            if (prefs == null) prefs = getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            String inst = prefs.getString("stable_instance_id", "");
+            if (inst.isEmpty()) {
+                inst = "inst_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
+                prefs.edit().putString("stable_instance_id", inst).apply();
+            }
+            return inst;
+        } catch (Exception e) {
+            return "inst_default_order_munim";
+        }
     }
 
     private String readStream(InputStream is) {

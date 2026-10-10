@@ -58,7 +58,7 @@ public class MeeshoDirectPlugin extends Plugin {
         getBridge().execute(() -> {
             try {
                 String deviceId = getDeviceFingerprint();
-                String instanceId = "inst_" + System.currentTimeMillis();
+                String instanceId = getStableInstanceId();
 
                 JSONObject postData = new JSONObject();
                 postData.put("email", email);
@@ -80,8 +80,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 conn.setRequestProperty("identifier", "login");
                 conn.setRequestProperty("client-type", "d-web");
                 conn.setRequestProperty("client-package-version", "1.0.41");
-                String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
-                conn.setRequestProperty("browser-id", browserId);
+                conn.setRequestProperty("browser-id", getStableBrowserId());
                 conn.setRequestProperty("Origin", "https://supplier.meesho.com");
                 conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
@@ -334,8 +333,7 @@ public class MeeshoDirectPlugin extends Plugin {
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
             conn.setRequestProperty("client-type", "d-web");
             conn.setRequestProperty("client-package-version", "1.0.41");
-            String browserId = android.util.Base64.encodeToString((System.currentTimeMillis() + " + meesho_otp").getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
-            conn.setRequestProperty("browser-id", browserId);
+            conn.setRequestProperty("browser-id", getStableBrowserId());
             if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", "https://supplier.meesho.com");
@@ -421,22 +419,14 @@ public class MeeshoDirectPlugin extends Plugin {
                         otpObj.put("handoverCount", count);
                         totalCount += count;
 
-                        String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                        String currentCheckTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                        otpObj.put("dateTime", currentCheckTime);
                         if (exp.isEmpty()) {
                             exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
                         }
                         if (!exp.isEmpty()) {
-                            try {
-                                if (exp.matches("\\d+")) {
-                                    timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(Long.parseLong(exp)));
-                                } else if (exp.length() >= 19) {
-                                    SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-                                    Date parsedDate = iso.parse(exp.substring(0, 19));
-                                    if (parsedDate != null) timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(parsedDate);
-                                }
-                            } catch (Exception ignored) {}
+                            otpObj.put("otpExpiry", exp);
                         }
-                        otpObj.put("dateTime", timeStr);
 
                         // AWBs
                         JSONArray awbs = item.optJSONArray("awbs");
@@ -856,6 +846,34 @@ public class MeeshoDirectPlugin extends Plugin {
             }
         } catch (Exception ignored) {}
         call.resolve();
+    }
+
+    private String getStableBrowserId() {
+        try {
+            SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            String bid = prefs.getString("stable_browser_id", "");
+            if (bid.isEmpty()) {
+                bid = android.util.Base64.encodeToString(("om_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+                prefs.edit().putString("stable_browser_id", bid).apply();
+            }
+            return bid;
+        } catch (Exception e) {
+            return "b21fc3RhYmxlX21lZXNob19vdHA=";
+        }
+    }
+
+    private String getStableInstanceId() {
+        try {
+            SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+            String inst = prefs.getString("stable_instance_id", "");
+            if (inst.isEmpty()) {
+                inst = "inst_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
+                prefs.edit().putString("stable_instance_id", inst).apply();
+            }
+            return inst;
+        } catch (Exception e) {
+            return "inst_default_order_munim";
+        }
     }
 
     private String readStream(InputStream is) {
