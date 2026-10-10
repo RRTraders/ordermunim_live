@@ -1,21 +1,25 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Capacitor Plugin & Bridge Preservation Rules
+-keep public class * extends com.getcapacitor.Plugin { *; }
+-keepclassmembers class * {
+    @com.getcapacitor.PluginMethod public *;
+}
+-keep public class * extends com.getcapacitor.BridgeActivity { *; }
+-keep class com.getcapacitor.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep Core Manifest Components
+-keep public class com.rrtraders.meeshootp.MainActivity { *; }
+-keep public class com.rrtraders.meeshootp.MeeshoBackgroundService extends android.app.Service { *; }
+-keep public class com.rrtraders.meeshootp.PollAlarmReceiver extends android.content.BroadcastReceiver { *; }
+-keep public class com.rrtraders.meeshootp.BootReceiver extends android.content.BroadcastReceiver { *; }
+-keep public class com.rrtraders.meeshootp.CopyOtpReceiver extends android.content.BroadcastReceiver { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Security Shield
+-keep class com.rrtraders.meeshootp.SecurityShield {
+    public static java.lang.String get*(...);
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Aggressive Obfuscation & Bytecode Scrambling
+-dontusemixedcaseclassnames
+-overloadaggressively
+-renamesourcefileattribute SourceFile
+-keepattributes *Annotation*

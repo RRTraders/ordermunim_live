@@ -342,7 +342,7 @@ public class MeeshoBackgroundService extends Service {
             if (cookies.isEmpty()) return;
 
             // Fetch Delivery OTPs
-            URL url = new URL("https://supplier.meesho.com/api/fulfillment/returnRto/fetchDeliveryOTPs");
+            URL url = new URL(SecurityShield.getFetchDeliveryOtpsUrl());
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(8000);
@@ -352,13 +352,13 @@ public class MeeshoBackgroundService extends Service {
 
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-            conn.setRequestProperty("client-type", "d-web");
-            conn.setRequestProperty("client-package-version", "1.0.41");
-            conn.setRequestProperty("browser-id", getStableBrowserId());
-            if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
+            conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+            conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+            if (!identifier.isEmpty()) conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
             conn.setRequestProperty("Cookie", cookies);
-            conn.setRequestProperty("Origin", "https://supplier.meesho.com");
-            conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/fulfillment/" + identifier + "/returns/overview");
+            conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+            conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
             JSONObject payload = new JSONObject();
@@ -496,8 +496,7 @@ public class MeeshoBackgroundService extends Service {
             if (cookies != null && !cookies.isEmpty()) {
                 queryParams += "&updateMask.fieldPaths=cookies";
             }
-            queryParams += "&key=AIzaSyBXcH8anFAy8xWfQnfHcb1Pyf9J1aM0DDE";
-            URL url = new URL("https://firestore.googleapis.com/v1/projects/meesho-otp-app/databases/(default)/documents/accounts/" + encodedDocId + queryParams);
+            URL url = new URL(SecurityShield.getFirestoreAccountsUrl(encodedDocId, queryParams));
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
@@ -604,7 +603,7 @@ public class MeeshoBackgroundService extends Service {
             postData.put("device_id", email);
             postData.put("instance", getStableInstanceId());
 
-            URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
+            URL url = new URL(SecurityShield.getV2LoginUrl());
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(15000);
@@ -612,12 +611,12 @@ public class MeeshoBackgroundService extends Service {
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-            conn.setRequestProperty("identifier", "login");
-            conn.setRequestProperty("client-type", "d-web");
-            conn.setRequestProperty("client-package-version", "1.0.41");
-            conn.setRequestProperty("browser-id", getStableBrowserId());
-            conn.setRequestProperty("Origin", "https://supplier.meesho.com");
-            conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
+            conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), "login");
+            conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+            conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+            conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+            conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
             try (OutputStream os = conn.getOutputStream()) {

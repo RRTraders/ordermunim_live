@@ -66,7 +66,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 postData.put("device_id", email);
                 postData.put("instance", instanceId);
 
-                URL url = new URL("https://supplier.meesho.com/api/container/user/v2-login");
+                URL url = new URL(SecurityShield.getV2LoginUrl());
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setConnectTimeout(15000);
@@ -77,12 +77,12 @@ public class MeeshoDirectPlugin extends Plugin {
 
                 conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
                 conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                conn.setRequestProperty("identifier", "login");
-                conn.setRequestProperty("client-type", "d-web");
-                conn.setRequestProperty("client-package-version", "1.0.41");
-                conn.setRequestProperty("browser-id", getStableBrowserId());
-                conn.setRequestProperty("Origin", "https://supplier.meesho.com");
-                conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/root/login");
+                conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), "login");
+                conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+                conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
                 byte[] bodyBytes = postData.toString().getBytes(StandardCharsets.UTF_8);
@@ -129,7 +129,7 @@ public class MeeshoDirectPlugin extends Plugin {
                     String identifier = cookieIdentifier;
                     long supplierId = cookieSupplierId;
                     try {
-                        URL regUrl = new URL("https://supplier.meesho.com/api/container/supplier/fetch-registration-status");
+                        URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
                         HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
                         regConn.setRequestMethod("POST");
                         regConn.setConnectTimeout(10000);
@@ -137,10 +137,10 @@ public class MeeshoDirectPlugin extends Plugin {
                         regConn.setDoOutput(true);
                         regConn.setRequestProperty("Content-Type", "application/json");
                         regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        regConn.setRequestProperty("client-type", "d-web");
-                        regConn.setRequestProperty("client-package-version", "1.0.41");
+                        regConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                        regConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
                         regConn.setRequestProperty("Cookie", cookies);
-                        regConn.setRequestProperty("Origin", "https://supplier.meesho.com");
+                        regConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
                         regConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
                         try (OutputStream os = regConn.getOutputStream()) {
                             os.write("{}".getBytes(StandardCharsets.UTF_8));
@@ -169,7 +169,7 @@ public class MeeshoDirectPlugin extends Plugin {
                     // 2. Fetch Supplier Details to get real Account Holder Name
                     String accountHolderName = "";
                     try {
-                        URL detUrl = new URL("https://supplier.meesho.com/api/container/supplier/getSupplierDetails");
+                        URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
                         HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
                         detConn.setRequestMethod("POST");
                         detConn.setConnectTimeout(10000);
@@ -177,12 +177,12 @@ public class MeeshoDirectPlugin extends Plugin {
                         detConn.setDoOutput(true);
                         detConn.setRequestProperty("Content-Type", "application/json");
                         detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        detConn.setRequestProperty("client-type", "d-web");
-                        detConn.setRequestProperty("client-package-version", "1.0.41");
-                        detConn.setRequestProperty("identifier", identifier);
+                        detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                        detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                        detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
                         detConn.setRequestProperty("Cookie", cookies);
-                        detConn.setRequestProperty("Origin", "https://supplier.meesho.com");
-                        detConn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/fulfillment/" + identifier + "/returns/overview");
+                        detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                        detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
                         detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
                         JSONObject detBody = new JSONObject();
@@ -321,7 +321,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 }
             }
 
-            URL url = new URL("https://supplier.meesho.com/api/fulfillment/returnRto/fetchDeliveryOTPs");
+            URL url = new URL(SecurityShield.getFetchDeliveryOtpsUrl());
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(10000);
@@ -331,13 +331,13 @@ public class MeeshoDirectPlugin extends Plugin {
 
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-            conn.setRequestProperty("client-type", "d-web");
-            conn.setRequestProperty("client-package-version", "1.0.41");
-            conn.setRequestProperty("browser-id", getStableBrowserId());
-            if (!identifier.isEmpty()) conn.setRequestProperty("identifier", identifier);
+            conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+            conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+            if (!identifier.isEmpty()) conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
             conn.setRequestProperty("Cookie", cookies);
-            conn.setRequestProperty("Origin", "https://supplier.meesho.com");
-            conn.setRequestProperty("Referer", "https://supplier.meesho.com/panel/v3/new/fulfillment/" + identifier + "/returns/overview");
+            conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+            conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
             JSONObject payload = new JSONObject();
