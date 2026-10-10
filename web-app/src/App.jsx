@@ -1385,8 +1385,8 @@ export default function App() {
     // 1. Instant zero-delay poll immediately on mount
     pollAllNativeSessions();
 
-    // 2. Poll every 5 seconds while app is running
-    const interval = setInterval(pollAllNativeSessions, 5000);
+    // 2. Poll every 30 seconds while app is running (prevents radio modem battery drain and reduces data by 85%)
+    const interval = setInterval(pollAllNativeSessions, 30000);
 
     // 3. Instant trigger whenever user clicks notification or returns to app
     const onVisibilityChange = () => {
