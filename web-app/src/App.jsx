@@ -4740,28 +4740,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Desktop Operational Guide Cards (2 Cards) */}
-            <div className="hidden md:grid md:grid-cols-2 gap-4 pt-2">
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
-                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#083B82]">
-                  <Truck className="w-4 h-4 text-sky-600" />
-                  Courier Handover Best Practice
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Always verify that the parcel count announced by the delivery partner matches the parcel count displayed next to their courier name before sharing the OTP.
-                </p>
-              </div>
-
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
-                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#083B82]">
-                  <Smartphone className="w-4 h-4 text-orange-500" />
-                  OrdersMunim Mobile App
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Keep the Android app installed on your smartphone to ensure background OTP sync continues seamlessly even when your PC is turned off.
-                </p>
-              </div>
-            </div>
           </>
         ) : (
           /* ================= HOME DASHBOARD VIEW (ORDERMUNIM HUB) ================= */
