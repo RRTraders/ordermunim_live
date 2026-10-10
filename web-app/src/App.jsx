@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 28;
-const CURRENT_APP_VERSION_NAME = "3.8";
+const CURRENT_APP_VERSION_CODE = 29;
+const CURRENT_APP_VERSION_NAME = "3.9";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1385,8 +1385,28 @@ export default function App() {
     // 1. Instant zero-delay poll immediately on mount
     pollAllNativeSessions();
 
-    // 2. Poll every 30 seconds while app is running (prevents radio modem battery drain and reduces data by 85%)
-    const interval = setInterval(pollAllNativeSessions, 30000);
+    // 2. Dynamic polling schedule:
+    // Daytime (10:00 AM to 06:00 PM): every 60 seconds
+    // Rest of time (06:00 PM to 10:00 AM): every 1 hour (3600 seconds)
+    const getPollIntervalMs = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      if (hour >= 10 && hour < 18) {
+        return 60 * 1000; // 60 seconds
+      }
+      return 3600 * 1000; // 1 hour (3600 seconds)
+    };
+
+    let pollTimerId = null;
+    const scheduleNextForegroundPoll = () => {
+      const delay = getPollIntervalMs();
+      pollTimerId = setTimeout(async () => {
+        await pollAllNativeSessions();
+        scheduleNextForegroundPoll();
+      }, delay);
+    };
+
+    scheduleNextForegroundPoll();
 
     // 3. Instant trigger whenever user clicks notification or returns to app
     const onVisibilityChange = () => {
@@ -1413,7 +1433,7 @@ export default function App() {
     }
 
     return () => {
-      clearInterval(interval);
+      if (pollTimerId) clearTimeout(pollTimerId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
       if (appStateListener && appStateListener.remove) {
