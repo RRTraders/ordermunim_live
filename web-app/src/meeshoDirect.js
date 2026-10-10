@@ -69,10 +69,14 @@ export async function directFetchDeliveryOTPs(identifier, cookies, supplierId) {
 /**
  * Sync active accounts to Android native background service for 24/7 background alerts
  */
-export async function syncBackgroundSessions(sessionsObj, forceWipe = false) {
+export async function syncBackgroundSessions(sessionsObj, forceWipe = false, userId = '') {
   try {
     if (!isNativeMobile()) return;
-    await NativeMeesho.syncSessions({ sessions: sessionsObj, forceWipe: Boolean(forceWipe) });
+    await NativeMeesho.syncSessions({ 
+      sessions: sessionsObj, 
+      forceWipe: Boolean(forceWipe),
+      userId: userId || ''
+    });
   } catch (err) {
     console.warn('[Native Meesho] syncSessions failed:', err);
   }

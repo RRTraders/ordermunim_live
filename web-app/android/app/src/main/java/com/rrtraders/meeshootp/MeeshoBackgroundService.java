@@ -221,6 +221,7 @@ public class MeeshoBackgroundService extends Service {
 
     private void pollAllAccounts() {
         try {
+            String currentUid = prefs.getString("current_user_uid", "");
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
 
@@ -241,6 +242,14 @@ public class MeeshoBackgroundService extends Service {
             for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
                 String syncKey = it.next();
                 JSONObject sess = allSessions.getJSONObject(syncKey);
+
+                // Cross-Account Isolation Guard:
+                // Skip any session belonging to another user
+                String sessUid = sess.optString("userId", "");
+                if (!currentUid.isEmpty() && !sessUid.isEmpty() && !currentUid.equals(sessUid)) {
+                    continue;
+                }
+
                 String ident = sess.optString("identifier", "");
                 long supId = sess.optLong("supplierId", 0);
                 String dedupKey = !ident.isEmpty() ? ident : (supId > 0 ? ("sup_" + supId) : syncKey);
@@ -512,6 +521,18 @@ public class MeeshoBackgroundService extends Service {
 
     private void triggerOtpAlert(String syncKey, String storeName, String courier, String otp, int count, int index) {
         try {
+            // Guard: Verify session belongs to active device user before triggering notification
+            String currentUid = prefs.getString("current_user_uid", "");
+            String sessionsJson = prefs.getString("sessions", "{}");
+            JSONObject allSessions = new JSONObject(sessionsJson);
+            if (allSessions.has(syncKey)) {
+                JSONObject s = allSessions.getJSONObject(syncKey);
+                String sUid = s.optString("userId", "");
+                if (!currentUid.isEmpty() && !sUid.isEmpty() && !currentUid.equals(sUid)) {
+                    return; // Cross-account protection: Skip alerting for another user!
+                }
+            }
+
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 

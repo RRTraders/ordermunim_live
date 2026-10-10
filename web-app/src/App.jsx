@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 26;
-const CURRENT_APP_VERSION_NAME = "3.6";
+const CURRENT_APP_VERSION_CODE = 27;
+const CURRENT_APP_VERSION_NAME = "3.7";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -745,7 +745,7 @@ export default function App() {
           localStorage.removeItem('cached_user_profile');
           clearVault();
           if (isNativeMobile()) {
-            syncBackgroundSessions({}, true);
+            syncBackgroundSessions({}, true, '');
           }
         } catch {}
         setLocalSessions({});
@@ -1019,6 +1019,7 @@ export default function App() {
         if (!existing && (acc.cookies || restoredPassword || restoredEmail || acc.email)) {
           const newSess = {
             docId: acc.id || '',
+            userId: user.uid,
             email: restoredEmail,
             password: restoredPassword,
             identifier: acc.identifier || (vaultCred?.identifier || ''),
@@ -1035,6 +1036,7 @@ export default function App() {
           }
           changed = true;
         } else if (existing) {
+          if (user.uid) existing.userId = user.uid;
           if (acc.id) existing.docId = acc.id;
           if (!existing.password && restoredPassword) {
             existing.password = restoredPassword;
@@ -1070,6 +1072,7 @@ export default function App() {
               const updatedSess = {
                 ...(cur[key] || {}),
                 docId: acc.id,
+                userId: user.uid,
                 email: restoredEmail,
                 password: restoredPassword,
                 identifier: freshIdent,
@@ -1084,7 +1087,7 @@ export default function App() {
               try {
                 localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
                 setLocalSessions({ ...cur });
-                syncBackgroundSessions(cur);
+                syncBackgroundSessions(cur, false, user.uid);
                 saveEncryptedStoreCredentials(key, updatedSess, user.uid);
               } catch {}
 
@@ -1104,7 +1107,7 @@ export default function App() {
       if (changed) {
         localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
         setLocalSessions(cur);
-        syncBackgroundSessions(cur);
+        syncBackgroundSessions(cur, false, user.uid);
       }
     } catch (e) {}
   }, [accounts, user]);
@@ -1146,6 +1149,8 @@ export default function App() {
 
           for (const [k, v] of Object.entries(nativeStored)) {
             if (!v) continue;
+            // Cross-user guard: skip any session that belongs to another user
+            if (user && v.userId && v.userId !== user.uid) continue;
             if (!merged[k]) {
               merged[k] = v;
               hasUpdates = true;
@@ -1181,7 +1186,7 @@ export default function App() {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
         if (rawSessions) {
           const sessions = JSON.parse(rawSessions);
-          syncBackgroundSessions(sessions);
+          syncBackgroundSessions(sessions, false, user?.uid);
         }
         startBackgroundMonitoring();
       } catch (e) {}
@@ -1286,7 +1291,7 @@ export default function App() {
                 try {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions({ ...sessions });
-                  syncBackgroundSessions(sessions);
+                  syncBackgroundSessions(sessions, false, user?.uid);
                 } catch {}
                 await updateDoc(doc(db, 'accounts', targetDocId), {
                   status: 'live',
@@ -1754,7 +1759,7 @@ export default function App() {
     if (isNativeMobile()) {
       try {
         await stopBackgroundMonitoring();
-        await syncBackgroundSessions({}, true);
+        await syncBackgroundSessions({}, true, '');
       } catch {}
     }
     try {
@@ -1792,6 +1797,7 @@ export default function App() {
           sess = {
             email: targetAcc.email || '',
             password: '',
+            userId: user?.uid,
             identifier: targetAcc.identifier || '',
             supplierId: targetAcc.supplierId || 0,
             storeName: targetAcc.storeName || storeName,
@@ -1801,13 +1807,14 @@ export default function App() {
           try {
             localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
             setLocalSessions(sessions);
-            syncBackgroundSessions(sessions);
+            syncBackgroundSessions(sessions, false, user?.uid);
           } catch {}
         }
 
         // 2. If we have session / credentials, fetch directly
-        const vaultCred = findCredentialsForAccount(targetAcc || { id: syncKey, syncKey });
+        const vaultCred = findCredentialsForAccount(targetAcc || { id: syncKey, syncKey }, user?.uid);
         if (sess) {
+          if (user?.uid) sess.userId = user.uid;
           if (!sess.password && vaultCred?.password) sess.password = vaultCred.password;
           if (!sess.email && vaultCred?.email) sess.email = vaultCred.email;
 
@@ -1822,11 +1829,12 @@ export default function App() {
               sess.supplierId = fresh.supplierId || sess.supplierId || targetAcc?.supplierId || 0;
               sess.email = loginEmail;
               sess.password = loginPass;
+              sess.userId = user?.uid;
               sessions[syncKey] = sess;
               try {
                 localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                 setLocalSessions(sessions);
-                syncBackgroundSessions(sessions);
+                syncBackgroundSessions(sessions, false, user?.uid);
               } catch {}
               await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
                 cookies: fresh.cookies,
@@ -1852,11 +1860,12 @@ export default function App() {
                 sessions[syncKey].storeName = fresh.storeName || sess.storeName;
                 sessions[syncKey].password = loginPass;
                 sessions[syncKey].email = loginEmail;
+                sessions[syncKey].userId = user?.uid;
                 sessions[syncKey].expired = false;
                 try {
                   localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
                   setLocalSessions(sessions);
-                  syncBackgroundSessions(sessions);
+                  syncBackgroundSessions(sessions, false, user?.uid);
                 } catch {}
                 await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
                   status: 'live',
@@ -1939,6 +1948,7 @@ export default function App() {
               const freshIdent = fresh.identifier || targetAcc.identifier || '';
               const freshSupId = fresh.supplierId || targetAcc.supplierId || 0;
               const newSess = {
+                userId: user?.uid,
                 email: loginEmail,
                 password: vaultCred.password,
                 identifier: freshIdent,
@@ -1953,7 +1963,7 @@ export default function App() {
               if (targetAcc.id) curSess[targetAcc.id] = newSess;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(curSess));
               setLocalSessions(curSess);
-              syncBackgroundSessions(curSess);
+              syncBackgroundSessions(curSess, false, user?.uid);
               const otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
               const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               setLiveCheckedTimes(prev => ({
@@ -2042,6 +2052,7 @@ export default function App() {
       const curSessions = raw ? JSON.parse(raw) : {};
       const key = reconnectAccount.syncKey || reconnectAccount.id;
       const sessData = {
+        userId: user?.uid,
         email: email.trim(),
         password: reconnectPass,
         identifier: res.identifier || reconnectAccount.identifier || '',
@@ -2055,7 +2066,7 @@ export default function App() {
       if (reconnectAccount.syncKey) curSessions[reconnectAccount.syncKey] = sessData;
       localStorage.setItem('native_meesho_sessions', JSON.stringify(curSessions));
       setLocalSessions({ ...curSessions });
-      syncBackgroundSessions(curSessions);
+      syncBackgroundSessions(curSessions, false, user?.uid);
 
       // 2. Update Firestore so all devices get live status & cookies (NEVER password)
       await updateDoc(doc(db, 'accounts', reconnectAccount.id), {
@@ -2280,6 +2291,7 @@ export default function App() {
           const raw = localStorage.getItem('native_meesho_sessions');
           const sessions = raw ? JSON.parse(raw) : {};
           const sessObj = {
+            userId: user?.uid,
             email: cleanEmail,
             password: meeshoPass,
             identifier: data?.identifier || existingStore?.identifier || '',
@@ -2294,7 +2306,7 @@ export default function App() {
           sessions[targetSyncKey] = sessObj;
           localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
           setLocalSessions({ ...sessions });
-          syncBackgroundSessions(sessions);
+          syncBackgroundSessions(sessions, false, user?.uid);
         } catch (e) {}
       }
 
@@ -2355,7 +2367,7 @@ export default function App() {
                 const sessions = JSON.parse(raw);
                 delete sessions[accId];
                 localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-                syncBackgroundSessions(sessions);
+                syncBackgroundSessions(sessions, false, user?.uid);
               }
             } catch {}
           }
