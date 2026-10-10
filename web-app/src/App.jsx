@@ -2530,6 +2530,11 @@ export default function App() {
       return { shouldPrompt: false };
     }
 
+    // CRITICAL: If user has already dismissed or downloaded this update, NEVER show dialog again!
+    if (updateDismissed || (dismissedUpdateCode && Number(dismissedUpdateCode) >= targetCode)) {
+      return { shouldPrompt: false };
+    }
+
     const mode = appUpdateConfig.updateMode || 'optional';
     const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.3/meesho_otp.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
