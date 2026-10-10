@@ -496,7 +496,9 @@ async function checkReturnsForSession(syncKey, docFields = null) {
   return result;
 }
 
-// Auto-refresh every 20 seconds (Instant sync)
+// Auto-refresh interval disabled: Polling is handled 100% by the native Android mobile app on Indian cellular/WiFi IP.
+// Cloud datacenter IPs (Render/US) must NEVER poll Meesho to prevent 403 Session Expired conflicts.
+/*
 setInterval(async () => {
   try {
     const res = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts`);
@@ -510,6 +512,7 @@ setInterval(async () => {
     }
   } catch (e) { log(`[Auto-Sync] Interval error: ${e.message}`); }
 }, 20 * 1000);
+*/
 
 
 // =====================================================================

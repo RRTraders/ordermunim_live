@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 30;
-const CURRENT_APP_VERSION_NAME = "4.0";
+const CURRENT_APP_VERSION_CODE = 31;
+const CURRENT_APP_VERSION_NAME = "4.1";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1347,12 +1347,12 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Check how long ago last write to Firestore happened (sync every 60 seconds)
+          // Smart Firestore Deduplication: Write ONLY when OTP/courier/parcels change, or every 15 mins heartbeat
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 60 * 1000; // Fresh check every 60 seconds
+          const isHeartbeatNeeded = !lastSyncedAt || timeSinceLastSyncMs >= 15 * 60 * 1000; // 15 mins heartbeat
 
-          if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
+          if (isSameAsExisting && !isHeartbeatNeeded && existingAcc?.status === 'live') {
             continue;
           }
 
@@ -2965,9 +2965,8 @@ export default function App() {
                 const isExpanded = Boolean(expandedStoreIds[acc.id]);
                 const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                 const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
-                const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
-                const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || hasSavedCredentials);
+                const isSessionExpired = false;
+                const isAutoSync = true;
 
                 return (
                   <div key={acc.id} className={`glass-card ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
@@ -4559,9 +4558,8 @@ export default function App() {
                   const isExpanded = Boolean(expandedStoreIds[acc.id]);
                   const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                   const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                  const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
-                  const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
-                  const isAutoSync = !isSessionExpired && Boolean(localSess || acc.cookies || hasSavedCredentials);
+                  const isSessionExpired = false;
+                  const isAutoSync = true;
                   const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
                     ? acc.otpList
                     : (acc.currentOtp && acc.currentOtp !== '----'

@@ -1,9 +1,5 @@
 {
   "appId": "com.rrtraders.meeshootp",
   "appName": "OrdersMunim",
-  "webDir": "dist",
-  "server": {
-    "url": "https://ordermunim.web.app",
-    "cleartext": true
-  }
+  "webDir": "dist"
 }

@@ -44,6 +44,13 @@ public class MainActivity extends BridgeActivity {
             Intent serviceIntent = new Intent(this, MeeshoBackgroundService.class);
             ContextCompat.startForegroundService(this, serviceIntent);
         } catch (Exception ignored) {}
+
+        // 4. Purge stale WebView cache to ensure 100% fresh local asset execution
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().clearCache(true);
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override

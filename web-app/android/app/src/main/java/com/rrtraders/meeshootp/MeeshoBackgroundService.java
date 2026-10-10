@@ -246,7 +246,7 @@ public class MeeshoBackgroundService extends Service {
                 // Strictly only poll sessions matching the current logged-in user!
                 if (!currentUid.isEmpty()) {
                     String sessUid = sess.optString("userId", "");
-                    if (!currentUid.equals(sessUid)) {
+                    if (!sessUid.isEmpty() && !currentUid.equals(sessUid)) {
                         continue;
                     }
                 }
@@ -429,7 +429,13 @@ public class MeeshoBackgroundService extends Service {
 
                         if (!firstFound) {
                             firstFound = true;
-                            syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
+                            String lastPushedKey = "last_fs_pushed_" + syncKey;
+                            String prevPushed = prefs.getString(lastPushedKey, "");
+                            String payloadSig = otp + "_" + courier + "_" + count;
+                            if (!payloadSig.equals(prevPushed)) {
+                                syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
+                                prefs.edit().putString(lastPushedKey, payloadSig).apply();
+                            }
                         }
                     }
                 } else {
@@ -442,12 +448,18 @@ public class MeeshoBackgroundService extends Service {
                     }
                     editor.apply();
 
-                    // Sync fresh timestamp to Firestore every 60 seconds even while running silently in background
-                    String lastSyncKey = "last_fs_sync_" + syncKey;
-                    long lastSyncMs = prefs.getLong(lastSyncKey, 0);
-                    if (System.currentTimeMillis() - lastSyncMs >= 60 * 1000) {
+                    // Smart Firestore Sync: Only write if there WAS an active OTP previously (to clear it), or 15 mins heartbeat elapsed
+                    String lastPushedKey = "last_fs_pushed_" + syncKey;
+                    String prevPushed = prefs.getString(lastPushedKey, "");
+                    String lastHeartbeatKey = "last_fs_heartbeat_" + syncKey;
+                    long lastHeartbeatMs = prefs.getLong(lastHeartbeatKey, 0);
+
+                    if (!"NO_RETURN".equals(prevPushed) || System.currentTimeMillis() - lastHeartbeatMs >= 15 * 60 * 1000L) {
                         syncToFirestore(sess.optString("docId", syncKey), "----", "No Return", 0, timeStr, "live");
-                        prefs.edit().putLong(lastSyncKey, System.currentTimeMillis()).apply();
+                        prefs.edit()
+                            .putString(lastPushedKey, "NO_RETURN")
+                            .putLong(lastHeartbeatKey, System.currentTimeMillis())
+                            .apply();
                     }
                 }
             }
@@ -529,7 +541,7 @@ public class MeeshoBackgroundService extends Service {
                 JSONObject s = allSessions.getJSONObject(syncKey);
                 if (!currentUid.isEmpty()) {
                     String sUid = s.optString("userId", "");
-                    if (!currentUid.equals(sUid)) {
+                    if (!sUid.isEmpty() && !currentUid.equals(sUid)) {
                         return; // Cross-account protection: Strictly skip alerting for another user!
                     }
                 }
