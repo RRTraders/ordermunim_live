@@ -603,7 +603,7 @@ export default function App() {
   const [broadcastVersionName, setBroadcastVersionName] = useState('3.2');
   const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v3.2)!');
   const [broadcastMessage, setBroadcastMessage] = useState('Version 3.2 completely silences background sync with 0% notification bar presence while keeping instant high-priority return OTP alerts.');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.2/meesho_otp.apk');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
@@ -2442,7 +2442,7 @@ export default function App() {
         versionName: broadcastVersionName.trim() || '1.1',
         title: broadcastTitle.trim() || 'New Update Available!',
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.2/meesho_otp.apk',
+        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk',
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -2517,7 +2517,7 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/v3.3/meesho_otp.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
