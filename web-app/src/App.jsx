@@ -382,7 +382,12 @@ export default function App() {
   const [reconnectLoading, setReconnectLoading] = useState(false);
   const [reconnectError, setReconnectError] = useState('');
 
-  // Follow Us Store Profile Links State
+  // Follow Us Store Profile Links State (Defaults to 5 free profiles for all sellers)
+  const getMaxFollowStoresAllowed = (prof) => {
+    if (typeof prof?.maxFollowStores === 'number') return prof.maxFollowStores;
+    return Math.max(5, typeof prof?.maxAccounts === 'number' ? prof.maxAccounts : 5);
+  };
+
   const [newFollowStoreName, setNewFollowStoreName] = useState('');
   const [newFollowStoreUrl, setNewFollowStoreUrl] = useState('');
   const [addingFollowStore, setAddingFollowStore] = useState(false);
@@ -399,10 +404,10 @@ export default function App() {
     }
 
     const currentList = Array.isArray(profile?.followStores) ? profile.followStores : [];
-    const maxPermitted = typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1);
+    const maxPermitted = getMaxFollowStoresAllowed(profile);
 
     if (currentList.length >= maxPermitted) {
-      showToast(`Store limit reached (${maxPermitted} store${maxPermitted === 1 ? '' : 's'} permitted). Contact admin to add more stores.`, 'error');
+      showToast(`Store profile limit reached (${maxPermitted} store profile${maxPermitted === 1 ? '' : 's'} permitted). Contact admin to add more stores.`, 'error');
       return;
     }
 
@@ -3724,7 +3729,7 @@ export default function App() {
                   <span className="font-bold text-sm text-slate-900">Follow Us Store Profiles</span>
                 </div>
                 <span className="bg-sky-50 border border-sky-200 text-sky-700 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
-                  {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} Stores Added
+                  {(profile?.followStores || []).length} / {getMaxFollowStoresAllowed(profile)} Stores Added
                 </span>
               </div>
 
@@ -3753,7 +3758,7 @@ export default function App() {
               </div>
 
               {/* Add Store Form */}
-              {(profile?.followStores || []).length < (typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)) ? (
+              {(profile?.followStores || []).length < getMaxFollowStoresAllowed(profile) ? (
                 <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-200/80 space-y-2">
                   <div className="text-[11px] font-bold text-slate-700">Add New Store Profile:</div>
                   <input
@@ -3781,7 +3786,7 @@ export default function App() {
                 </form>
               ) : (
                 <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
-                  Store slot quota reached ({typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)} permitted). Contact admin to add more stores.
+                  Store profile quota reached ({getMaxFollowStoresAllowed(profile)} permitted). Contact admin to add more store profiles.
                 </div>
               )}
             </div>
@@ -5579,7 +5584,7 @@ export default function App() {
                     <span className="font-bold text-xs text-slate-900">Follow Us Store Profiles</span>
                   </div>
                   <span className="bg-sky-50 border border-sky-200 text-sky-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    {(profile?.followStores || []).length} / {typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)}
+                    {(profile?.followStores || []).length} / {getMaxFollowStoresAllowed(profile)}
                   </span>
                 </div>
 
@@ -5602,7 +5607,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {(profile?.followStores || []).length < (typeof profile?.maxAccounts === 'number' ? profile.maxAccounts : (Number(profile?.maxAccounts) || 1)) ? (
+                {(profile?.followStores || []).length < getMaxFollowStoresAllowed(profile) ? (
                   <form onSubmit={handleAddFollowStore} className="pt-2 border-t border-slate-200/80 space-y-2">
                     <input
                       type="text"
