@@ -4497,10 +4497,15 @@ export default function App() {
               {/* Action Button: Visible on Android App; on Web browser guides to Mobile App */}
               <div className="flex items-center gap-2.5">
                 {!isNativeMobile() ? (
-                  <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-xl text-sky-800 text-xs font-semibold">
-                    <Smartphone className="w-4 h-4 text-sky-600" />
-                    <span>Add Store via Android App</span>
-                  </div>
+                  <a
+                    href={`/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                    download={`ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                    className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 transition-all cursor-pointer group"
+                    title={`Download OrderMunim Android App (v${CURRENT_APP_VERSION_NAME})`}
+                  >
+                    <DownloadCloud className="w-4 h-4 text-white group-hover:translate-y-0.5 transition-transform" />
+                    <span>Download Android App (v{CURRENT_APP_VERSION_NAME})</span>
+                  </a>
                 ) : accounts.length < (profile.maxAccounts ?? 0) && profile.status !== 'on_hold' ? (
                   <button
                     onClick={handleOpenAddModal}
@@ -4534,13 +4539,12 @@ export default function App() {
                     <p className="text-[11px] text-sky-700 font-semibold">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
                     <div className="pt-1">
                       <a
-                        href={broadcastUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all"
+                        href={`/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                        download={`ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                       >
                         <DownloadCloud className="w-4 h-4" />
-                        Download Android App
+                        Download Android App (v{CURRENT_APP_VERSION_NAME})
                       </a>
                     </div>
                   </div>
