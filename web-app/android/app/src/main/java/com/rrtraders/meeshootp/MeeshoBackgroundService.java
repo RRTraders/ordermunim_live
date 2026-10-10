@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MeeshoBackgroundService extends Service {
 
-    public static final String CHANNEL_SERVICE = "meesho_silent_sync_v4";
+    public static final String CHANNEL_SERVICE = "meesho_persistent_sync_v5";
     public static final String CHANNEL_ALERT = "meesho_otp_alert_channel";
     private static final int SERVICE_NOTIFICATION_ID = 9001;
 
@@ -67,6 +67,26 @@ public class MeeshoBackgroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && PollAlarmReceiver.ACTION_POLL.equals(intent.getAction())) {
+            // Triggered by OS AlarmManager broadcast
+            Executors.newSingleThreadExecutor().execute(() -> {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                PowerManager.WakeLock wakeLock = null;
+                if (pm != null) {
+                    try {
+                        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OrderMunim:AlarmExecLock");
+                        wakeLock.acquire(20000);
+                    } catch (Exception ignored) {}
+                }
+                try {
+                    pollAllAccounts();
+                } finally {
+                    if (wakeLock != null && wakeLock.isHeld()) {
+                        try { wakeLock.release(); } catch (Exception ignored) {}
+                    }
+                }
+            });
+        }
         return START_STICKY;
     }
 
@@ -79,15 +99,8 @@ public class MeeshoBackgroundService extends Service {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
-        // Ensure background polling continues even when app is swiped away from Recent Apps
-        try {
-            Intent serviceIntent = new Intent(getApplicationContext(), MeeshoBackgroundService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(getApplicationContext(), serviceIntent);
-            } else {
-                startService(serviceIntent);
-            }
-        } catch (Exception ignored) {}
+        // User swiped app away from Recent Apps - schedule immediate OS alarm in 5s
+        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), 5);
     }
 
     @Override
@@ -96,12 +109,8 @@ public class MeeshoBackgroundService extends Service {
             scheduler.shutdownNow();
         }
         super.onDestroy();
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) {
-                nm.cancel(SERVICE_NOTIFICATION_ID);
-            }
-        } catch (Exception ignored) {}
+        // If Android system destroys service, ensure AlarmManager triggers wakeup in 15 seconds!
+        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), 15);
     }
 
     private void createNotificationChannels() {
@@ -109,24 +118,24 @@ public class MeeshoBackgroundService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            // Delete legacy channels so Android clears out any old visible settings
+            // Delete legacy channels so Android clears out any old settings
             try {
                 nm.deleteNotificationChannel("meesho_bg_service_channel");
                 nm.deleteNotificationChannel("meesho_bg_service_channel_v2");
                 nm.deleteNotificationChannel("meesho_bg_silent_sync_v3");
+                nm.deleteNotificationChannel("meesho_silent_sync_v4");
             } catch (Exception ignored) {}
 
-            // 1. Silent Background Service Channel (MIN importance suppresses status bar icon and sound)
+            // 1. Persistent Low-Importance Background Sync Channel (Silent, no sound/vibe, protected from swipe-kill)
             NotificationChannel serviceChannel = new NotificationChannel(
                     CHANNEL_SERVICE,
-                    "OrderMunim Background Sync",
-                    NotificationManager.IMPORTANCE_MIN
+                    "OrderMunim Monitoring",
+                    NotificationManager.IMPORTANCE_LOW
             );
-            serviceChannel.setDescription("Keeps Meesho OTP monitoring active silently");
+            serviceChannel.setDescription("Keeps Meesho return OTP monitoring active");
             serviceChannel.setShowBadge(false);
             serviceChannel.setSound(null, null);
             serviceChannel.enableVibration(false);
-            serviceChannel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
             nm.createNotificationChannel(serviceChannel);
 
             // 2. High-Priority Alert Channel for Live OTPs
@@ -161,14 +170,13 @@ public class MeeshoBackgroundService extends Service {
 
         return new NotificationCompat.Builder(this, CHANNEL_SERVICE)
                 .setContentTitle("OrderMunim")
-                .setContentText("Background sync active")
+                .setContentText("Monitoring Return OTPs (Active)")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
                 .build();
     }
 
@@ -180,6 +188,10 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private void scheduleNextPoll(long delaySeconds) {
+        // 1. Schedule OS-level Alarm to guarantee execution even when swiped away or sleeping
+        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), delaySeconds);
+
+        // 2. Also schedule in executor if process remains alive
         if (scheduler == null || scheduler.isShutdown()) return;
         scheduler.schedule(() -> {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -197,8 +209,7 @@ public class MeeshoBackgroundService extends Service {
                 if (wakeLock != null && wakeLock.isHeld()) {
                     try { wakeLock.release(); } catch (Exception ignored) {}
                 }
-                // Determine next delay based on time of day to preserve battery
-                long nextDelay = getDynamicPollDelaySeconds();
+                long nextDelay = getDynamicPollDelaySecondsStatic();
                 scheduleNextPoll(nextDelay);
             }
         }, delaySeconds, TimeUnit.SECONDS);
@@ -209,7 +220,7 @@ public class MeeshoBackgroundService extends Service {
      * - Day time (10:00 AM to 06:00 PM): 60 seconds interval
      * - Rest of time (06:00 PM to 10:00 AM): 3600 seconds (1 hour) interval
      */
-    private long getDynamicPollDelaySeconds() {
+    public static long getDynamicPollDelaySecondsStatic() {
         try {
             java.util.Calendar cal = java.util.Calendar.getInstance();
             int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
@@ -440,7 +451,7 @@ public class MeeshoBackgroundService extends Service {
 
                         if (!firstFound) {
                             firstFound = true;
-                            syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
+                            syncToFirestore(docId, otp, courier, count, timeStr, "live");
                         }
                     }
                 } else {
@@ -454,7 +465,7 @@ public class MeeshoBackgroundService extends Service {
                     editor.apply();
 
                     // Sync fresh timestamp to Firestore on every poll (60s daytime, 1h off-hours) so website updates in real time
-                    syncToFirestore(sess.optString("docId", syncKey), "----", "No Return", 0, timeStr, "live");
+                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live");
                 }
             }
         } catch (Exception ignored) {

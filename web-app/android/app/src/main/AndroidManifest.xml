@@ -80,6 +80,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- 60-Second Background Alarm Wakeup Receiver -->
+        <receiver
+            android:name=".PollAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>
