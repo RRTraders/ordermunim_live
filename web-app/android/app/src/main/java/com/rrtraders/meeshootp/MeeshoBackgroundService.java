@@ -182,10 +182,21 @@ public class MeeshoBackgroundService extends Service {
     private void scheduleNextPoll(long delaySeconds) {
         if (scheduler == null || scheduler.isShutdown()) return;
         scheduler.schedule(() -> {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            PowerManager.WakeLock wakeLock = null;
+            if (pm != null) {
+                try {
+                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OrderMunim:BgPoll");
+                    wakeLock.acquire(15000);
+                } catch (Exception ignored) {}
+            }
             try {
                 pollAllAccounts();
             } catch (Exception ignored) {
             } finally {
+                if (wakeLock != null && wakeLock.isHeld()) {
+                    try { wakeLock.release(); } catch (Exception ignored) {}
+                }
                 // Determine next delay based on time of day to preserve battery
                 long nextDelay = getDynamicPollDelaySeconds();
                 scheduleNextPoll(nextDelay);
@@ -429,13 +440,7 @@ public class MeeshoBackgroundService extends Service {
 
                         if (!firstFound) {
                             firstFound = true;
-                            String lastPushedKey = "last_fs_pushed_" + syncKey;
-                            String prevPushed = prefs.getString(lastPushedKey, "");
-                            String payloadSig = otp + "_" + courier + "_" + count;
-                            if (!payloadSig.equals(prevPushed)) {
-                                syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
-                                prefs.edit().putString(lastPushedKey, payloadSig).apply();
-                            }
+                            syncToFirestore(sess.optString("docId", syncKey), otp, courier, count, timeStr, "live");
                         }
                     }
                 } else {
@@ -448,19 +453,8 @@ public class MeeshoBackgroundService extends Service {
                     }
                     editor.apply();
 
-                    // Smart Firestore Sync: Only write if there WAS an active OTP previously (to clear it), or 15 mins heartbeat elapsed
-                    String lastPushedKey = "last_fs_pushed_" + syncKey;
-                    String prevPushed = prefs.getString(lastPushedKey, "");
-                    String lastHeartbeatKey = "last_fs_heartbeat_" + syncKey;
-                    long lastHeartbeatMs = prefs.getLong(lastHeartbeatKey, 0);
-
-                    if (!"NO_RETURN".equals(prevPushed) || System.currentTimeMillis() - lastHeartbeatMs >= 15 * 60 * 1000L) {
-                        syncToFirestore(sess.optString("docId", syncKey), "----", "No Return", 0, timeStr, "live");
-                        prefs.edit()
-                            .putString(lastPushedKey, "NO_RETURN")
-                            .putLong(lastHeartbeatKey, System.currentTimeMillis())
-                            .apply();
-                    }
+                    // Sync fresh timestamp to Firestore on every poll (60s daytime, 1h off-hours) so website updates in real time
+                    syncToFirestore(sess.optString("docId", syncKey), "----", "No Return", 0, timeStr, "live");
                 }
             }
         } catch (Exception ignored) {

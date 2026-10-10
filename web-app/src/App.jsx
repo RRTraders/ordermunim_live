@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 31;
-const CURRENT_APP_VERSION_NAME = "4.1";
+const CURRENT_APP_VERSION_CODE = 32;
+const CURRENT_APP_VERSION_NAME = "4.2";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1347,12 +1347,12 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Smart Firestore Deduplication: Write ONLY when OTP/courier/parcels change, or every 15 mins heartbeat
+          // Sync fresh timestamp to Firestore every 60 seconds so website and all devices reflect live checking
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isHeartbeatNeeded = !lastSyncedAt || timeSinceLastSyncMs >= 15 * 60 * 1000; // 15 mins heartbeat
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 60 * 1000; // Fresh check every 60 seconds
 
-          if (isSameAsExisting && !isHeartbeatNeeded && existingAcc?.status === 'live') {
+          if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
           }
 
