@@ -2730,15 +2730,18 @@ export default function App() {
     }
   };
 
-  // Admin: load all users and all platform stores only when Admin tab is active & unlocked
+  // Admin: load all users and all platform stores for Super Admin or when Admin tab is active & unlocked
   useEffect(() => {
-    if (activeTab !== 'admin' || !adminAuthenticated) return;
+    const shouldLoad = isSuperAdmin || (activeTab === 'admin' && adminAuthenticated);
+    if (!shouldLoad) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const uList = [];
       snapshot.forEach((d) => {
         uList.push({ id: d.id, ...d.data() });
       });
       setAllUsersList(uList);
+    }, (error) => {
+      console.warn("unsubUsers listener error:", error);
     });
 
     const unsubAllAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -2747,13 +2750,15 @@ export default function App() {
         accList.push({ id: d.id, ...d.data() });
       });
       setAllPlatformAccounts(accList);
+    }, (error) => {
+      console.warn("unsubAllAccounts listener error:", error);
     });
 
     return () => {
       unsubUsers();
       unsubAllAccounts();
     };
-  }, [activeTab, adminAuthenticated]);
+  }, [isSuperAdmin, activeTab, adminAuthenticated]);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
