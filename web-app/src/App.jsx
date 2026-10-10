@@ -284,7 +284,58 @@ export default function App() {
   const [connectStep, setConnectStep] = useState(1); // 1 = enter details, 2 = install extension
   const [generatedSyncKey, setGeneratedSyncKey] = useState('');
 
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'admin' | 'staff'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash.replace('#', '').trim().toLowerCase();
+        if (['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(hash)) {
+          return hash;
+        }
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        if (tabParam && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(tabParam)) {
+          return tabParam;
+        }
+        const saved = localStorage.getItem('om_active_tab');
+        if (saved && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(saved)) {
+          return saved;
+        }
+      }
+    } catch {}
+    return isNativeMobile() ? 'otp' : 'dashboard';
+  });
+
+  // Keep active tab in localStorage & URL hash so page refresh stays on current page
+  useEffect(() => {
+    try {
+      if (activeTab) {
+        localStorage.setItem('om_active_tab', activeTab);
+        if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+          const newHash = activeTab === 'dashboard' ? '' : `#${activeTab}`;
+          const currentUrl = window.location.pathname + window.location.search + newHash;
+          window.history.replaceState(null, '', currentUrl);
+        }
+      }
+    } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      try {
+        const hash = window.location.hash.replace('#', '').trim().toLowerCase();
+        if (hash && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(hash)) {
+          setActiveTab(hash);
+        }
+      } catch {}
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
+
   const [activeCropperMarketplace, setActiveCropperMarketplace] = useState(() => {
     return localStorage.getItem('om_selected_marketplace') || 'meesho';
   });
@@ -772,7 +823,13 @@ export default function App() {
         try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
         if (isSuper || profData.role === 'super_admin') {
           setAdminAuthenticated(true);
-          setActiveTab(prev => (prev === 'cropper' || prev === 'profile' ? prev : 'admin'));
+          // Preserve user's current selected tab on refresh
+          setActiveTab(prev => {
+            if (prev && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(prev)) {
+              return prev;
+            }
+            return 'admin';
+          });
         }
       } else {
         const currentDeviceId = getDeviceId();
