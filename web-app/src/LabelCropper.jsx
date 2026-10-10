@@ -2245,7 +2245,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       height: 28,
       color: lightGray
     });
-    page.drawText('OrdersMunim Virtual QZ • 100% Thermal Print Ready', {
+    page.drawText('OrderMunim Virtual QZ • 100% Thermal Print Ready', {
       x: 18,
       y: 22,
       size: 7.5,
@@ -2374,10 +2374,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     page.drawRectangle({ x: 360, y: 250, width: 205, height: 80, borderColor: borderGray, borderWidth: 0.8, color: white });
     page.drawText(myntraSession?.sellerName ? `For ${myntraSession.sellerName}` : 'For FASHION HUB TRADERS', { x: 370, y: 315, size: 8, font: fontBold, color: black });
     page.drawText('Authorized Signatory', { x: 370, y: 265, size: 7.5, font: fontBold, color: rgb(0.3, 0.35, 0.4) });
-    page.drawText('[Digitally Signed via OrdersMunim]', { x: 370, y: 255, size: 6.5, font: fontNorm, color: rgb(0.05, 0.55, 0.35) });
+    page.drawText('[Digitally Signed via OrderMunim]', { x: 370, y: 255, size: 6.5, font: fontNorm, color: rgb(0.05, 0.55, 0.35) });
 
     // Footer
-    page.drawText('Generated from Myntra Partner Portal via OrdersMunim In-App Downloader', {
+    page.drawText('Generated from Myntra Partner Portal via OrderMunim In-App Downloader', {
       x: 75,
       y: 35,
       size: 7.5,
@@ -7062,7 +7062,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                       </div>
                       <p className="text-[11px] leading-relaxed text-slate-300">{webcamError}</p>
                       <p className="text-[10px] text-orange-300/90 pt-1 border-t border-rose-500/20">
-                        📱 <strong>On Mobile Phone / App:</strong> Open Phone <em>Settings &gt; Apps &gt; OrdersMunim (or Chrome) &gt; Permissions &gt; Camera</em> &rarr; Set to <strong>&quot;Allow&quot;</strong>.
+                        📱 <strong>On Mobile Phone / App:</strong> Open Phone <em>Settings &gt; Apps &gt; OrderMunim (or Chrome) &gt; Permissions &gt; Camera</em> &rarr; Set to <strong>&quot;Allow&quot;</strong>.
                       </p>
                     </div>
                   )}

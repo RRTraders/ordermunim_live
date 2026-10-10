@@ -2805,7 +2805,7 @@ export default function App() {
           </div>
 
           <div className="space-y-1.5">
-            <h3 className="text-base font-bold text-white">Updating OrdersMunim</h3>
+            <h3 className="text-base font-bold text-white">Updating OrderMunim</h3>
             <p className="text-xs text-slate-300">
               {updateStatusText || 'Downloading update package...'}
             </p>
@@ -3176,9 +3176,9 @@ export default function App() {
         <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-xs border border-slate-200/90">
           <div className="text-center mb-6">
             <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-3 overflow-hidden bg-white p-1 border border-slate-200">
-              <img src="/logo.png" alt="OrdersMunim" className="w-full h-full object-contain" />
+              <img src="/logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-[#083B82]">OrdersMunim</h1>
+            <h1 className="text-2xl font-black tracking-tight text-[#083B82]">OrderMunim</h1>
             <p className="text-xs text-slate-500 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
           </div>
 
@@ -3275,7 +3275,7 @@ export default function App() {
 
                   <div className="text-center pt-2">
                     <span className="text-xs text-slate-500">
-                      New to OrdersMunim?{' '}
+                      New to OrderMunim?{' '}
                       <button
                         type="button"
                         onClick={() => { setAuthMode('signup'); setAuthError(''); }}
@@ -4510,7 +4510,7 @@ export default function App() {
                     </div>
                     <h4 className="text-sm font-bold text-slate-900">Connect Store from Mobile App</h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Meesho accounts must be connected inside the <strong>OrdersMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
+                      Meesho accounts must be connected inside the <strong>OrderMunim Android App</strong> on your phone to store credentials safely on your device and enable 24/7 background OTP sync.
                     </p>
                     <p className="text-[11px] text-sky-700 font-semibold">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
                     <div className="pt-1">

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "ordermunim",
+    "site": "meesho-otp-app",
     "public": "dist",
     "ignore": [
       "firebase.json",
