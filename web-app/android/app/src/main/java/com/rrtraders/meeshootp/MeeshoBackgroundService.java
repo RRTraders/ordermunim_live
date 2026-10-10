@@ -262,10 +262,50 @@ public class MeeshoBackgroundService extends Service {
             String storeName = sess.optString("storeName", "Meesho Store");
             String email = sess.optString("email", "");
             String password = sess.optString("password", "");
+            String docId = sess.optString("docId", "");
             String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
 
+            String sessionsJson = prefs.getString("sessions", "{}");
+            JSONObject allSessions = new JSONObject(sessionsJson);
+
+            // 1. Resolve docId to real Firestore ID (e.g. MSH-6234)
+            if (docId.isEmpty() || !docId.startsWith("MSH-")) {
+                if (syncKey.startsWith("MSH-")) {
+                    docId = syncKey;
+                } else {
+                    for (java.util.Iterator<String> sit = allSessions.keys(); sit.hasNext(); ) {
+                        String sk = sit.next();
+                        if (sk.startsWith("MSH-")) {
+                            JSONObject sObj = allSessions.getJSONObject(sk);
+                            if (sObj.optString("identifier", "").equals(identifier) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email))) {
+                                docId = sk;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (docId.isEmpty()) docId = syncKey;
+
+            // 2. Resolve email & password across all stored sessions if missing
+            if (password.isEmpty() || email.isEmpty()) {
+                for (java.util.Iterator<String> sit = allSessions.keys(); sit.hasNext(); ) {
+                    String sk = sit.next();
+                    JSONObject sObj = allSessions.getJSONObject(sk);
+                    boolean match = (!identifier.isEmpty() && sObj.optString("identifier", "").equals(identifier)) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email));
+                    if (match) {
+                        if (password.isEmpty() && !sObj.optString("password", "").isEmpty()) {
+                            password = sObj.optString("password", "");
+                        }
+                        if (email.isEmpty() && !sObj.optString("email", "").isEmpty()) {
+                            email = sObj.optString("email", "");
+                        }
+                    }
+                }
+            }
+
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
-                cookies = autoRelogin(email, password, syncKey);
+                cookies = autoRelogin(email, password, docId);
             }
             if (cookies.isEmpty()) return;
 
@@ -307,11 +347,15 @@ public class MeeshoBackgroundService extends Service {
             int code = conn.getResponseCode();
 
             if (code == 401 || code == 403) {
-                // Auto re-login silently if cookie expired
+                // Auto re-login silently if cookie expired, then immediately retry fetch!
                 if (!email.isEmpty() && !password.isEmpty()) {
-                    cookies = autoRelogin(email, password, syncKey);
-                    if (!cookies.isEmpty()) {
-                        sess.put("cookies", cookies);
+                    String freshCookies = autoRelogin(email, password, docId);
+                    if (!freshCookies.isEmpty()) {
+                        sess.put("cookies", freshCookies);
+                        sess.put("docId", docId);
+                        sess.put("email", email);
+                        sess.put("password", password);
+                        pollSingleAccount(docId, sess);
                     }
                 }
                 return;
@@ -416,8 +460,13 @@ public class MeeshoBackgroundService extends Service {
         if (docId == null || docId.trim().isEmpty()) return;
         HttpURLConnection conn = null;
         try {
-            String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
-            String queryParams = "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+            String encodedDocId = java.net.URLEncoder.encode(docId, "UTF-8");
+            String queryParams;
+            if (otp == null) {
+                queryParams = "?updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+            } else {
+                queryParams = "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+            }
             if (cookies != null && !cookies.isEmpty()) {
                 queryParams += "&updateMask.fieldPaths=cookies";
             }
@@ -432,10 +481,12 @@ public class MeeshoBackgroundService extends Service {
             conn.setDoOutput(true);
 
             JSONObject fields = new JSONObject();
-            JSONObject fOtp = new JSONObject(); fOtp.put("stringValue", otp != null ? otp : "----"); fields.put("currentOtp", fOtp);
-            JSONObject fCourier = new JSONObject(); fCourier.put("stringValue", courier != null ? courier : "No Return"); fields.put("courier", fCourier);
-            JSONObject fCount = new JSONObject(); fCount.put("integerValue", String.valueOf(count)); fields.put("handoverCount", fCount);
-            JSONObject fTime = new JSONObject(); fTime.put("stringValue", dateTime != null ? dateTime : ""); fields.put("dateTime", fTime);
+            if (otp != null) {
+                JSONObject fOtp = new JSONObject(); fOtp.put("stringValue", otp); fields.put("currentOtp", fOtp);
+                JSONObject fCourier = new JSONObject(); fCourier.put("stringValue", courier != null ? courier : "No Return"); fields.put("courier", fCourier);
+                JSONObject fCount = new JSONObject(); fCount.put("integerValue", String.valueOf(count)); fields.put("handoverCount", fCount);
+                JSONObject fTime = new JSONObject(); fTime.put("stringValue", dateTime != null ? dateTime : ""); fields.put("dateTime", fTime);
+            }
             JSONObject fStatus = new JSONObject(); fStatus.put("stringValue", status != null ? status : "live"); fields.put("status", fStatus);
             if (cookies != null && !cookies.isEmpty()) {
                 JSONObject fCook = new JSONObject(); fCook.put("stringValue", cookies); fields.put("cookies", fCook);
@@ -554,15 +605,24 @@ public class MeeshoBackgroundService extends Service {
                 if (!freshCookies.isEmpty()) {
                     String sessionsJson = prefs.getString("sessions", "{}");
                     JSONObject all = new JSONObject(sessionsJson);
-                    String docId = syncKey;
-                    if (all.has(syncKey)) {
-                        JSONObject cur = all.getJSONObject(syncKey);
-                        cur.put("cookies", freshCookies);
-                        docId = cur.optString("docId", syncKey);
-                        prefs.edit().putString("sessions", all.toString()).apply();
+                    String resolvedDocId = syncKey;
+
+                    for (java.util.Iterator<String> sit = all.keys(); sit.hasNext(); ) {
+                        String sk = sit.next();
+                        JSONObject cur = all.getJSONObject(sk);
+                        if (sk.equals(syncKey) || (cur.has("email") && cur.optString("email", "").equalsIgnoreCase(email))) {
+                            cur.put("cookies", freshCookies);
+                            cur.put("expired", false);
+                            if (resolvedDocId.equals(syncKey) && !cur.optString("docId", "").isEmpty()) {
+                                resolvedDocId = cur.optString("docId", "");
+                            }
+                        }
                     }
+                    prefs.edit().putString("sessions", all.toString()).apply();
+
                     String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", freshCookies);
+                    // Sync status: live and fresh cookies to Firestore without wiping active OTPs!
+                    syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies);
                     return freshCookies;
                 }
             }

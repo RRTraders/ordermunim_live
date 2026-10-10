@@ -70,13 +70,20 @@ export const saveEncryptedStoreCredentials = (storeKey, creds, userId = '') => {
     const raw = localStorage.getItem(VAULT_STORAGE_KEY);
     const vault = raw ? JSON.parse(raw) : {};
 
+    // If incoming password is empty, preserve existing password from vault
+    let encPassword = creds.password ? encryptSecret(creds.password) : '';
+    if (!encPassword) {
+      const existingEnc = vault[storeKey]?.password || (creds.identifier ? vault[creds.identifier]?.password : null) || (creds.email ? vault[creds.email.trim().toLowerCase()]?.password : null);
+      if (existingEnc) encPassword = existingEnc;
+    }
+
     const encData = {
-      userId: userId || creds.userId || '',
-      email: creds.email ? encryptSecret(creds.email.trim()) : '',
-      password: creds.password ? encryptSecret(creds.password) : '',
-      identifier: creds.identifier ? encryptSecret(creds.identifier) : '',
-      supplierId: creds.supplierId || 0,
-      storeName: creds.storeName || '',
+      userId: userId || creds.userId || vault[storeKey]?.userId || '',
+      email: creds.email ? encryptSecret(creds.email.trim()) : (vault[storeKey]?.email || ''),
+      password: encPassword,
+      identifier: creds.identifier ? encryptSecret(creds.identifier) : (vault[storeKey]?.identifier || ''),
+      supplierId: creds.supplierId || vault[storeKey]?.supplierId || 0,
+      storeName: creds.storeName || vault[storeKey]?.storeName || '',
       updatedAt: new Date().toISOString()
     };
 
@@ -84,6 +91,7 @@ export const saveEncryptedStoreCredentials = (storeKey, creds, userId = '') => {
     if (creds.identifier) vault[creds.identifier] = encData;
     if (creds.supplierId) vault[`sup_${creds.supplierId}`] = encData;
     if (creds.email) vault[creds.email.trim().toLowerCase()] = encData;
+    if (creds.storeName) vault[`store_${creds.storeName.trim().toLowerCase()}`] = encData;
 
     localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
     return true;
@@ -131,14 +139,14 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
     acc.id,
     acc.identifier,
     acc.supplierId ? `sup_${acc.supplierId}` : null,
-    acc.email ? acc.email.trim().toLowerCase() : null
+    acc.email ? acc.email.trim().toLowerCase() : null,
+    acc.storeName ? `store_${acc.storeName.trim().toLowerCase()}` : null
   ].filter(Boolean);
 
   let fallbackCred = null;
   for (const k of candidates) {
     const cred = getDecryptedStoreCredentials(k);
     if (cred && cred.password) {
-      // Ensure credentials belong strictly to this user
       if (targetUserId && cred.userId && cred.userId !== targetUserId) {
         if (!fallbackCred) fallbackCred = cred;
         continue;
@@ -146,6 +154,38 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
       return cred;
     }
   }
+
+  // Deep fallback: Scan entire vault dictionary
+  try {
+    const raw = localStorage.getItem(VAULT_STORAGE_KEY);
+    if (raw) {
+      const vault = JSON.parse(raw);
+      for (const [vKey, vVal] of Object.entries(vault)) {
+        if (vVal && vVal.password) {
+          const decPass = decryptSecret(vVal.password);
+          if (decPass) {
+            const decEmail = vVal.email ? decryptSecret(vVal.email) : '';
+            const decIdent = vVal.identifier ? decryptSecret(vVal.identifier) : '';
+            const matchEmail = acc.email && decEmail && acc.email.trim().toLowerCase() === decEmail.trim().toLowerCase();
+            const matchIdent = acc.identifier && decIdent && acc.identifier === decIdent;
+            const matchSup = acc.supplierId && vVal.supplierId && String(acc.supplierId) === String(vVal.supplierId);
+            const matchStore = acc.storeName && vVal.storeName && acc.storeName.trim().toLowerCase() === vVal.storeName.trim().toLowerCase();
+            if (matchEmail || matchIdent || matchSup || matchStore) {
+              return {
+                userId: targetUserId || vVal.userId,
+                email: decEmail || acc.email || '',
+                password: decPass,
+                identifier: decIdent || acc.identifier || '',
+                supplierId: vVal.supplierId || acc.supplierId || 0,
+                storeName: vVal.storeName || acc.storeName || ''
+              };
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   if (fallbackCred) return fallbackCred;
 
   // Resilient Fallback: Check native_meesho_sessions stored locally on device
@@ -170,7 +210,8 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
           const matchEmail = acc.email && sVal.email && acc.email.trim().toLowerCase() === sVal.email.trim().toLowerCase();
           const matchSup = acc.supplierId && sVal.supplierId && String(acc.supplierId) === String(sVal.supplierId);
           const matchIdent = acc.identifier && sVal.identifier && acc.identifier === sVal.identifier;
-          if (matchEmail || matchSup || matchIdent) {
+          const matchStore = acc.storeName && sVal.storeName && acc.storeName.trim().toLowerCase() === sVal.storeName.trim().toLowerCase();
+          if (matchEmail || matchSup || matchIdent || matchStore) {
             return {
               userId: targetUserId,
               email: sVal.email || acc.email || '',

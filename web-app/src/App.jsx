@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 24;
-const CURRENT_APP_VERSION_NAME = "3.4";
+const CURRENT_APP_VERSION_CODE = 25;
+const CURRENT_APP_VERSION_NAME = "3.5";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1011,7 +1011,7 @@ export default function App() {
 
       for (const acc of myAccounts) {
         const key = acc.syncKey || acc.id;
-        const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null);
+        const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null) || (acc.identifier ? cur[acc.identifier] : null) || Object.values(cur).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
         const vaultCred = findCredentialsForAccount(acc, user.uid);
         const restoredPassword = (existing && existing.password) ? existing.password : (vaultCred?.password || '');
         const restoredEmail = (existing && existing.email) ? existing.email : (acc.email || vaultCred?.email || '');
@@ -1055,17 +1055,44 @@ export default function App() {
             cur[acc.id] = existing;
             changed = true;
           }
+          if (acc.syncKey && !cur[acc.syncKey]) {
+            cur[acc.syncKey] = existing;
+            changed = true;
+          }
         }
 
         // Auto re-login silently on behalf of the client if session was marked expired
         if ((acc.status === 'session_expired' || !acc.cookies) && restoredEmail && restoredPassword) {
           directMeeshoLogin(restoredEmail, restoredPassword).then(async (fresh) => {
             if (fresh && fresh.success) {
+              const freshIdent = fresh.identifier || acc.identifier || '';
+              const freshSupId = fresh.supplierId || acc.supplierId || 0;
+              const updatedSess = {
+                ...(cur[key] || {}),
+                docId: acc.id,
+                email: restoredEmail,
+                password: restoredPassword,
+                identifier: freshIdent,
+                supplierId: freshSupId,
+                storeName: fresh.storeName || acc.storeName || '',
+                cookies: fresh.cookies,
+                expired: false
+              };
+              cur[key] = updatedSess;
+              if (acc.id) cur[acc.id] = updatedSess;
+              if (acc.syncKey) cur[acc.syncKey] = updatedSess;
+              try {
+                localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
+                setLocalSessions({ ...cur });
+                syncBackgroundSessions(cur);
+                saveEncryptedStoreCredentials(key, updatedSess, user.uid);
+              } catch {}
+
               await updateDoc(doc(db, 'accounts', acc.id), {
                 status: 'live',
                 cookies: fresh.cookies,
-                identifier: fresh.identifier || acc.identifier || '',
-                supplierId: fresh.supplierId || acc.supplierId || 0,
+                identifier: freshIdent,
+                supplierId: freshSupId,
                 dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
@@ -1896,8 +1923,9 @@ export default function App() {
                     status: 'session_expired',
                     lastUpdated: new Date().toISOString()
                   }).catch(() => {});
+                  const cred = findCredentialsForAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email }, userRef.current?.uid || user?.uid);
                   setReconnectAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email });
-                  setReconnectPass('');
+                  setReconnectPass(cred?.password || '');
                   setReconnectError(`Meesho session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
                   setShowReconnectModal(true);
                 }
@@ -1998,7 +2026,7 @@ export default function App() {
             }
           }
           setReconnectAccount(targetAcc);
-          setReconnectPass('');
+          setReconnectPass(vaultCred?.password || '');
           setReconnectError('');
           setShowReconnectModal(true);
           return;
@@ -2944,7 +2972,7 @@ export default function App() {
                       : []);
 
                 const isExpanded = Boolean(expandedStoreIds[acc.id]);
-                const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
+                const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                 const vaultCred = findCredentialsForAccount(acc, user?.uid);
                 const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
                 const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
@@ -4542,7 +4570,7 @@ export default function App() {
                   const isLive = acc.status === 'live';
                   const isOnHold = profile.status === 'on_hold';
                   const isExpanded = Boolean(expandedStoreIds[acc.id]);
-                  const localSess = localSessions[acc.syncKey] || localSessions[acc.id];
+                  const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                   const vaultCred = findCredentialsForAccount(acc, user?.uid);
                   const hasSavedCredentials = Boolean(vaultCred?.password || localSess?.password);
                   const isSessionExpired = !hasSavedCredentials && (acc.status === 'session_expired' || Boolean(localSess?.expired));
@@ -4699,8 +4727,9 @@ export default function App() {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    const cred = findCredentialsForAccount(acc, user?.uid);
                                     setReconnectAccount(acc);
-                                    setReconnectPass('');
+                                    setReconnectPass(cred?.password || '');
                                     setReconnectError('');
                                     setShowReconnectModal(true);
                                   }}
