@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 29;
-const CURRENT_APP_VERSION_NAME = "3.9";
+const CURRENT_APP_VERSION_CODE = 30;
+const CURRENT_APP_VERSION_NAME = "4.0";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1228,8 +1228,9 @@ export default function App() {
           if (polledIdentifiers.has(dedupKey)) continue;
           polledIdentifiers.add(dedupKey);
 
-          const targetAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key);
-          const targetDocId = targetAcc?.id || key;
+          const targetAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key || (a.email && sess.email && a.email.toLowerCase() === sess.email.toLowerCase()) || (a.identifier && sess.identifier && a.identifier === sess.identifier));
+          if (!targetAcc) continue;
+          const targetDocId = targetAcc.id || key;
 
           // Restore credentials from encrypted local vault if missing
           if (!sess.password) {

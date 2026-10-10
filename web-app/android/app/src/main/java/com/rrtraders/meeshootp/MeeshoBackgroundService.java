@@ -243,10 +243,12 @@ public class MeeshoBackgroundService extends Service {
                 JSONObject sess = allSessions.getJSONObject(syncKey);
 
                 // Cross-Account Isolation Guard:
-                // Skip any session belonging to another user
-                String sessUid = sess.optString("userId", "");
-                if (!currentUid.isEmpty() && !sessUid.isEmpty() && !currentUid.equals(sessUid)) {
-                    continue;
+                // Strictly only poll sessions matching the current logged-in user!
+                if (!currentUid.isEmpty()) {
+                    String sessUid = sess.optString("userId", "");
+                    if (!currentUid.equals(sessUid)) {
+                        continue;
+                    }
                 }
 
                 String ident = sess.optString("identifier", "");
@@ -525,9 +527,11 @@ public class MeeshoBackgroundService extends Service {
             JSONObject allSessions = new JSONObject(sessionsJson);
             if (allSessions.has(syncKey)) {
                 JSONObject s = allSessions.getJSONObject(syncKey);
-                String sUid = s.optString("userId", "");
-                if (!currentUid.isEmpty() && !sUid.isEmpty() && !currentUid.equals(sUid)) {
-                    return; // Cross-account protection: Skip alerting for another user!
+                if (!currentUid.isEmpty()) {
+                    String sUid = s.optString("userId", "");
+                    if (!currentUid.equals(sUid)) {
+                        return; // Cross-account protection: Strictly skip alerting for another user!
+                    }
                 }
             }
 
