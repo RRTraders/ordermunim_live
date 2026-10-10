@@ -59,6 +59,7 @@
             android:name=".MeeshoBackgroundService"
             android:enabled="true"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- Auto-Start on Phone Boot / App Update -->

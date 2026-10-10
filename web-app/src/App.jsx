@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 23;
-const CURRENT_APP_VERSION_NAME = "3.3";
+const CURRENT_APP_VERSION_CODE = 24;
+const CURRENT_APP_VERSION_NAME = "3.4";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
