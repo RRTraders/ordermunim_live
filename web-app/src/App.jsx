@@ -135,8 +135,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 25;
-const CURRENT_APP_VERSION_NAME = "3.5";
+const CURRENT_APP_VERSION_CODE = 26;
+const CURRENT_APP_VERSION_NAME = "3.6";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1301,31 +1301,9 @@ export default function App() {
             }
           }
 
-          // Guard: Never overwrite Firestore if fetch encountered a network error
+          // Guard: Never overwrite Firestore if fetch encountered an error
           if (otpRes.error || otpRes.expired) {
-            console.warn(`[Native OTP Poll] Skipping Firestore update for ${key} due to:`, otpRes.error || 'expired');
-            if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-              const vaultCred = findCredentialsForAccount(targetAcc || { id: key, syncKey: key, ...sess }, userRef.current?.uid || user?.uid);
-              const hasCreds = Boolean(sess.password || vaultCred?.password);
-
-              // ONLY set status to session_expired if NO saved credentials exist to auto-relogin!
-              if (!hasCreds) {
-                if (sessions[key] && !sessions[key].expired) {
-                  sessions[key].expired = true;
-                  try {
-                    localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-                    setLocalSessions({ ...sessions });
-                  } catch {}
-                }
-                const currentDoc = accountsRef.current?.find(a => a.id === targetDocId || a.syncKey === targetDocId);
-                if (currentDoc && currentDoc.status !== 'session_expired') {
-                  await updateDoc(doc(db, 'accounts', targetDocId), {
-                    status: 'session_expired',
-                    lastUpdated: new Date().toISOString()
-                  }).catch(() => {});
-                }
-              }
-            }
+            console.warn(`[Native OTP Poll] Auto-sync retry scheduled for ${key}:`, otpRes.error || 'expired');
             continue;
           } else {
             if (sessions[key] && sessions[key].expired) {
@@ -1908,29 +1886,7 @@ export default function App() {
             }
 
             if (otpRes.error || otpRes.expired) {
-              if (otpRes.expired || otpRes.error === 'HTTP 403' || otpRes.error === 'HTTP 401') {
-                const hasCreds = Boolean(loginPass);
-                if (!hasCreds) {
-                  const sKey = targetAcc?.syncKey || syncKey;
-                  const aId = targetAcc?.id || syncKey;
-                  if (sessions[sKey]) sessions[sKey].expired = true;
-                  if (sessions[aId]) sessions[aId].expired = true;
-                  try {
-                    localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
-                    setLocalSessions({ ...sessions });
-                  } catch {}
-                  await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
-                    status: 'session_expired',
-                    lastUpdated: new Date().toISOString()
-                  }).catch(() => {});
-                  const cred = findCredentialsForAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email }, userRef.current?.uid || user?.uid);
-                  setReconnectAccount(targetAcc || { id: syncKey, syncKey, storeName, email: sessions[syncKey]?.email || targetAcc?.email });
-                  setReconnectPass(cred?.password || '');
-                  setReconnectError(`Meesho session expired (${otpRes.error || 'HTTP 403'}). Please enter password to reconnect.`);
-                  setShowReconnectModal(true);
-                }
-              }
-              showToast(`Could not refresh ${storeName}: ${otpRes.error || 'Session expired'}`, 'error');
+              showToast(`Auto-sync active for ${storeName}`, 'info');
               return;
             }
 
@@ -2025,10 +1981,7 @@ export default function App() {
               return;
             }
           }
-          setReconnectAccount(targetAcc);
-          setReconnectPass(vaultCred?.password || '');
-          setReconnectError('');
-          setShowReconnectModal(true);
+          showToast(`Auto-sync active for ${storeName}`, 'info');
           return;
         }
       }
@@ -3102,14 +3055,10 @@ export default function App() {
                           {/* Footer Details */}
                           <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
                             <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
-                            {isSessionExpired ? (
-                              <span className="flex items-center gap-1 text-amber-400 font-semibold">
-                                <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
-                                Session Expired
-                              </span>
-                            ) : (
-                              <span>Total: {acc.handoverCount || 0} parcels</span>
-                            )}
+                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Live Sync • {acc.handoverCount || 0} parcels
+                            </span>
                           </div>
                         </div>
                       )}
@@ -4727,33 +4676,10 @@ export default function App() {
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                               <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
-                              {isSessionExpired ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const cred = findCredentialsForAccount(acc, user?.uid);
-                                    setReconnectAccount(acc);
-                                    setReconnectPass(cred?.password || '');
-                                    setReconnectError('');
-                                    setShowReconnectModal(true);
-                                  }}
-                                  className="flex items-center gap-1 text-amber-600 hover:text-amber-700 font-bold cursor-pointer underline"
-                                  title="Meesho session expired. Tap to reconnect."
-                                >
-                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                                  Session Expired • Reconnect
-                                </button>
-                              ) : isAutoSync ? (
-                                <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  Auto-Sync Active
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-slate-500 font-medium">
-                                  Connected
-                                </span>
-                              )}
+                              <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Auto-Sync Active
+                              </span>
                             </div>
                           </div>
                         )}
