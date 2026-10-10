@@ -91,6 +91,7 @@ import {
   Info
 } from 'lucide-react';
 import LabelCropper from './LabelCropper';
+import PdfToolsSuite from './PdfTools/PdfToolsSuite';
 
 class CropperErrorBoundary extends React.Component {
   constructor(props) {
@@ -288,16 +289,16 @@ export default function App() {
     try {
       if (typeof window !== 'undefined') {
         const hash = window.location.hash.replace('#', '').trim().toLowerCase();
-        if (['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(hash)) {
+        if (['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff', 'pdf-tools'].includes(hash)) {
           return hash;
         }
         const params = new URLSearchParams(window.location.search);
         const tabParam = params.get('tab');
-        if (tabParam && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(tabParam)) {
+        if (tabParam && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff', 'pdf-tools'].includes(tabParam)) {
           return tabParam;
         }
         const saved = localStorage.getItem('om_active_tab');
-        if (saved && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(saved)) {
+        if (saved && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff', 'pdf-tools'].includes(saved)) {
           return saved;
         }
       }
@@ -323,7 +324,7 @@ export default function App() {
     const handleHashChange = () => {
       try {
         const hash = window.location.hash.replace('#', '').trim().toLowerCase();
-        if (hash && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff'].includes(hash)) {
+        if (hash && ['dashboard', 'otp', 'cropper', 'profile', 'admin', 'staff', 'pdf-tools'].includes(hash)) {
           setActiveTab(hash);
         }
       } catch {}
@@ -3614,15 +3615,22 @@ export default function App() {
               }`} />
             </button>
 
-            {/* 5. PDF Tools (Coming Soon) */}
+            {/* 5. PDF Tools Suite */}
             <button
               type="button"
-              onClick={() => setShowPdfComingSoonModal(true)}
-              className="relative py-1.5 flex items-center gap-1.5 hover:text-[#083B82] transition-colors cursor-pointer group"
+              onClick={() => {
+                setActiveTab('pdf-tools');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`relative py-1.5 flex items-center gap-1.5 transition-colors cursor-pointer group ${
+                activeTab === 'pdf-tools' ? 'text-[#083B82] font-bold' : 'hover:text-[#083B82]'
+              }`}
             >
               <span>PDF Tools</span>
-              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-md">Soon</span>
-              <span className="absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 scale-x-0 group-hover:scale-x-100 origin-left" />
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md shadow-xs">10 Tools</span>
+              <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
+                activeTab === 'pdf-tools' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
+              }`} />
             </button>
 
             {/* 6. About Us */}
@@ -4746,6 +4754,9 @@ export default function App() {
             )}
 
           </>
+        ) : activeTab === 'pdf-tools' ? (
+          /* ================= PDF TOOLS SUITE (FULL PAGE WORKSPACE) ================= */
+          <PdfToolsSuite onNavigateTab={setActiveTab} />
         ) : (
           /* ================= HOME DASHBOARD VIEW (ORDERMUNIM HUB) ================= */
           <div className="space-y-8 animate-in fade-in duration-200">
@@ -4919,38 +4930,41 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Module 4: PDF Tools (Coming Soon) */}
-                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-amber-300 transition-all flex flex-col justify-between group">
+                {/* Module 4: PDF & Document Power Tools */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:border-blue-400 transition-all flex flex-col justify-between group">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center shadow-xs">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200/70 text-blue-600 flex items-center justify-center shadow-xs">
                         <FileText className="w-6 h-6" />
                       </div>
-                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 rounded-md uppercase tracking-wider">
-                        Coming Soon
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
+                        10 Pro Tools
                       </span>
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
-                        PDF Manifest &amp; Label Tools
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                        PDF &amp; Label Power Tools
                       </h3>
                       <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                        Batch PDF merge, manifest split, thermal page rotation, file compression, and multi-seller label organizers built specifically for Indian e-commerce.
+                        Client-side PDF merge, page delete &amp; reorder, thermal label rotation, scan file compression, and instant image-to-PDF converters.
                       </p>
                     </div>
                     <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 font-medium">
-                      <span>Manifest Splitting</span>
+                      <span className="text-emerald-600 font-semibold">100% Client-Side Privacy</span>
                       <span>•</span>
-                      <span>PDF Compression</span>
+                      <span>Zero Uploads</span>
                     </div>
                   </div>
                   <div className="pt-5 border-t border-slate-100 mt-5">
                     <button
                       type="button"
-                      onClick={() => setShowPdfComingSoonModal(true)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setActiveTab('pdf-tools');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-blue-50 hover:bg-[#083B82] text-[#083B82] hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                     >
-                      <span>Explore PDF Tools</span>
+                      <span>Open PDF Tools Suite (10)</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
