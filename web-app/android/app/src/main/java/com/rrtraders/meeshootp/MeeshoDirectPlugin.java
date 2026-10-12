@@ -438,14 +438,12 @@ public class MeeshoDirectPlugin extends Plugin {
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
             conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
 
+            // 1. Primary Desktop Payload (matches Meesho desktop portal exactly)
             JSONObject payload = new JSONObject();
             if (!identifier.isEmpty()) {
                 payload.put("identifier", identifier);
-            }
-            if (supplierId > 0) {
-                payload.put("supplier_id", supplierId);
             }
             payload.put("child_supplier_identifier", JSONObject.NULL);
             payload.put("child_supplier_id", JSONObject.NULL);
@@ -461,16 +459,69 @@ public class MeeshoDirectPlugin extends Plugin {
                 String resp = readStream(conn.getInputStream());
                 android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs body: " + (resp.length() > 500 ? resp.substring(0, 500) : resp));
                 JSONObject json = new JSONObject(resp.isEmpty() ? "{}" : resp);
+                
+                // Deep array lookup across all known Meesho response structures
                 JSONArray otps = json.optJSONArray("supplier_delivery_otp");
+                if (otps == null) otps = json.optJSONArray("delivery_otps");
+                if (otps == null) otps = json.optJSONArray("otps");
+                if (otps == null) otps = json.optJSONArray("rto_otps");
+                if (otps == null) otps = json.optJSONArray("return_otps");
 
-                // Fallback if wrapped in data object
                 if (otps == null && json.has("data")) {
                     Object d = json.get("data");
                     if (d instanceof JSONObject) {
-                        otps = ((JSONObject) d).optJSONArray("supplier_delivery_otp");
+                        JSONObject dObj = (JSONObject) d;
+                        otps = dObj.optJSONArray("supplier_delivery_otp");
+                        if (otps == null) otps = dObj.optJSONArray("delivery_otps");
+                        if (otps == null) otps = dObj.optJSONArray("otps");
+                        if (otps == null) otps = dObj.optJSONArray("rto_otps");
                     } else if (d instanceof JSONArray) {
                         otps = (JSONArray) d;
                     }
+                }
+
+                // If empty and supplierId exists, retry once with supplier_id included in payload
+                if ((otps == null || otps.length() == 0) && supplierId > 0) {
+                    try {
+                        HttpURLConnection retryConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
+                        retryConn.setRequestMethod("POST");
+                        retryConn.setConnectTimeout(8000);
+                        retryConn.setReadTimeout(8000);
+                        retryConn.setDoOutput(true);
+                        retryConn.setRequestProperty("Content-Type", "application/json");
+                        retryConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                        retryConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                        retryConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                        retryConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+                        if (!identifier.isEmpty()) retryConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                        retryConn.setRequestProperty("Cookie", cookies);
+                        retryConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                        retryConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                        retryConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+
+                        JSONObject retryPayload = new JSONObject();
+                        if (!identifier.isEmpty()) retryPayload.put("identifier", identifier);
+                        retryPayload.put("supplier_id", supplierId);
+                        retryPayload.put("child_supplier_identifier", JSONObject.NULL);
+                        retryPayload.put("child_supplier_id", JSONObject.NULL);
+
+                        try (OutputStream ros = retryConn.getOutputStream()) {
+                            ros.write(retryPayload.toString().getBytes(StandardCharsets.UTF_8));
+                        }
+                        if (retryConn.getResponseCode() == 200) {
+                            String retryResp = readStream(retryConn.getInputStream());
+                            JSONObject retryJson = new JSONObject(retryResp.isEmpty() ? "{}" : retryResp);
+                            JSONArray retryOtps = retryJson.optJSONArray("supplier_delivery_otp");
+                            if (retryOtps == null && retryJson.has("data")) {
+                                Object rd = retryJson.get("data");
+                                if (rd instanceof JSONObject) retryOtps = ((JSONObject) rd).optJSONArray("supplier_delivery_otp");
+                                else if (rd instanceof JSONArray) retryOtps = (JSONArray) rd;
+                            }
+                            if (retryOtps != null && retryOtps.length() > 0) {
+                                otps = retryOtps;
+                            }
+                        }
+                    } catch (Exception ignored) {}
                 }
 
                 if (otps != null && otps.length() > 0) {
@@ -482,16 +533,18 @@ public class MeeshoDirectPlugin extends Plugin {
                         JSONObject item = otps.getJSONObject(i);
                         JSONObject otpObj = new JSONObject();
 
-                        String otpStr = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "----")));
+                        // 1. Direct field lookup
+                        String otpStr = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", item.optString("end_otp", item.optString("valmo_otp", ""))))).trim();
                         String exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
 
-                        // Support Meesho nested otp_details array
+                        // 2. Nested otp_details lookup
                         JSONArray details = item.optJSONArray("otp_details");
                         if (details != null && details.length() > 0) {
+                            // Check active items first
                             for (int j = 0; j < details.length(); j++) {
                                 JSONObject d = details.optJSONObject(j);
                                 if (d != null && d.optBoolean("active", true)) {
-                                    String candidate = d.optString("otp", "");
+                                    String candidate = d.optString("otp", d.optString("delivery_otp", d.optString("end_otp", d.optString("handover_otp", "")))).trim();
                                     if (!candidate.isEmpty() && !candidate.equals("----")) {
                                         otpStr = candidate;
                                         String dExp = d.optString("expiry_timestamp", "");
@@ -500,18 +553,43 @@ public class MeeshoDirectPlugin extends Plugin {
                                     }
                                 }
                             }
+                            // Fallback: unconditional lookup in details array
+                            if (otpStr.isEmpty() || otpStr.equals("----")) {
+                                for (int j = 0; j < details.length(); j++) {
+                                    JSONObject d = details.optJSONObject(j);
+                                    if (d != null) {
+                                        String candidate = d.optString("otp", d.optString("delivery_otp", d.optString("end_otp", d.optString("handover_otp", "")))).trim();
+                                        if (!candidate.isEmpty() && !candidate.equals("----")) {
+                                            otpStr = candidate;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
+
+                        // 3. Fallback: regex search across raw item text for any 4-to-6 digit OTP
+                        if (otpStr.isEmpty() || otpStr.equals("----")) {
+                            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"(?:otp|delivery_otp|handover_otp|end_otp|valmo_otp)\"\\s*:\\s*\"?(\\d{4,6})\"?").matcher(item.toString());
+                            if (m.find()) {
+                                otpStr = m.group(1);
+                            }
+                        }
+
+                        if (otpStr.isEmpty()) otpStr = "----";
                         otpObj.put("otp", otpStr);
 
+                        // Carrier detection
                         JSONObject carrier = item.optJSONObject("carrier_details");
                         String carrierName = carrier != null ? carrier.optString("name", carrier.optString("carrier_name", "Courier")) : item.optString("carrier_name", item.optString("name", "Courier"));
                         if (carrierName.equalsIgnoreCase("delhivery")) carrierName = "Delhivery";
                         else if (carrierName.equalsIgnoreCase("shadowfax")) carrierName = "Shadowfax";
                         else if (carrierName.equalsIgnoreCase("xpressbees")) carrierName = "Xpressbees";
                         else if (carrierName.equalsIgnoreCase("ecom_express")) carrierName = "Ecom Express";
+                        else if (carrierName.equalsIgnoreCase("valmo")) carrierName = "Valmo";
                         otpObj.put("courier", carrierName);
 
-                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", 0)));
+                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", item.optInt("handover_count", 0))));
                         JSONObject dsd = item.optJSONObject("delivery_shipment_details");
                         if (count == 0 && dsd != null) {
                             count = dsd.optInt("total_handover_count", dsd.optInt("total_shipment_count", dsd.optInt("count", 0)));

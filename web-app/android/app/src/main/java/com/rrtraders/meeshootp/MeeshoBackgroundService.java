@@ -384,14 +384,12 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
             conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
 
+            // 1. Primary Desktop Payload (matches Meesho desktop portal exactly)
             JSONObject payload = new JSONObject();
             if (!identifier.isEmpty()) {
                 payload.put("identifier", identifier);
-            }
-            if (supplierId > 0) {
-                payload.put("supplier_id", supplierId);
             }
             payload.put("child_supplier_identifier", JSONObject.NULL);
             payload.put("child_supplier_id", JSONObject.NULL);
@@ -420,16 +418,69 @@ public class MeeshoBackgroundService extends Service {
             if (code == 200) {
                 String resp = readStream(conn.getInputStream());
                 JSONObject json = new JSONObject(resp.isEmpty() ? "{}" : resp);
+                
+                // Deep array lookup across all known Meesho response structures
                 JSONArray otps = json.optJSONArray("supplier_delivery_otp");
+                if (otps == null) otps = json.optJSONArray("delivery_otps");
+                if (otps == null) otps = json.optJSONArray("otps");
+                if (otps == null) otps = json.optJSONArray("rto_otps");
+                if (otps == null) otps = json.optJSONArray("return_otps");
 
-                // Fallback if wrapped in data object
                 if (otps == null && json.has("data")) {
                     Object d = json.get("data");
                     if (d instanceof JSONObject) {
-                        otps = ((JSONObject) d).optJSONArray("supplier_delivery_otp");
+                        JSONObject dObj = (JSONObject) d;
+                        otps = dObj.optJSONArray("supplier_delivery_otp");
+                        if (otps == null) otps = dObj.optJSONArray("delivery_otps");
+                        if (otps == null) otps = dObj.optJSONArray("otps");
+                        if (otps == null) otps = dObj.optJSONArray("rto_otps");
                     } else if (d instanceof JSONArray) {
                         otps = (JSONArray) d;
                     }
+                }
+
+                // If empty and supplierId exists, retry once with supplier_id included in payload
+                if ((otps == null || otps.length() == 0) && supplierId > 0) {
+                    try {
+                        HttpURLConnection retryConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
+                        retryConn.setRequestMethod("POST");
+                        retryConn.setConnectTimeout(8000);
+                        retryConn.setReadTimeout(8000);
+                        retryConn.setDoOutput(true);
+                        retryConn.setRequestProperty("Content-Type", "application/json");
+                        retryConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                        retryConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                        retryConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                        retryConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
+                        if (!identifier.isEmpty()) retryConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                        retryConn.setRequestProperty("Cookie", cookies);
+                        retryConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                        retryConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                        retryConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+
+                        JSONObject retryPayload = new JSONObject();
+                        if (!identifier.isEmpty()) retryPayload.put("identifier", identifier);
+                        retryPayload.put("supplier_id", supplierId);
+                        retryPayload.put("child_supplier_identifier", JSONObject.NULL);
+                        retryPayload.put("child_supplier_id", JSONObject.NULL);
+
+                        try (OutputStream ros = retryConn.getOutputStream()) {
+                            ros.write(retryPayload.toString().getBytes(StandardCharsets.UTF_8));
+                        }
+                        if (retryConn.getResponseCode() == 200) {
+                            String retryResp = readStream(retryConn.getInputStream());
+                            JSONObject retryJson = new JSONObject(retryResp.isEmpty() ? "{}" : retryResp);
+                            JSONArray retryOtps = retryJson.optJSONArray("supplier_delivery_otp");
+                            if (retryOtps == null && retryJson.has("data")) {
+                                Object rd = retryJson.get("data");
+                                if (rd instanceof JSONObject) retryOtps = ((JSONObject) rd).optJSONArray("supplier_delivery_otp");
+                                else if (rd instanceof JSONArray) retryOtps = (JSONArray) rd;
+                            }
+                            if (retryOtps != null && retryOtps.length() > 0) {
+                                otps = retryOtps;
+                            }
+                        }
+                    } catch (Exception ignored) {}
                 }
 
                 boolean anyActiveOtp = false;
@@ -441,20 +492,45 @@ public class MeeshoBackgroundService extends Service {
                 if (otps != null && otps.length() > 0) {
                     for (int i = 0; i < otps.length(); i++) {
                         JSONObject item = otps.getJSONObject(i);
-                        String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "")));
+                        
+                        // 1. Direct field lookup
+                        String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", item.optString("end_otp", item.optString("valmo_otp", ""))))).trim();
+                        
+                        // 2. Nested otp_details lookup
                         JSONArray details = item.optJSONArray("otp_details");
                         if (details != null && details.length() > 0) {
                             for (int j = 0; j < details.length(); j++) {
                                 JSONObject d = details.optJSONObject(j);
                                 if (d != null && d.optBoolean("active", true)) {
-                                    String candidate = d.optString("otp", "");
+                                    String candidate = d.optString("otp", d.optString("delivery_otp", d.optString("end_otp", d.optString("handover_otp", "")))).trim();
                                     if (!candidate.isEmpty() && !candidate.equals("----")) {
                                         otp = candidate;
                                         break;
                                     }
                                 }
                             }
+                            if (otp.isEmpty() || otp.equals("----")) {
+                                for (int j = 0; j < details.length(); j++) {
+                                    JSONObject d = details.optJSONObject(j);
+                                    if (d != null) {
+                                        String candidate = d.optString("otp", d.optString("delivery_otp", d.optString("end_otp", d.optString("handover_otp", "")))).trim();
+                                        if (!candidate.isEmpty() && !candidate.equals("----")) {
+                                            otp = candidate;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
+
+                        // 3. Regex fallback across item text for any 4-to-6 digit OTP
+                        if (otp.isEmpty() || otp.equals("----")) {
+                            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"(?:otp|delivery_otp|handover_otp|end_otp|valmo_otp)\"\\s*:\\s*\"?(\\d{4,6})\"?").matcher(item.toString());
+                            if (m.find()) {
+                                otp = m.group(1);
+                            }
+                        }
+
                         if (otp.isEmpty() || otp.equals("----")) continue;
 
                         JSONObject carrier = item.optJSONObject("carrier_details");
@@ -462,8 +538,10 @@ public class MeeshoBackgroundService extends Service {
                         if (courier.equalsIgnoreCase("delhivery")) courier = "Delhivery";
                         else if (courier.equalsIgnoreCase("shadowfax")) courier = "Shadowfax";
                         else if (courier.equalsIgnoreCase("xpressbees")) courier = "Xpressbees";
+                        else if (courier.equalsIgnoreCase("ecom_express")) courier = "Ecom Express";
+                        else if (courier.equalsIgnoreCase("valmo")) courier = "Valmo";
 
-                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", 0)));
+                        int count = item.optInt("count", item.optInt("total_handover_count", item.optInt("total_shipment_count", item.optInt("handover_count", 0))));
                         JSONObject dsd = item.optJSONObject("delivery_shipment_details");
                         if (count == 0 && dsd != null) {
                             count = dsd.optInt("total_handover_count", dsd.optInt("total_shipment_count", dsd.optInt("count", 0)));
