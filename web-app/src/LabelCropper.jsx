@@ -684,28 +684,79 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     const isContinuation = pageCurrent > 1 || (!invoiceNumber && !orderId);
 
     // 7. Extract Item SKUs & Quantities from invoice table
-    // Matches patterns like: Men Relaxed Fit Flat-Front Trousers,grey,703666422025 (O1PANTDARKGREY32),O1 PANT DARK GREY-32
-    // or standalone line: LILN PNT BLACK-32
+    // Matches patterns like:
+    // - Women Embroidered 2-Piece Co-Ord Set,blue,704105368013 (LESPSNFLRBLUXXL),LE_SP_SNFLR_BLU_XXL
+    // - (FRWNLLNBLU32),FR_WN_LLN_BLU_32
+    // - Men Relaxed Fit Flat-Front Trousers,grey,703666422025 (O1PANTDARKGREY32),O1 PANT DARK GREY-32
+    // - Standalone style codes: LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32
     const invoiceItems = [];
     for (let i = 0; i < lines.length; i++) {
-      const l = lines[i];
+      const l = lines[i]?.trim() || '';
+      if (!l) continue;
+
       let sku = '';
-      const m1 = l.match(/\([A-Za-z0-9]+\),([A-Za-z0-9\s\-]+)$/);
+
+      // Pattern 1: ... (CODE),SKU_NAME (with support for _, -, spaces, dots, slashes)
+      const m1 = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)\s*$/);
       if (m1) {
         sku = m1[1].trim();
-      } else {
-        const m2 = l.match(/^([A-Z0-9]{2,8}\s+(?:PANT|PNT|PT)[A-Z0-9\s\-]+)$/i);
+      }
+
+      // Pattern 1b: If not strictly at end of line (e.g. trailing comma or text)
+      if (!sku) {
+        const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)(?:\s*,|\s*$)/);
+        if (m1b && !/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST)/i.test(m1b[1])) {
+          sku = m1b[1].trim();
+        }
+      }
+
+      // Pattern 1c: SKU is inside parentheses at the end: ... 704105368013 (LE_SP_SNFLR_BLU_XXL)
+      if (!sku) {
+        const m1c = l.match(/\b\d{8,14}\s*\(([A-Za-z0-9_\s\-\.\/\+]+)\)\s*$/);
+        if (m1c) {
+          sku = m1c[1].trim();
+        }
+      }
+
+      // Pattern 2: Standalone SKU with apparel keywords (e.g. O1 PANT DARK GREY-32)
+      if (!sku) {
+        const m2 = l.match(/^([A-Z0-9_\-]{2,15}\s+(?:PANT|PNT|PT|KURTI|SHIRT|TSHIRT|JEANS|SET|DRESS)[A-Z0-9_\s\-]+)$/i);
         if (m2 && !l.includes('Total') && !l.includes('TAX') && !l.includes('HSN')) {
           sku = m2[1].trim();
         }
       }
 
+      // Pattern 3: Standalone alphanumeric style code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
+      if (!sku) {
+        const m3 = l.match(/^([A-Z0-9]{2,10}_[A-Z0-9_]{2,30})$/i);
+        if (m3 && !l.includes('GST') && !l.includes('TAX') && !l.includes('INVOICE') && !l.includes('BILL')) {
+          sku = m3[1].trim();
+        }
+      }
+
+      if (sku) {
+        // Clean up any trailing commas or semicolons
+        sku = sku.replace(/[,;]+$/, '').trim();
+        // Ignore table headers or invalid keywords
+        if (/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST|Convenience|Description)/i.test(sku) || sku.length < 2) {
+          sku = '';
+        }
+      }
+
       if (sku) {
         let qty = 1;
-        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
-          const qm = lines[j].match(/\b\d{6,8}\s+(\d+(?:\.\d+)?)\b/);
+        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+          const lineJ = lines[j]?.trim() || '';
+          // Match HSN (6-8 digits) followed by Qty (e.g. 61044400 1.0 or 61044400 2)
+          const qm = lineJ.match(/\b\d{6,8}\s+(\d+(?:\.\d+)?)\b/);
           if (qm) {
-            qty = Math.round(parseFloat(qm[1]));
+            qty = Math.max(1, Math.round(parseFloat(qm[1])));
+            break;
+          }
+          // Fallback: starts with quantity like "1.0 2499.0"
+          const qm2 = lineJ.match(/^(\d+(?:\.0+)?)\s+\d+(?:\.\d+)?/);
+          if (qm2 && parseFloat(qm2[1]) > 0 && parseFloat(qm2[1]) <= 50) {
+            qty = Math.max(1, Math.round(parseFloat(qm2[1])));
             break;
           }
         }
