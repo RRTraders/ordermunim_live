@@ -139,8 +139,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 42;
-const CURRENT_APP_VERSION_NAME = "5.2";
+const CURRENT_APP_VERSION_CODE = 43;
+const CURRENT_APP_VERSION_NAME = "5.3";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1131,7 +1131,7 @@ export default function App() {
                 cookies: fresh.cookies,
                 identifier: freshIdent,
                 supplierId: freshSupId,
-                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -1290,7 +1290,7 @@ export default function App() {
                 cookies: fresh.cookies,
                 identifier: fresh.identifier,
                 supplierId: fresh.supplierId,
-                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -1334,7 +1334,7 @@ export default function App() {
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
-                  dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                   lastUpdated: new Date().toISOString()
                 }).catch(() => {});
                 otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
@@ -1360,7 +1360,7 @@ export default function App() {
           const newCourier = otpRes.courier || 'No Return';
           const newCount = otpRes.handoverCount || 0;
           const newOtpListJson = JSON.stringify(otpRes.otpList || []);
-          const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
           // Instantly update live timestamp on this device
           setLiveCheckedTimes(prev => ({
@@ -1382,10 +1382,10 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Sync fresh timestamp to Firestore every 15 seconds so website and all devices reflect live checking
+          // Sync fresh timestamp to Firestore on every 10s poll so website and all devices reflect live checking
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 15 * 1000; // Fresh check every 15 seconds
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 8 * 1000; // Fresh check every 8-10 seconds
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
@@ -1967,7 +1967,7 @@ export default function App() {
             const newOtp = otpRes.otp || '----';
             const newCourier = otpRes.courier || 'No Return';
             const newCount = otpRes.handoverCount || 0;
-            const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             setLiveCheckedTimes(prev => ({
               ...prev,
@@ -2021,7 +2021,7 @@ export default function App() {
               setLocalSessions(curSess);
               syncBackgroundSessions(curSess, false, user?.uid);
               const otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
-              const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
               setLiveCheckedTimes(prev => ({
                 ...prev,
                 [syncKey]: currentTimeStr,
@@ -2132,7 +2132,7 @@ export default function App() {
         currentOtp: res.otp || '----',
         courier: res.courier || 'No Return',
         handoverCount: res.handoverCount || 0,
-        dateTime: res.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        dateTime: res.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         otpList: res.otpList || [],
         status: 'live',
         lastUpdated: new Date().toISOString()
@@ -2330,7 +2330,7 @@ export default function App() {
         currentOtp: data.otp || '----',
         courier: data.courier || 'No Return',
         handoverCount: data.handoverCount || 0,
-        dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        dateTime: data.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         otpList: data.otpList || [],
         status: 'live',
         cookies: (data && data.cookies) ? data.cookies : (existingStore?.cookies || ''),

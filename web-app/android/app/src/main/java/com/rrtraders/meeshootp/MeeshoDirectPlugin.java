@@ -325,7 +325,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 ret.put("otp", otpRes.optString("otp", "----"));
                 ret.put("courier", otpRes.optString("courier", "No Return"));
                 ret.put("handoverCount", otpRes.optInt("handoverCount", 0));
-                ret.put("dateTime", otpRes.optString("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date())));
+                ret.put("dateTime", otpRes.optString("dateTime", new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date())));
                 ret.put("otpList", otpRes.opt("otpList"));
 
                 // Save session to SharedPreferences for 24/7 background foreground service
@@ -395,7 +395,7 @@ public class MeeshoDirectPlugin extends Plugin {
                 fallback.put("otp", "----");
                 fallback.put("courier", "No Return");
                 fallback.put("handoverCount", 0);
-                fallback.put("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date()));
+                fallback.put("dateTime", new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date()));
                 fallback.put("otpList", new JSONArray());
                 fallback.put("error", e.getMessage() != null ? e.getMessage() : "Fetch exception");
                 call.resolve(fallback);
@@ -408,7 +408,7 @@ public class MeeshoDirectPlugin extends Plugin {
         def.put("otp", "----");
         def.put("courier", "No Return");
         def.put("handoverCount", 0);
-        def.put("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date()));
+        def.put("dateTime", new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date()));
         def.put("otpList", new JSONArray());
 
         try {
@@ -598,7 +598,7 @@ public class MeeshoDirectPlugin extends Plugin {
                         otpObj.put("handoverCount", count);
                         totalCount += count;
 
-                        String currentCheckTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                        String currentCheckTime = new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date());
                         otpObj.put("dateTime", currentCheckTime);
                         if (exp.isEmpty()) {
                             exp = item.optString("otp_expiry_timestamp", item.optString("expiry_timestamp", ""));
@@ -623,7 +623,7 @@ public class MeeshoDirectPlugin extends Plugin {
 
                     JSONObject first = resultList.getJSONObject(0);
                     def.put("otp", first.optString("otp", "----"));
-                    def.put("dateTime", first.optString("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date())));
+                    def.put("dateTime", first.optString("dateTime", new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date())));
                     android.util.Log.d("MeeshoDirect", "Found " + resultList.length() + " active OTPs for " + identifier + ". First OTP: " + def.optString("otp", "----"));
                 }
             } else if (code == 401 || code == 403) {

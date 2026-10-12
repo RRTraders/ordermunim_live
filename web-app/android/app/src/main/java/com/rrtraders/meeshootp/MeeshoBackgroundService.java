@@ -312,7 +312,7 @@ public class MeeshoBackgroundService extends Service {
             String email = sess.optString("email", "");
             String password = sess.optString("password", "");
             String docId = sess.optString("docId", "");
-            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+            String timeStr = new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date());
 
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
