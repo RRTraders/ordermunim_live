@@ -226,8 +226,8 @@ public class MeeshoBackgroundService extends Service {
 
     /**
      * Polling schedule:
-     * - Day time (08:00 AM to 09:00 PM): 60 seconds interval
-     * - Night time (09:00 PM to 08:00 AM): 900 seconds (15 minutes) interval
+     * - Day time (08:00 AM to 09:00 PM): 12 seconds interval for near-instant return OTP updates
+     * - Night time (09:00 PM to 08:00 AM): 300 seconds (5 minutes) interval
      */
     public static long getDynamicPollDelaySecondsStatic() {
         try {
@@ -240,12 +240,12 @@ public class MeeshoBackgroundService extends Service {
             int dayEnd = 21 * 60;   // 09:00 PM (1260 minutes)
 
             if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 60; // 60 seconds during daytime (08:00 AM to 09:00 PM)
+                return 12; // 12 seconds during daytime (08:00 AM to 09:00 PM)
             } else {
-                return 900; // 15 minutes during night (09:00 PM to 08:00 AM)
+                return 300; // 5 minutes during night (09:00 PM to 08:00 AM)
             }
         } catch (Exception e) {
-            return 60;
+            return 12;
         }
     }
 

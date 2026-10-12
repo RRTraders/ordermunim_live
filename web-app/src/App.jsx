@@ -139,8 +139,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 40;
-const CURRENT_APP_VERSION_NAME = "5.0";
+const CURRENT_APP_VERSION_CODE = 41;
+const CURRENT_APP_VERSION_NAME = "5.1";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1351,16 +1351,16 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Sync fresh timestamp to Firestore every 60 seconds so website and all devices reflect live checking
+          // Sync fresh timestamp to Firestore every 15 seconds so website and all devices reflect live checking
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 60 * 1000; // Fresh check every 60 seconds
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 15 * 1000; // Fresh check every 15 seconds
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
           }
 
-          // Data has changed OR 60 seconds elapsed since last Firestore write
+          // Data has changed OR 15 seconds elapsed since last Firestore write
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1391,15 +1391,15 @@ export default function App() {
     pollAllNativeSessions();
 
     // 2. Dynamic polling schedule:
-    // Daytime (08:00 AM to 09:00 PM): every 60 seconds
-    // Night (09:00 PM to 08:00 AM): every 15 minutes (900 seconds)
+    // Daytime (08:00 AM to 09:00 PM): every 10 seconds (ultra-fast for delivery returns)
+    // Night (09:00 PM to 08:00 AM): every 5 minutes (300 seconds)
     const getPollIntervalMs = () => {
       const now = new Date();
       const hour = now.getHours();
       if (hour >= 8 && hour < 21) {
-        return 60 * 1000; // 60 seconds
+        return 10 * 1000; // 10 seconds
       }
-      return 15 * 60 * 1000; // 15 minutes (900 seconds)
+      return 5 * 60 * 1000; // 5 minutes (300 seconds)
     };
 
     let pollTimerId = null;
