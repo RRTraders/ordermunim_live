@@ -11,12 +11,12 @@
     "redirects": [
       {
         "source": "/ordermunim_v:version.apk",
-        "destination": "https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk",
+        "destination": "https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v:version.apk",
         "type": 302
       },
       {
         "source": "/meesho_otp.apk",
-        "destination": "https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk",
+        "destination": "https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.7.apk",
         "type": 302
       }
     ],
