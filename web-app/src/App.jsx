@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo, exitApp } from './meeshoDirect';
+import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, checkExactAlarmPermission, requestExactAlarmPermission, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo, exitApp } from './meeshoDirect';
 import { 
   saveEncryptedStoreCredentials, 
   getDecryptedStoreCredentials, 
@@ -139,8 +139,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 41;
-const CURRENT_APP_VERSION_NAME = "5.1";
+const CURRENT_APP_VERSION_CODE = 42;
+const CURRENT_APP_VERSION_NAME = "5.2";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -575,6 +575,37 @@ export default function App() {
         }
       }
     });
+  }, []);
+
+  // Exact Alarm Permission (Android 12+ / API 31+) for 10-12s Fast Refresh
+  const [canScheduleExactAlarms, setCanScheduleExactAlarms] = useState(true);
+
+  const checkAlarmPermission = async () => {
+    if (isNativeMobile()) {
+      try {
+        const res = await checkExactAlarmPermission();
+        if (res && typeof res.canScheduleExactAlarms === 'boolean') {
+          setCanScheduleExactAlarms(res.canScheduleExactAlarms);
+        }
+      } catch (err) {
+        console.warn('Check exact alarm permission failed:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    checkAlarmPermission();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAlarmPermission();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', checkAlarmPermission);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', checkAlarmPermission);
+    };
   }, []);
 
   const [appUpdateConfig, setAppUpdateConfig] = useState(null);
@@ -2716,6 +2747,26 @@ export default function App() {
     }
   };
 
+  // Handle Request Exact Alarm Permission for 10-12s Fast Refresh
+  const handleRequestExactAlarmPermission = async () => {
+    if (isNativeMobile()) {
+      showToast('Opening Alarms & Reminders settings...', 'info');
+      try {
+        const res = await requestExactAlarmPermission();
+        if (res?.alreadyGranted) {
+          setCanScheduleExactAlarms(true);
+          showToast('✓ Fast 10s Alarm Permission is already active!', 'success');
+        } else {
+          showToast('Please enable "Allow setting alarms and reminders" toggle.', 'info');
+        }
+      } catch (err) {
+        showToast(`Could not open settings: ${err.message}`, 'error');
+      }
+    } else {
+      showToast('Fast alarms are handled automatically on web.', 'info');
+    }
+  };
+
   // Handle Open Notification Settings (allows user to hide background notification without affecting OTP alerts)
   const handleOpenSystemNotificationSettings = async () => {
     if (isNativeMobile()) {
@@ -3937,6 +3988,18 @@ export default function App() {
                     <Settings className="w-3.5 h-3.5 text-slate-500" />
                     App Settings / Permissions
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestExactAlarmPermission}
+                    className={`col-span-1 sm:col-span-2 w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border ${
+                      canScheduleExactAlarms
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{canScheduleExactAlarms ? '✓ Fast 10s Alarm: Enabled' : '⚡ Enable Fast 10s Alarm (Tap to Allow)'}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -4454,6 +4517,30 @@ export default function App() {
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Android Exact Alarm Permission Alert */}
+            {isMobileApp && !canScheduleExactAlarms && (
+              <div className="bg-amber-500/10 border border-amber-500/30 text-amber-900 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-amber-950">Enable Fast 10-Second Return Refresh</h4>
+                    <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                      Android requires "Alarms & Reminders" permission to update Meesho OTPs every 10–12 seconds in the background. Tap to allow.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRequestExactAlarmPermission}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 cursor-pointer transition-all text-center"
+                >
+                  Enable Fast Refresh
+                </button>
               </div>
             )}
 
@@ -5750,6 +5837,18 @@ export default function App() {
                   >
                     <Settings className="w-3 h-3 text-slate-500" />
                     <span>App Settings</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestExactAlarmPermission}
+                    className={`col-span-2 py-2 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center border ${
+                      canScheduleExactAlarms
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{canScheduleExactAlarms ? 'Fast 10s Alarm: Enabled ✓' : 'Fast 10s Alarm: Tap to Allow'}</span>
                   </button>
                 </div>
               )}

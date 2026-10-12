@@ -135,6 +135,34 @@ export async function requestBatteryOptimization() {
 }
 
 /**
+ * Check if Android Exact Alarm permission is granted (Android 12+ API 31+)
+ */
+export async function checkExactAlarmPermission() {
+  try {
+    if (!isNativeMobile()) return { isNative: false, canScheduleExactAlarms: true };
+    const res = await NativeMeesho.checkExactAlarmPermission();
+    return res || { canScheduleExactAlarms: true };
+  } catch (err) {
+    console.warn('[Native Meesho] checkExactAlarmPermission failed:', err);
+    return { canScheduleExactAlarms: true };
+  }
+}
+
+/**
+ * Request Android Exact Alarm permission via system settings (Android 12+ API 31+)
+ */
+export async function requestExactAlarmPermission() {
+  try {
+    if (!isNativeMobile()) return { isNative: false };
+    const res = await NativeMeesho.requestExactAlarmPermission();
+    return res || { success: true };
+  } catch (err) {
+    console.warn('[Native Meesho] requestExactAlarmPermission failed:', err);
+    throw err;
+  }
+}
+
+/**
  * Open Android system App Info Settings
  */
 export async function openAppSettings() {

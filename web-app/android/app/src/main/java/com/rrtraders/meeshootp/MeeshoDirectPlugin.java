@@ -1,5 +1,6 @@
 package com.rrtraders.meeshootp;
 
+import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -983,6 +984,67 @@ public class MeeshoDirectPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Failed to open app settings: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void checkExactAlarmPermission(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            boolean canSchedule = true;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                canSchedule = (am != null && am.canScheduleExactAlarms());
+            }
+            JSObject ret = new JSObject();
+            ret.put("canScheduleExactAlarms", canSchedule);
+            call.resolve(ret);
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("canScheduleExactAlarms", true);
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void requestExactAlarmPermission(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                if (am != null && !am.canScheduleExactAlarms()) {
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                    intent.setData(Uri.parse("package:" + ctx.getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(intent);
+                    JSObject ret = new JSObject();
+                    ret.put("success", true);
+                    ret.put("opened", true);
+                    call.resolve(ret);
+                    return;
+                }
+            }
+            try {
+                PollAlarmReceiver.scheduleNextAlarm(ctx.getApplicationContext(), 5);
+            } catch (Exception ignored) {}
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("alreadyGranted", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            try {
+                Context ctx = getContext();
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + ctx.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("fallback", true);
+                call.resolve(ret);
+            } catch (Exception ex) {
+                call.reject("Could not open alarm settings: " + ex.getMessage());
+            }
         }
     }
 
