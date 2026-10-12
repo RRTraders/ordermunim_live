@@ -136,8 +136,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 34;
-const CURRENT_APP_VERSION_NAME = "4.4";
+const CURRENT_APP_VERSION_CODE = 35;
+const CURRENT_APP_VERSION_NAME = "4.5";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -1393,15 +1393,15 @@ export default function App() {
     pollAllNativeSessions();
 
     // 2. Dynamic polling schedule:
-    // Daytime (10:00 AM to 06:00 PM): every 60 seconds
-    // Rest of time (06:00 PM to 10:00 AM): every 1 hour (3600 seconds)
+    // Daytime (08:00 AM to 09:00 PM): every 60 seconds
+    // Night (09:00 PM to 08:00 AM): every 15 minutes (900 seconds)
     const getPollIntervalMs = () => {
       const now = new Date();
       const hour = now.getHours();
-      if (hour >= 10 && hour < 18) {
+      if (hour >= 8 && hour < 21) {
         return 60 * 1000; // 60 seconds
       }
-      return 3600 * 1000; // 1 hour (3600 seconds)
+      return 15 * 60 * 1000; // 15 minutes (900 seconds)
     };
 
     let pollTimerId = null;

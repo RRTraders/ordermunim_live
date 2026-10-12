@@ -39,12 +39,15 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MeeshoBackgroundService extends Service {
 
     public static final String CHANNEL_SERVICE = "meesho_persistent_sync_v5";
     public static final String CHANNEL_ALERT = "meesho_otp_alert_channel";
     private static final int SERVICE_NOTIFICATION_ID = 9001;
+
+    private static final AtomicBoolean isPollingInProgress = new AtomicBoolean(false);
 
     private ScheduledExecutorService scheduler;
     private SharedPreferences prefs;
@@ -79,7 +82,7 @@ public class MeeshoBackgroundService extends Service {
                     } catch (Exception ignored) {}
                 }
                 try {
-                    pollAllAccounts();
+                    pollAllAccountsStatic(this);
                 } finally {
                     if (wakeLock != null && wakeLock.isHeld()) {
                         try { wakeLock.release(); } catch (Exception ignored) {}
@@ -144,9 +147,9 @@ public class MeeshoBackgroundService extends Service {
                     "Return Handover OTP Alerts",
                     NotificationManager.IMPORTANCE_HIGH
             );
-            alertChannel.setDescription("Alerts when a courier arrives with return parcels");
+            alertChannel.setDescription("Instant alerts when Meesho courier returns arrive");
             alertChannel.enableLights(true);
-            alertChannel.setLightColor(Color.YELLOW);
+            alertChannel.setLightColor(Color.MAGENTA);
             alertChannel.enableVibration(true);
             alertChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
 
@@ -203,7 +206,7 @@ public class MeeshoBackgroundService extends Service {
                 } catch (Exception ignored) {}
             }
             try {
-                pollAllAccounts();
+                pollAllAccountsStatic(this);
             } catch (Exception ignored) {
             } finally {
                 if (wakeLock != null && wakeLock.isHeld()) {
@@ -217,8 +220,8 @@ public class MeeshoBackgroundService extends Service {
 
     /**
      * Polling schedule:
-     * - Day time (10:00 AM to 06:00 PM): 60 seconds interval
-     * - Rest of time (06:00 PM to 10:00 AM): 3600 seconds (1 hour) interval
+     * - Day time (08:00 AM to 09:00 PM): 60 seconds interval
+     * - Night time (09:00 PM to 08:00 AM): 900 seconds (15 minutes) interval
      */
     public static long getDynamicPollDelaySecondsStatic() {
         try {
@@ -227,28 +230,33 @@ public class MeeshoBackgroundService extends Service {
             int minute = cal.get(java.util.Calendar.MINUTE);
             int timeInMinutes = hour * 60 + minute;
 
-            int dayStart = 10 * 60; // 10:00 AM (600 minutes)
-            int dayEnd = 18 * 60;   // 06:00 PM (1080 minutes)
+            int dayStart = 8 * 60;  // 08:00 AM (480 minutes)
+            int dayEnd = 21 * 60;   // 09:00 PM (1260 minutes)
 
             if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 60; // 60 seconds during daytime (10:00 AM to 06:00 PM)
+                return 60; // 60 seconds during daytime (08:00 AM to 09:00 PM)
             } else {
-                return 3600; // 1 hour (3600 seconds) during rest of time (06:00 PM to 10:00 AM)
+                return 900; // 15 minutes during night (09:00 PM to 08:00 AM)
             }
         } catch (Exception e) {
             return 60;
         }
     }
 
-    private void pollAllAccounts() {
+    public static void pollAllAccountsStatic(Context context) {
+        if (context == null) return;
+        if (!isPollingInProgress.compareAndSet(false, true)) {
+            return; // Prevent duplicate concurrent polling
+        }
         try {
+            SharedPreferences prefs = context.getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
             String currentUid = prefs.getString("current_user_uid", "");
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
 
             if (allSessions.length() == 0) {
                 try {
-                    NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                    NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
                     if (nm != null) {
                         for (int id = 3000; id <= 4500; id++) {
                             nm.cancel(id);
@@ -280,12 +288,15 @@ public class MeeshoBackgroundService extends Service {
                     continue;
                 }
                 polledSet.add(dedupKey);
-                pollSingleAccount(syncKey, sess);
+                pollSingleAccountStatic(context, syncKey, sess, prefs);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            isPollingInProgress.set(false);
+        }
     }
 
-    private void pollSingleAccount(String syncKey, JSONObject sess) {
+    private static void pollSingleAccountStatic(Context context, String syncKey, JSONObject sess, SharedPreferences prefs) {
         HttpURLConnection conn = null;
         try {
             String identifier = sess.optString("identifier", "");
@@ -337,7 +348,7 @@ public class MeeshoBackgroundService extends Service {
             }
 
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
-                cookies = autoRelogin(email, password, docId);
+                cookies = autoReloginStatic(context, email, password, docId, prefs);
             }
             if (cookies.isEmpty()) return;
 
@@ -354,7 +365,7 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Accept", "application/json, text/plain, */*");
             conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
             conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
             if (!identifier.isEmpty()) conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
             conn.setRequestProperty("Cookie", cookies);
             conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
@@ -380,13 +391,13 @@ public class MeeshoBackgroundService extends Service {
             if (code == 401 || code == 403) {
                 // Auto re-login silently if cookie expired, then immediately retry fetch!
                 if (!email.isEmpty() && !password.isEmpty()) {
-                    String freshCookies = autoRelogin(email, password, docId);
+                    String freshCookies = autoReloginStatic(context, email, password, docId, prefs);
                     if (!freshCookies.isEmpty()) {
                         sess.put("cookies", freshCookies);
                         sess.put("docId", docId);
                         sess.put("email", email);
                         sess.put("password", password);
-                        pollSingleAccount(docId, sess);
+                        pollSingleAccountStatic(context, docId, sess, prefs);
                     }
                 }
                 return;
@@ -445,13 +456,13 @@ public class MeeshoBackgroundService extends Service {
 
                         if (!currentSig.equals(lastNotified)) {
                             // New or updated return OTP — FIRE HIGH PRIORITY ALERT NOTIFICATION!
-                            triggerOtpAlert(syncKey, storeName, courier, otp, count, i + 1);
+                            triggerOtpAlertStatic(context, syncKey, storeName, courier, otp, count, i + 1, prefs);
                             prefs.edit().putString(lastNotifiedKey, currentSig).apply();
                         }
 
                         if (!firstFound) {
                             firstFound = true;
-                            syncToFirestore(docId, otp, courier, count, timeStr, "live");
+                            syncToFirestore(docId, otp, courier, count, timeStr, "live", null);
                         }
                     }
                 } else {
@@ -464,8 +475,8 @@ public class MeeshoBackgroundService extends Service {
                     }
                     editor.apply();
 
-                    // Sync fresh timestamp to Firestore on every poll (60s daytime, 1h off-hours) so website updates in real time
-                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live");
+                    // Sync fresh timestamp to Firestore on every poll (60s daytime, 15m off-hours) so website updates in real time
+                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", null);
                 }
             }
         } catch (Exception ignored) {
@@ -478,11 +489,7 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status) {
-        syncToFirestore(docId, otp, courier, count, dateTime, status, null);
-    }
-
-    private void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies) {
+    private static void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies) {
         if (docId == null || docId.trim().isEmpty()) return;
         HttpURLConnection conn = null;
         try {
@@ -535,7 +542,7 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private void triggerOtpAlert(String syncKey, String storeName, String courier, String otp, int count, int index) {
+    private static void triggerOtpAlertStatic(Context context, String syncKey, String storeName, String courier, String otp, int count, int index, SharedPreferences prefs) {
         try {
             // Guard: Verify session belongs to active device user before triggering notification
             String currentUid = prefs.getString("current_user_uid", "");
@@ -551,29 +558,29 @@ public class MeeshoBackgroundService extends Service {
                 }
             }
 
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
             // Tap Notification -> Open App
-            Intent openIntent = new Intent(this, MainActivity.class);
+            Intent openIntent = new Intent(context, MainActivity.class);
             openIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent openPending = PendingIntent.getActivity(
-                    this, 100 + index, openIntent,
+                    context, 100 + index, openIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
             );
 
             // Copy Action Button
-            Intent copyIntent = new Intent(this, CopyOtpReceiver.class);
+            Intent copyIntent = new Intent(context, CopyOtpReceiver.class);
             copyIntent.putExtra("otp", otp);
             PendingIntent copyPending = PendingIntent.getBroadcast(
-                    this, 200 + index, copyIntent,
+                    context, 200 + index, copyIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
             );
 
             String title = "🚚 " + courier + " Return Handover: " + otp;
             String text = count + " " + (count == 1 ? "Parcel" : "Parcels") + " • " + storeName;
 
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ALERT)
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ALERT)
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle(title)
                     .setContentText(text)
@@ -589,19 +596,14 @@ public class MeeshoBackgroundService extends Service {
         } catch (Exception ignored) {}
     }
 
-    private String autoRelogin(String email, String password, String syncKey) {
+    private static String autoReloginStatic(Context context, String email, String password, String syncKey, SharedPreferences prefs) {
         HttpURLConnection conn = null;
         try {
-            String deviceId = Build.FINGERPRINT;
-            if (deviceId == null || deviceId.isEmpty()) {
-                deviceId = "google/Pixel_7/panther:13/TQ3A.230705.001/10161073:user/release-keys";
-            }
-
             JSONObject postData = new JSONObject();
             postData.put("email", email);
             postData.put("password", password);
             postData.put("device_id", email);
-            postData.put("instance", getStableInstanceId());
+            postData.put("instance", getStableInstanceId(prefs));
 
             URL url = new URL(SecurityShield.getV2LoginUrl());
             conn = (HttpURLConnection) url.openConnection();
@@ -614,7 +616,7 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), "login");
             conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
             conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
             conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
             conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
@@ -675,9 +677,8 @@ public class MeeshoBackgroundService extends Service {
         return "";
     }
 
-    private String getStableBrowserId() {
+    private static String getStableBrowserId(SharedPreferences prefs) {
         try {
-            if (prefs == null) prefs = getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
             String bid = prefs.getString("stable_browser_id", "");
             if (bid.isEmpty()) {
                 bid = android.util.Base64.encodeToString(("om_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
@@ -689,9 +690,8 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private String getStableInstanceId() {
+    private static String getStableInstanceId(SharedPreferences prefs) {
         try {
-            if (prefs == null) prefs = getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
             String inst = prefs.getString("stable_instance_id", "");
             if (inst.isEmpty()) {
                 inst = "inst_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
@@ -703,7 +703,7 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private String readStream(InputStream is) {
+    private static String readStream(InputStream is) {
         if (is == null) return "";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();

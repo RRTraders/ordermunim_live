@@ -8,12 +8,12 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.PowerManager;
 
-import androidx.core.content.ContextCompat;
+import java.util.concurrent.Executors;
 
 /**
  * PollAlarmReceiver: System-level Alarm Receiver for OrderMunim.
- * Registered with Android OS AlarmManager so polling runs every 60s
- * even if the app was swiped away from Recent Apps or if the screen is off.
+ * Woken up by Android AlarmManager. Runs poll directly using goAsync()
+ * so it NEVER gets blocked by Android 12+ ForegroundServiceStartNotAllowedException!
  */
 public class PollAlarmReceiver extends BroadcastReceiver {
 
@@ -22,6 +22,8 @@ public class PollAlarmReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        final PendingResult pendingResult = goAsync();
+
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         PowerManager.WakeLock wakeLock = null;
         if (pm != null) {
@@ -33,33 +35,26 @@ public class PollAlarmReceiver extends BroadcastReceiver {
 
         final PowerManager.WakeLock wl = wakeLock;
 
-        try {
-            // Wake or revive the background service to execute pollAllAccounts
-            Intent serviceIntent = new Intent(context, MeeshoBackgroundService.class);
-            serviceIntent.setAction(ACTION_POLL);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(context, serviceIntent);
-            } else {
-                context.startService(serviceIntent);
-            }
-        } catch (Exception ignored) {}
-
-        // Schedule the next alarm based on day/night dynamic schedule
-        long delaySeconds = MeeshoBackgroundService.getDynamicPollDelaySecondsStatic();
-        scheduleNextAlarm(context, delaySeconds);
-
-        if (wl != null && wl.isHeld()) {
+        Executors.newSingleThreadExecutor().execute(() -> {
             try {
-                // Give background thread time to begin execution before releasing
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    try {
-                        if (wl.isHeld()) wl.release();
-                    } catch (Exception ignored) {}
-                }, 10000);
+                // Execute pollAllAccounts directly in background with WakeLock!
+                // This eliminates any reliance on startForegroundService from background
+                // which Android 12+ blocks with ForegroundServiceStartNotAllowedException!
+                MeeshoBackgroundService.pollAllAccountsStatic(context);
             } catch (Exception ignored) {
-                try { if (wl.isHeld()) wl.release(); } catch (Exception ignored2) {}
+            } finally {
+                // Schedule the next alarm based on day/night dynamic schedule
+                long delaySeconds = MeeshoBackgroundService.getDynamicPollDelaySecondsStatic();
+                scheduleNextAlarm(context, delaySeconds);
+
+                if (wl != null && wl.isHeld()) {
+                    try { wl.release(); } catch (Exception ignored) {}
+                }
+                try {
+                    pendingResult.finish();
+                } catch (Exception ignored) {}
             }
-        }
+        });
     }
 
     public static void scheduleNextAlarm(Context context, long delaySeconds) {
