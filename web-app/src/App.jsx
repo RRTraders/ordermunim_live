@@ -609,7 +609,7 @@ export default function App() {
   const [broadcastVersionName, setBroadcastVersionName] = useState('3.2');
   const [broadcastTitle, setBroadcastTitle] = useState('New Update Available (v3.2)!');
   const [broadcastMessage, setBroadcastMessage] = useState('Version 3.2 completely silences background sync with 0% notification bar presence while keeping instant high-priority return OTP alerts.');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk');
   const [broadcastMode, setBroadcastMode] = useState('optional'); // 'grace_period' | 'force_immediate' | 'optional'
   const [broadcastGraceDays, setBroadcastGraceDays] = useState(2);
   const [broadcastSaving, setBroadcastSaving] = useState(false);
@@ -2481,7 +2481,7 @@ export default function App() {
         versionName: broadcastVersionName.trim() || '1.1',
         title: broadcastTitle.trim() || 'New Update Available!',
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk',
+        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk',
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -2556,7 +2556,7 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/meesho_otp.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
@@ -2631,7 +2631,7 @@ export default function App() {
 
   // Trigger In-App APK Download & Direct Android Install
   const handleInstallAppUpdate = async (url) => {
-    const targetUrl = url || 'https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk';
+    const targetUrl = url || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk';
     setUpdateDownloading(true);
     setDownloadProgress(0);
     setUpdateStatusText('Connecting to update server...');
@@ -4506,7 +4506,7 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 {!isNativeMobile() ? (
                   <a
-                    href={`/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                    href={`https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
                     download={`ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
                     className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 transition-all cursor-pointer group"
                     title={`Download OrderMunim Android App (v${CURRENT_APP_VERSION_NAME})`}
@@ -4547,7 +4547,7 @@ export default function App() {
                     <p className="text-[11px] text-sky-700 font-semibold">Once added on your phone, live delivery OTPs will sync to this screen automatically!</p>
                     <div className="pt-1">
                       <a
-                        href={`/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
+                        href={`https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
                         download={`ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`}
                         className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                       >
@@ -6329,7 +6329,7 @@ export default function App() {
                   value={broadcastUrl}
                   onChange={(e) => setBroadcastUrl(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-500"
-                  placeholder="https://github.com/RRTraders/ordermunim_live/raw/main/meesho_otp.apk"
+                  placeholder="https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk"
                 />
               </div>
 
