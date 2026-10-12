@@ -704,7 +704,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
       // Pattern 1b: If not strictly at end of line (e.g. trailing comma or text)
       if (!sku) {
-        const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)(?:\s*,|\s*$)/);
+        const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\-\.\/]+(?:[ \t]+[A-Za-z0-9_\-\.\/]+)*)/);
         if (m1b && !/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST)/i.test(m1b[1])) {
           sku = m1b[1].trim();
         }
@@ -715,6 +715,14 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         const m1c = l.match(/\b\d{8,14}\s*\(([A-Za-z0-9_\s\-\.\/\+]+)\)\s*$/);
         if (m1c) {
           sku = m1c[1].trim();
+        }
+      }
+
+      // Pattern 1d: Any word in the line matching style code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
+      if (!sku) {
+        const m1d = l.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/);
+        if (m1d && !/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR)/i.test(m1d[1])) {
+          sku = m1d[1].trim();
         }
       }
 
@@ -761,6 +769,19 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           }
         }
         invoiceItems.push({ sku, qty });
+      }
+    }
+
+    // Global fallback for page: if invoiceItems is still empty, scan rawText for style code with underscores
+    if (invoiceItems.length === 0) {
+      const globalMatches = rawText.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/g);
+      if (globalMatches) {
+        for (const candidate of globalMatches) {
+          if (!/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR|CUSTOMER|BILL_TO|SHIP_TO)/i.test(candidate)) {
+            invoiceItems.push({ sku: candidate.trim(), qty: 1 });
+            break;
+          }
+        }
       }
     }
 
@@ -1414,10 +1435,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           // Uses a solid white background rectangle so the vertical table line does not interfere/cut through the text,
           // and maintains a consistent clean font size (6.5pt) for both single and multi-item orders.
           if (item.items && item.items.length > 0) {
-            const boxX = 172; // Safely right of Consignor address (ends at <= 168)
-            const boxY = 12;
-            const boxW = 106; // Extends to 278 (clear of page right border at 282)
-            const boxH = 48; // Extends to 60 (under the Total box horizontal separator)
+            const pageWidth = copiedPage.getWidth();
+            const pageHeight = copiedPage.getHeight();
+            // Proportional scaling for both standard 4x6 (288x432) and A4 (595x842) labels
+            const scaleX = pageWidth / 288;
+            const scaleY = pageHeight / 432;
+            const scale = Math.min(scaleX, scaleY);
+
+            const boxX = 172 * scaleX; // Safely right of Consignor address (ends at <= 168 on 288pt)
+            const boxY = 12 * scaleY;
+            const boxW = Math.min(106 * scaleX, pageWidth - boxX - (4 * scaleX)); // Extends clear of right border
+            const boxH = 48 * scaleY; // Extends under the Total box horizontal separator
 
             // 1. Solid white background to cleanly erase the vertical line
             copiedPage.drawRectangle({
@@ -1428,26 +1456,27 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               color: rgb(1, 1, 1),
             });
 
-            // 2. Draw text with consistent compact font size (6.5pt)
-            const textStartX = 175;
-            const maxTextWidth = 100;
-            const baseFontSize = 6.5;
+            // 2. Draw text with consistent compact font size
+            const textStartX = 175 * scaleX;
+            const maxTextWidth = boxW - (6 * scaleX);
+            const baseFontSize = 6.5 * scale;
+            const minFontSize = 4.0 * scale;
 
             if (item.items.length === 1) {
               const itm = item.items[0];
               let fSize = baseFontSize;
-              while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(itm.sku, fSize) > maxTextWidth) {
-                fSize -= 0.5;
+              while (fSize > minFontSize && helveticaBold.widthOfTextAtSize(itm.sku, fSize) > maxTextWidth) {
+                fSize -= 0.5 * scale;
               }
               const skuW = helveticaBold.widthOfTextAtSize(itm.sku, fSize);
               const qtyStr = String(itm.qty || 1);
-              const qtySize = baseFontSize + 1; // 7.5pt
+              const qtySize = baseFontSize + (1 * scale);
               const qtyW = helveticaBold.widthOfTextAtSize(qtyStr, qtySize);
 
-              // Line 1: SKU Name (e.g. O1 PANT DARK GREY-32)
+              // Line 1: SKU Name (e.g. LE_SP_SNFLR_BLU_XXL or O1 PANT DARK GREY-32)
               copiedPage.drawText(itm.sku, {
                 x: textStartX,
-                y: 33,
+                y: 33 * scaleY,
                 size: fSize,
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
@@ -1456,7 +1485,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               // Line 2: Quantity centered under the SKU
               copiedPage.drawText(qtyStr, {
                 x: textStartX + Math.max(0, (skuW - qtyW) / 2),
-                y: 21,
+                y: 21 * scaleY,
                 size: qtySize,
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
@@ -1466,12 +1495,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty})`;
                 let fSize = baseFontSize;
-                while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
-                  fSize -= 0.5;
+                while (fSize > minFontSize && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: 35 - (k * 12),
+                  y: (35 - (k * 12)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
@@ -1482,12 +1511,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty})`;
                 let fSize = baseFontSize;
-                while (fSize > 4.5 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
-                  fSize -= 0.5;
+                while (fSize > minFontSize && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: 39 - (k * 11),
+                  y: (39 - (k * 11)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
@@ -1498,13 +1527,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               for (let k = 0; k < count; k++) {
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty})`;
-                let fSize = 5.5;
-                while (fSize > 4.0 && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
-                  fSize -= 0.5;
+                let fSize = 5.5 * scale;
+                while (fSize > (3.5 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
+                  fSize -= 0.5 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: 44 - (k * 9.5),
+                  y: (44 - (k * 9.5)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
