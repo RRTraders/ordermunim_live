@@ -240,12 +240,12 @@ public class MeeshoBackgroundService extends Service {
             int dayEnd = 21 * 60;   // 09:00 PM (1260 minutes)
 
             if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 12; // 12 seconds during daytime (08:00 AM to 09:00 PM)
+                return 120; // 2 minutes (120 seconds) during daytime (08:00 AM to 09:00 PM)
             } else {
                 return 300; // 5 minutes during night (09:00 PM to 08:00 AM)
             }
         } catch (Exception e) {
-            return 12;
+            return 120;
         }
     }
 
@@ -410,8 +410,11 @@ public class MeeshoBackgroundService extends Service {
                         sess.put("email", email);
                         sess.put("password", password);
                         pollSingleAccountStatic(context, docId, sess, prefs);
+                        return;
                     }
                 }
+                // Mark session expired in Firestore so the user is alerted to reconnect!
+                syncToFirestore(docId, "----", "Session Expired", 0, timeStr, "session_expired", null, new JSONArray());
                 return;
             }
 

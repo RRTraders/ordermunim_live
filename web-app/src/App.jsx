@@ -1342,9 +1342,24 @@ export default function App() {
             }
           }
 
-          // Guard: Never overwrite Firestore if fetch encountered an error
+          // Guard: If session expired or auth error, flag session_expired in Firestore so user is notified to reconnect
           if (otpRes.error || otpRes.expired) {
-            console.warn(`[Native OTP Poll] Auto-sync retry scheduled for ${key}:`, otpRes.error || 'expired');
+            console.warn(`[Native OTP Poll] Auto-sync error/expired for ${key}:`, otpRes.error || 'expired');
+            if (otpRes.expired || (otpRes.error && (otpRes.error.includes('401') || otpRes.error.includes('403') || otpRes.error.includes('1007') || otpRes.error.includes('supplier identifier')))) {
+              const currentTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              setLiveCheckedTimes(prev => ({
+                ...prev,
+                [key]: currentTimeStr,
+                [targetDocId]: currentTimeStr,
+                ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
+                ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
+              }));
+              await updateDoc(doc(db, 'accounts', targetDocId), {
+                status: 'session_expired',
+                dateTime: currentTimeStr,
+                lastUpdated: new Date().toISOString()
+              }).catch(() => {});
+            }
             continue;
           } else {
             if (sessions[key] && sessions[key].expired) {
@@ -1382,16 +1397,16 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Sync fresh timestamp to Firestore on every 10s poll so website and all devices reflect live checking
+          // Sync fresh timestamp to Firestore on every 120s poll so website and all devices reflect live checking
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 8 * 1000; // Fresh check every 8-10 seconds
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 100 * 1000; // Fresh check every ~2 minutes
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
           }
 
-          // Data has changed OR 15 seconds elapsed since last Firestore write
+          // Data has changed OR 100+ seconds elapsed since last Firestore write
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1422,13 +1437,13 @@ export default function App() {
     pollAllNativeSessions();
 
     // 2. Dynamic polling schedule:
-    // Daytime (08:00 AM to 09:00 PM): every 10 seconds (ultra-fast for delivery returns)
+    // Daytime (08:00 AM to 09:00 PM): every 120 seconds (2 minutes)
     // Night (09:00 PM to 08:00 AM): every 5 minutes (300 seconds)
     const getPollIntervalMs = () => {
       const now = new Date();
       const hour = now.getHours();
       if (hour >= 8 && hour < 21) {
-        return 10 * 1000; // 10 seconds
+        return 120 * 1000; // 120 seconds (2 minutes)
       }
       return 5 * 60 * 1000; // 5 minutes (300 seconds)
     };
@@ -2747,7 +2762,7 @@ export default function App() {
     }
   };
 
-  // Handle Request Exact Alarm Permission for 10-12s Fast Refresh
+  // Handle Request Exact Alarm Permission for 2-Minute Background Refresh
   const handleRequestExactAlarmPermission = async () => {
     if (isNativeMobile()) {
       showToast('Opening Alarms & Reminders settings...', 'info');
@@ -2755,7 +2770,7 @@ export default function App() {
         const res = await requestExactAlarmPermission();
         if (res?.alreadyGranted) {
           setCanScheduleExactAlarms(true);
-          showToast('✓ Fast 10s Alarm Permission is already active!', 'success');
+          showToast('✓ 2-Minute Background Alarm Permission is already active!', 'success');
         } else {
           showToast('Please enable "Allow setting alarms and reminders" toggle.', 'info');
         }
@@ -3998,7 +4013,7 @@ export default function App() {
                     }`}
                   >
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{canScheduleExactAlarms ? '✓ Fast 10s Alarm: Enabled' : '⚡ Enable Fast 10s Alarm (Tap to Allow)'}</span>
+                    <span>{canScheduleExactAlarms ? '✓ 2-Minute Alarm: Enabled' : '⚡ Enable 2-Minute Background Alarm (Tap to Allow)'}</span>
                   </button>
                 </div>
               </div>
@@ -4528,9 +4543,9 @@ export default function App() {
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-xs text-amber-950">Enable Fast 10-Second Return Refresh</h4>
+                    <h4 className="font-bold text-xs text-amber-950">Enable Background Return Refresh</h4>
                     <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
-                      Android requires "Alarms & Reminders" permission to update Meesho OTPs every 10–12 seconds in the background. Tap to allow.
+                      Android requires "Alarms & Reminders" permission to update Meesho OTPs every 2 minutes in the background. Tap to allow.
                     </p>
                   </div>
                 </div>
@@ -4539,7 +4554,7 @@ export default function App() {
                   onClick={handleRequestExactAlarmPermission}
                   className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 cursor-pointer transition-all text-center"
                 >
-                  Enable Fast Refresh
+                  Enable Background Refresh
                 </button>
               </div>
             )}
@@ -5848,7 +5863,7 @@ export default function App() {
                     }`}
                   >
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{canScheduleExactAlarms ? 'Fast 10s Alarm: Enabled ✓' : 'Fast 10s Alarm: Tap to Allow'}</span>
+                    <span>{canScheduleExactAlarms ? '2-Minute Alarm: Enabled ✓' : '2-Minute Alarm: Tap to Allow'}</span>
                   </button>
                 </div>
               )}
