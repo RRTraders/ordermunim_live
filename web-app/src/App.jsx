@@ -478,13 +478,8 @@ export default function App() {
 
   // In-App Update, Platform Detection & Broadcast State
   const [isMobileApp, setIsMobileApp] = useState(() => isNativeMobile());
-  const [installedVersionCode, setInstalledVersionCode] = useState(() => {
-    const cached = localStorage.getItem('om_installed_version_code');
-    return cached ? Number(cached) : CURRENT_APP_VERSION_CODE;
-  });
-  const [installedVersionName, setInstalledVersionName] = useState(() => {
-    return localStorage.getItem('om_installed_version_name') || CURRENT_APP_VERSION_NAME;
-  });
+  const [installedVersionCode, setInstalledVersionCode] = useState(CURRENT_APP_VERSION_CODE);
+  const [installedVersionName, setInstalledVersionName] = useState(CURRENT_APP_VERSION_NAME);
   const [appPlatformInfo, setAppPlatformInfo] = useState(() => ({
     isNative: isNativeMobile(),
     platform: isNativeMobile() ? 'android' : 'web',
@@ -2860,9 +2855,9 @@ export default function App() {
 
   const updateStatus = getAppUpdateStatus();
 
-  // If Force Update is active (grace period expired or immediate), lock out all non-super-admin users
-  // SAFETY: Never lock if broadcast is inactive or if user is on equal/higher version
-  if (!isSuperAdmin && updateStatus.isForce && updateStatus.shouldPrompt && Boolean(appUpdateConfig?.active)) {
+  // If Force Update is active (grace period expired or immediate), lock out users on older versions
+  // For Super Admin, still show the prompt, but allow dismissal to access admin tools
+  if (updateStatus.isForce && updateStatus.shouldPrompt && Boolean(appUpdateConfig?.active) && (!isSuperAdmin || !updateDismissed)) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 text-white">
         <div className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-5 shadow-2xl shadow-rose-950/60 animate-in fade-in zoom-in-95 duration-200">
@@ -6119,7 +6114,7 @@ export default function App() {
       )}
 
       {/* ================= IN-APP UPDATE FLOATING SNACKBAR (GRACE PERIOD / OPTIONAL) ================= */}
-      {!isSuperAdmin && !updateStatus.isForce && updateStatus.shouldPrompt && !updateDismissed && (
+      {!updateStatus.isForce && updateStatus.shouldPrompt && !updateDismissed && (
         <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md z-40 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="bg-slate-900/95 backdrop-blur-xl border border-cyan-500/50 shadow-2xl shadow-cyan-950/60 rounded-2xl p-4 text-white space-y-3">
             <div className="flex items-start justify-between gap-3">
