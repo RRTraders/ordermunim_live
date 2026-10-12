@@ -24,6 +24,11 @@ public class PollAlarmReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         final PendingResult pendingResult = goAsync();
 
+        // 1. Immediately pre-schedule next alarm so the chain is unbreakable
+        // even if network or execution is abruptly killed
+        long delaySeconds = MeeshoBackgroundService.getDynamicPollDelaySecondsStatic();
+        scheduleNextAlarm(context, delaySeconds);
+
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         PowerManager.WakeLock wakeLock = null;
         if (pm != null) {
@@ -43,10 +48,6 @@ public class PollAlarmReceiver extends BroadcastReceiver {
                 MeeshoBackgroundService.pollAllAccountsStatic(context);
             } catch (Exception ignored) {
             } finally {
-                // Schedule the next alarm based on day/night dynamic schedule
-                long delaySeconds = MeeshoBackgroundService.getDynamicPollDelaySecondsStatic();
-                scheduleNextAlarm(context, delaySeconds);
-
                 if (wl != null && wl.isHeld()) {
                     try { wl.release(); } catch (Exception ignored) {}
                 }
@@ -72,7 +73,16 @@ public class PollAlarmReceiver extends BroadcastReceiver {
             long triggerAtMillis = System.currentTimeMillis() + (delaySeconds * 1000L);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+                try {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+                } catch (SecurityException se) {
+                    // Fallback for Android 12+ when exact alarm permission is restricted
+                    try {
+                        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+                    } catch (Exception ignored) {
+                        am.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+                    }
+                }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                 am.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
             } else {

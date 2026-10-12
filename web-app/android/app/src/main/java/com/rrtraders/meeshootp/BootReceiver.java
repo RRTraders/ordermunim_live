@@ -17,6 +17,8 @@ public class BootReceiver extends BroadcastReceiver {
                 Intent serviceIntent = new Intent(context, MeeshoBackgroundService.class);
                 ContextCompat.startForegroundService(context, serviceIntent);
             } catch (Exception ignored) {}
+            // Unconditionally kickstart alarm polling chain within 5 seconds
+            PollAlarmReceiver.scheduleNextAlarm(context, 5);
         }
     }
 }

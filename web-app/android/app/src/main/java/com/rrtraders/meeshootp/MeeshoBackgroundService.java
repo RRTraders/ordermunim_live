@@ -418,8 +418,13 @@ public class MeeshoBackgroundService extends Service {
                     }
                 }
 
+                boolean anyActiveOtp = false;
+                JSONArray collectedOtpList = new JSONArray();
+                String firstOtp = "----";
+                String firstCourier = "No Return";
+                int firstCount = 0;
+
                 if (otps != null && otps.length() > 0) {
-                    boolean firstFound = false;
                     for (int i = 0; i < otps.length(); i++) {
                         JSONObject item = otps.getJSONObject(i);
                         String otp = item.optString("otp", item.optString("delivery_otp", item.optString("handover_otp", "")));
@@ -450,6 +455,13 @@ public class MeeshoBackgroundService extends Service {
                             count = dsd.optInt("total_handover_count", dsd.optInt("total_shipment_count", dsd.optInt("count", 0)));
                         }
 
+                        JSONObject otpItem = new JSONObject();
+                        otpItem.put("otp", otp);
+                        otpItem.put("courier", courier);
+                        otpItem.put("handoverCount", count);
+                        otpItem.put("dateTime", timeStr);
+                        collectedOtpList.put(otpItem);
+
                         String lastNotifiedKey = "last_notified_" + syncKey + "_" + courier;
                         String lastNotified = prefs.getString(lastNotifiedKey, "");
                         String currentSig = otp + "_" + count;
@@ -460,13 +472,19 @@ public class MeeshoBackgroundService extends Service {
                             prefs.edit().putString(lastNotifiedKey, currentSig).apply();
                         }
 
-                        if (!firstFound) {
-                            firstFound = true;
-                            syncToFirestore(docId, otp, courier, count, timeStr, "live", null);
+                        if (!anyActiveOtp) {
+                            anyActiveOtp = true;
+                            firstOtp = otp;
+                            firstCourier = courier;
+                            firstCount = count;
                         }
                     }
+                }
+
+                if (anyActiveOtp) {
+                    syncToFirestore(docId, firstOtp, firstCourier, firstCount, timeStr, "live", null, collectedOtpList);
                 } else {
-                    // Reset notified flags when no returns are pending
+                    // Reset notified flags when no active returns are pending
                     SharedPreferences.Editor editor = prefs.edit();
                     for (String k : prefs.getAll().keySet()) {
                         if (k.startsWith("last_notified_" + syncKey)) {
@@ -476,7 +494,7 @@ public class MeeshoBackgroundService extends Service {
                     editor.apply();
 
                     // Sync fresh timestamp to Firestore on every poll (60s daytime, 15m off-hours) so website updates in real time
-                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", null);
+                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", null, new JSONArray());
                 }
             }
         } catch (Exception ignored) {
@@ -489,21 +507,24 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private static void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies) {
+    private static void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies, JSONArray otpList) {
         if (docId == null || docId.trim().isEmpty()) return;
         HttpURLConnection conn = null;
         try {
             String encodedDocId = java.net.URLEncoder.encode(docId, "UTF-8");
-            String queryParams;
+            StringBuilder queryParams = new StringBuilder();
             if (otp == null) {
-                queryParams = "?updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+                queryParams.append("?updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
             } else {
-                queryParams = "?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated";
+                queryParams.append("?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
             }
             if (cookies != null && !cookies.isEmpty()) {
-                queryParams += "&updateMask.fieldPaths=cookies";
+                queryParams.append("&updateMask.fieldPaths=cookies");
             }
-            URL url = new URL(SecurityShield.getFirestoreAccountsUrl(encodedDocId, queryParams));
+            if (otpList != null) {
+                queryParams.append("&updateMask.fieldPaths=otpList");
+            }
+            URL url = new URL(SecurityShield.getFirestoreAccountsUrl(encodedDocId, queryParams.toString()));
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
@@ -522,6 +543,23 @@ public class MeeshoBackgroundService extends Service {
             JSONObject fStatus = new JSONObject(); fStatus.put("stringValue", status != null ? status : "live"); fields.put("status", fStatus);
             if (cookies != null && !cookies.isEmpty()) {
                 JSONObject fCook = new JSONObject(); fCook.put("stringValue", cookies); fields.put("cookies", fCook);
+            }
+            if (otpList != null) {
+                JSONArray arr = new JSONArray();
+                for (int m = 0; m < otpList.length(); m++) {
+                    JSONObject item = otpList.getJSONObject(m);
+                    JSONObject mapFields = new JSONObject();
+                    JSONObject mOtp = new JSONObject(); mOtp.put("stringValue", item.optString("otp", "----")); mapFields.put("otp", mOtp);
+                    JSONObject mCourier = new JSONObject(); mCourier.put("stringValue", item.optString("courier", "")); mapFields.put("courier", mCourier);
+                    JSONObject mCount = new JSONObject(); mCount.put("integerValue", String.valueOf(item.optInt("handoverCount", 0))); mapFields.put("handoverCount", mCount);
+                    JSONObject mTime = new JSONObject(); mTime.put("stringValue", item.optString("dateTime", "")); mapFields.put("dateTime", mTime);
+                    JSONObject mapVal = new JSONObject(); mapVal.put("fields", mapFields);
+                    JSONObject entry = new JSONObject(); entry.put("mapValue", mapVal);
+                    arr.put(entry);
+                }
+                JSONObject arrObj = new JSONObject(); arrObj.put("values", arr);
+                JSONObject fList = new JSONObject(); fList.put("arrayValue", arrObj);
+                fields.put("otpList", fList);
             }
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
             iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
@@ -662,7 +700,7 @@ public class MeeshoBackgroundService extends Service {
 
                     String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                     // Sync status: live and fresh cookies to Firestore without wiping active OTPs!
-                    syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies);
+                    syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null);
                     return freshCookies;
                 }
             }
