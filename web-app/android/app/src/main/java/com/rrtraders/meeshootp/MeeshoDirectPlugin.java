@@ -8,6 +8,13 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.os.Handler;
+import android.os.Looper;
+import android.webkit.CookieManager;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -55,226 +62,310 @@ public class MeeshoDirectPlugin extends Plugin {
             return;
         }
 
-        getBridge().execute(() -> {
+        // Run on UI Thread so android.webkit.WebView can be created and evaluated properly
+        new Handler(Looper.getMainLooper()).post(() -> {
             try {
-                String deviceId = getDeviceFingerprint();
-                String instanceId = getStableInstanceId();
+                Context context = getContext();
+                WebView webView = new WebView(context);
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                settings.setDatabaseEnabled(true);
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
 
-                JSONObject postData = new JSONObject();
-                postData.put("email", email);
-                postData.put("password", password);
-                postData.put("device_id", email);
-                postData.put("instance", instanceId);
+                CookieManager cookieManager = CookieManager.getInstance();
+                cookieManager.setAcceptCookie(true);
+                cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-                URL url = new URL(SecurityShield.getV2LoginUrl());
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.setDoInput(true);
-                conn.setDoOutput(true);
-                conn.setInstanceFollowRedirects(false);
+                final boolean[] isCompleted = {false};
+                final Handler timeoutHandler = new Handler(Looper.getMainLooper());
+                final Runnable timeoutRunnable = () -> {
+                    if (!isCompleted[0]) {
+                        isCompleted[0] = true;
+                        try { webView.destroy(); } catch (Exception ignored) {}
+                        JSObject ret = new JSObject();
+                        ret.put("success", false);
+                        ret.put("error", "Connection timed out. Please check your internet connection.");
+                        call.resolve(ret);
+                    }
+                };
+                timeoutHandler.postDelayed(timeoutRunnable, 35000);
 
-                conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-                conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), "login");
-                conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
-                conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
+                webView.setWebViewClient(new WebViewClient() {
+                    private boolean injected = false;
 
-                // Pre-flight Akamai WAF cookies to prevent HTTP 403 Access Denied
-                String initCookies = getInitialPageCookies(SecurityShield.getLoginRefererUrl());
-                if (!initCookies.isEmpty()) {
-                    conn.setRequestProperty("Cookie", initCookies);
-                }
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        super.onPageFinished(view, url);
+                        if (isCompleted[0]) return;
 
-                byte[] bodyBytes = postData.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(bodyBytes);
-                }
+                        if (url != null && url.contains("login") && !injected) {
+                            injected = true;
+                            // Inject credentials into login form with retry interval until elements mount
+                            String jsInject = "(function() {" +
+                                    "  var timer = setInterval(function() {" +
+                                    "    try {" +
+                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]');" +
+                                    "      var pw = document.querySelector('input[name=\"password\"]');" +
+                                    "      var btn = document.querySelector('button[type=\"submit\"]');" +
+                                    "      if (em && pw && btn) {" +
+                                    "        clearInterval(timer);" +
+                                    "        var setVal = function(el, val) {" +
+                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;" +
+                                    "          setter.call(el, val);" +
+                                    "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
+                                    "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                                    "        };" +
+                                    "        setVal(em, " + JSONObject.quote(email) + ");" +
+                                    "        setVal(pw, " + JSONObject.quote(password) + ");" +
+                                    "        setTimeout(function() { btn.click(); }, 350);" +
+                                    "      }" +
+                                    "    } catch(e) {" +
+                                    "      clearInterval(timer);" +
+                                    "    }" +
+                                    "  }, 400);" +
+                                    "})();";
 
-                int statusCode = conn.getResponseCode();
-                InputStream is = (statusCode >= 200 && statusCode < 400) ? conn.getInputStream() : conn.getErrorStream();
-                String responseBody = readStream(is);
+                            view.evaluateJavascript(jsInject, null);
 
-                // Extract Cookies
-                StringBuilder cookieHeader = new StringBuilder();
-                Map<String, List<String>> headerFields = conn.getHeaderFields();
-                if (headerFields != null) {
-                    for (Map.Entry<String, List<String>> entry : headerFields.entrySet()) {
-                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
-                            for (String rawCookie : entry.getValue()) {
-                                String part = rawCookie.split(";")[0].trim();
-                                if (!part.isEmpty()) {
-                                    if (cookieHeader.length() > 0) cookieHeader.append("; ");
-                                    cookieHeader.append(part);
-                                }
-                            }
+                            // Poll for login success, cookie acquisition, or error message
+                            pollForCompletion(view, timeoutHandler, timeoutRunnable, isCompleted, email, password, call);
                         }
                     }
-                }
-                String cookies = cookieHeader.toString();
+                });
 
-                if (statusCode == 200) {
-                    String cookieIdentifier = "";
-                    long cookieSupplierId = 0;
-                    for (String part : cookies.split(";")) {
-                        String[] kv = part.trim().split("=", 2);
-                        if (kv.length == 2) {
-                            if (kv[0].equalsIgnoreCase("current_az_identifier")) cookieIdentifier = kv[1];
-                            if (kv[0].equalsIgnoreCase("s_id")) {
-                                try { cookieSupplierId = Long.parseLong(kv[1]); } catch (Exception ignored) {}
-                            }
-                        }
-                    }
+                webView.loadUrl(SecurityShield.getLoginRefererUrl());
 
-                    // 1. Fetch registration status to get accurate identifier and numeric supplier_id
-                    String identifier = cookieIdentifier;
-                    long supplierId = cookieSupplierId;
-                    try {
-                        URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
-                        HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
-                        regConn.setRequestMethod("POST");
-                        regConn.setConnectTimeout(10000);
-                        regConn.setReadTimeout(10000);
-                        regConn.setDoOutput(true);
-                        regConn.setRequestProperty("Content-Type", "application/json");
-                        regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        regConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                        regConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                        regConn.setRequestProperty("Cookie", cookies);
-                        regConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                        regConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
-                        try (OutputStream os = regConn.getOutputStream()) {
-                            os.write("{}".getBytes(StandardCharsets.UTF_8));
-                        }
-                        if (regConn.getResponseCode() == 200) {
-                            String regBody = readStream(regConn.getInputStream());
-                            JSONObject regJson = new JSONObject(regBody.isEmpty() ? "{}" : regBody);
-                            JSONObject decToken = regJson.optJSONObject("decodedToken");
-                            if (decToken != null) {
-                                JSONArray idList = decToken.optJSONArray("supplier_identifiers");
-                                if (idList != null && idList.length() > 0) {
-                                    identifier = idList.getString(0);
-                                }
-                                JSONObject idMap = decToken.optJSONObject("supplier_identifier_to_id_mapping");
-                                if (idMap != null && !identifier.isEmpty()) {
-                                    supplierId = idMap.optLong(identifier, supplierId);
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {}
-
-                    if (identifier.isEmpty()) {
-                        identifier = email.split("@")[0];
-                    }
-
-                    // 2. Fetch Supplier Details to get real Account Holder Name
-                    String accountHolderName = "";
-                    try {
-                        URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
-                        HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
-                        detConn.setRequestMethod("POST");
-                        detConn.setConnectTimeout(10000);
-                        detConn.setReadTimeout(10000);
-                        detConn.setDoOutput(true);
-                        detConn.setRequestProperty("Content-Type", "application/json");
-                        detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                        detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                        detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
-                        detConn.setRequestProperty("Cookie", cookies);
-                        detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                        detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-                        detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
-
-                        JSONObject detBody = new JSONObject();
-                        if (supplierId > 0) detBody.put("supplier_id", supplierId);
-                        detBody.put("identifier", identifier);
-                        try (OutputStream os = detConn.getOutputStream()) {
-                            os.write(detBody.toString().getBytes(StandardCharsets.UTF_8));
-                        }
-
-                        if (detConn.getResponseCode() == 200) {
-                            String resp = readStream(detConn.getInputStream());
-                            JSONObject respJson = new JSONObject(resp.isEmpty() ? "{}" : resp);
-                            JSONObject supObj = respJson.optJSONObject("supplier");
-                            if (supObj != null) {
-                                String n = supObj.optString("name", "");
-                                if (!n.trim().isEmpty()) accountHolderName = n.trim();
-                                if (accountHolderName.isEmpty()) {
-                                    accountHolderName = supObj.optString("store_name", supObj.optString("legal_name", ""));
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {}
-
-                    if (accountHolderName.isEmpty()) {
-                        accountHolderName = email.split("@")[0];
-                    }
-
-                    // 3. Initial OTP Fetch with supplier_id and identifier
-                    JSObject otpRes = fetchOtpInternal(identifier, supplierId, cookies);
-
-                    JSObject ret = new JSObject();
-                    ret.put("success", true);
-                    ret.put("storeName", accountHolderName);
-                    ret.put("identifier", identifier);
-                    ret.put("supplierId", supplierId);
-                    ret.put("cookies", cookies);
-                    ret.put("otp", otpRes.optString("otp", "----"));
-                    ret.put("courier", otpRes.optString("courier", "No Return"));
-                    ret.put("handoverCount", otpRes.optInt("handoverCount", 0));
-                    ret.put("dateTime", otpRes.optString("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date())));
-                    ret.put("otpList", otpRes.opt("otpList"));
-
-                    // Save session to SharedPreferences for 24/7 background foreground service
-                    try {
-                        SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
-                        String existingSessionsJson = prefs.getString("sessions", "{}");
-                        JSONObject allSess = new JSONObject(existingSessionsJson);
-
-                        String sessKey = !identifier.isEmpty() ? identifier : ("sess_" + supplierId);
-                        JSONObject sessData = new JSONObject();
-                        sessData.put("email", email);
-                        sessData.put("password", password);
-                        sessData.put("identifier", identifier);
-                        sessData.put("supplierId", supplierId);
-                        sessData.put("storeName", accountHolderName);
-                        sessData.put("cookies", cookies);
-
-                        allSess.put(sessKey, sessData);
-                        prefs.edit().putString("sessions", allSess.toString()).apply();
-
-                        // Permanent OS-level Vault: survives all future app updates
-                        saveToPermanentVault(getContext(), email, password, identifier);
-
-                        // Start 24/7 background service
-                        Intent serviceIntent = new Intent(getContext(), MeeshoBackgroundService.class);
-                        ContextCompat.startForegroundService(getContext(), serviceIntent);
-                    } catch (Exception ignored) {}
-
-                    call.resolve(ret);
-                } else {
-                    String errorMsg = "Login failed (HTTP " + statusCode + ")";
-                    try {
-                        JSONObject errJson = new JSONObject(responseBody);
-                        if (errJson.has("error")) errorMsg = errJson.getString("error");
-                    } catch (Exception ignored) {}
-                    if (statusCode == 401) errorMsg = "Invalid email or password";
-
-                    JSObject ret = new JSObject();
-                    ret.put("success", false);
-                    ret.put("error", errorMsg);
-                    call.resolve(ret);
-                }
             } catch (Exception e) {
                 JSObject ret = new JSObject();
                 ret.put("success", false);
-                ret.put("error", e.getMessage() != null ? e.getMessage() : "Network error");
+                ret.put("error", e.getMessage() != null ? e.getMessage() : "Failed to initialize login engine");
+                call.resolve(ret);
+            }
+        });
+    }
+
+    private void pollForCompletion(WebView webView, Handler timeoutHandler, Runnable timeoutRunnable,
+                                   boolean[] isCompleted, String email, String password, PluginCall call) {
+        Handler poller = new Handler(Looper.getMainLooper());
+        Runnable checkTask = new Runnable() {
+            private int attempts = 0;
+
+            @Override
+            public void run() {
+                if (isCompleted[0]) return;
+                attempts++;
+
+                CookieManager cm = CookieManager.getInstance();
+                String rawCookies = cm.getCookie("https://supplier.meesho.com");
+                if (rawCookies == null) rawCookies = "";
+
+                boolean hasConnectSid = rawCookies.contains("connect.sid=");
+                boolean hasIdentifier = rawCookies.contains("current_az_identifier=");
+                String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
+
+                if ((hasConnectSid && hasIdentifier) || currentUrl.contains("fulfillment") || currentUrl.contains("growth") || currentUrl.contains("dashboard")) {
+                    // Success!
+                    isCompleted[0] = true;
+                    timeoutHandler.removeCallbacks(timeoutRunnable);
+                    finishSuccessfulLogin(rawCookies, email, password, call, webView);
+                    return;
+                }
+
+                // Check for login error text on screen
+                String checkErrJs = "(function() {" +
+                        "  try {" +
+                        "    var alerts = document.querySelectorAll('[role=\"alert\"], [class*=\"error\" i], [class*=\"helper\" i]');" +
+                        "    for (var i = 0; i < alerts.length; i++) {" +
+                        "      var txt = alerts[i].innerText || '';" +
+                        "      if (txt.trim().length > 3) return txt.trim();" +
+                        "    }" +
+                        "  } catch(e) {}" +
+                        "  return '';" +
+                        "})();";
+
+                webView.evaluateJavascript(checkErrJs, val -> {
+                    if (isCompleted[0]) return;
+                    String cleanVal = (val != null && !val.equals("null") && !val.equals("\"\"")) ? val.replace("\"", "").trim() : "";
+                    if (!cleanVal.isEmpty() && attempts > 4) {
+                        isCompleted[0] = true;
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                        try { webView.destroy(); } catch (Exception ignored) {}
+
+                        JSObject ret = new JSObject();
+                        ret.put("success", false);
+                        ret.put("error", cleanVal);
+                        call.resolve(ret);
+                        return;
+                    }
+
+                    if (attempts < 60) {
+                        poller.postDelayed(this, 500);
+                    }
+                });
+            }
+        };
+
+        poller.postDelayed(checkTask, 800);
+    }
+
+    private void finishSuccessfulLogin(String cookies, String email, String password, PluginCall call, WebView webView) {
+        getBridge().execute(() -> {
+            try {
+                String cookieIdentifier = "";
+                long cookieSupplierId = 0;
+                for (String part : cookies.split(";")) {
+                    String[] kv = part.trim().split("=", 2);
+                    if (kv.length == 2) {
+                        if (kv[0].equalsIgnoreCase("current_az_identifier") && !kv[1].isEmpty()) {
+                            cookieIdentifier = kv[1];
+                        }
+                        if (kv[0].equalsIgnoreCase("s_id")) {
+                            try { cookieSupplierId = Long.parseLong(kv[1]); } catch (Exception ignored) {}
+                        }
+                    }
+                }
+
+                // 1. Fetch registration status to get accurate identifier and numeric supplier_id
+                String identifier = cookieIdentifier;
+                long supplierId = cookieSupplierId;
+                try {
+                    URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
+                    HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
+                    regConn.setRequestMethod("POST");
+                    regConn.setConnectTimeout(10000);
+                    regConn.setReadTimeout(10000);
+                    regConn.setDoOutput(true);
+                    regConn.setRequestProperty("Content-Type", "application/json");
+                    regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                    regConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                    regConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                    regConn.setRequestProperty("Cookie", cookies);
+                    regConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                    regConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
+                    try (OutputStream os = regConn.getOutputStream()) {
+                        os.write("{}".getBytes(StandardCharsets.UTF_8));
+                    }
+                    if (regConn.getResponseCode() == 200) {
+                        String regBody = readStream(regConn.getInputStream());
+                        JSONObject regJson = new JSONObject(regBody.isEmpty() ? "{}" : regBody);
+                        JSONObject decToken = regJson.optJSONObject("decodedToken");
+                        if (decToken != null) {
+                            JSONArray idList = decToken.optJSONArray("supplier_identifiers");
+                            if (idList != null && idList.length() > 0) {
+                                identifier = idList.getString(0);
+                            }
+                            JSONObject idMap = decToken.optJSONObject("supplier_identifier_to_id_mapping");
+                            if (idMap != null && !identifier.isEmpty()) {
+                                supplierId = idMap.optLong(identifier, supplierId);
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                if (identifier.isEmpty()) {
+                    identifier = email.split("@")[0];
+                }
+
+                // 2. Fetch Supplier Details to get real Account Holder Name
+                String accountHolderName = "";
+                try {
+                    URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
+                    HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
+                    detConn.setRequestMethod("POST");
+                    detConn.setConnectTimeout(10000);
+                    detConn.setReadTimeout(10000);
+                    detConn.setDoOutput(true);
+                    detConn.setRequestProperty("Content-Type", "application/json");
+                    detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                    detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                    detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                    detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                    detConn.setRequestProperty("Cookie", cookies);
+                    detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                    detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                    detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
+
+                    JSONObject detBody = new JSONObject();
+                    if (supplierId > 0) detBody.put("supplier_id", supplierId);
+                    detBody.put("identifier", identifier);
+                    try (OutputStream os = detConn.getOutputStream()) {
+                        os.write(detBody.toString().getBytes(StandardCharsets.UTF_8));
+                    }
+
+                    if (detConn.getResponseCode() == 200) {
+                        String resp = readStream(detConn.getInputStream());
+                        JSONObject respJson = new JSONObject(resp.isEmpty() ? "{}" : resp);
+                        JSONObject supObj = respJson.optJSONObject("supplier");
+                        if (supObj != null) {
+                            String n = supObj.optString("name", "");
+                            if (!n.trim().isEmpty()) accountHolderName = n.trim();
+                            if (accountHolderName.isEmpty()) {
+                                accountHolderName = supObj.optString("store_name", supObj.optString("legal_name", ""));
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                if (accountHolderName.isEmpty()) {
+                    accountHolderName = email.split("@")[0];
+                }
+
+                // 3. Initial OTP Fetch with supplier_id and identifier
+                JSObject otpRes = fetchOtpInternal(identifier, supplierId, cookies);
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("storeName", accountHolderName);
+                ret.put("identifier", identifier);
+                ret.put("supplierId", supplierId);
+                ret.put("cookies", cookies);
+                ret.put("otp", otpRes.optString("otp", "----"));
+                ret.put("courier", otpRes.optString("courier", "No Return"));
+                ret.put("handoverCount", otpRes.optInt("handoverCount", 0));
+                ret.put("dateTime", otpRes.optString("dateTime", new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date())));
+                ret.put("otpList", otpRes.opt("otpList"));
+
+                // Save session to SharedPreferences for 24/7 background foreground service
+                try {
+                    SharedPreferences prefs = getContext().getSharedPreferences("meesho_sessions_pref", Context.MODE_PRIVATE);
+                    String existingSessionsJson = prefs.getString("sessions", "{}");
+                    JSONObject allSess = new JSONObject(existingSessionsJson);
+
+                    String sessKey = !identifier.isEmpty() ? identifier : ("sess_" + supplierId);
+                    JSONObject sessData = new JSONObject();
+                    sessData.put("email", email);
+                    sessData.put("password", password);
+                    sessData.put("identifier", identifier);
+                    sessData.put("supplierId", supplierId);
+                    sessData.put("storeName", accountHolderName);
+                    sessData.put("cookies", cookies);
+
+                    allSess.put(sessKey, sessData);
+                    prefs.edit().putString("sessions", allSess.toString()).apply();
+
+                    // Permanent OS-level Vault: survives all future app updates
+                    saveToPermanentVault(getContext(), email, password, identifier);
+
+                    // Start 24/7 background service
+                    Intent serviceIntent = new Intent(getContext(), MeeshoBackgroundService.class);
+                    ContextCompat.startForegroundService(getContext(), serviceIntent);
+                } catch (Exception ignored) {}
+
+                // Destroy temporary WebView on UI thread
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    try { webView.destroy(); } catch (Exception ignored) {}
+                });
+
+                call.resolve(ret);
+            } catch (Exception e) {
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    try { webView.destroy(); } catch (Exception ignored) {}
+                });
+                JSObject ret = new JSObject();
+                ret.put("success", false);
+                ret.put("error", e.getMessage() != null ? e.getMessage() : "Processing error");
                 call.resolve(ret);
             }
         });

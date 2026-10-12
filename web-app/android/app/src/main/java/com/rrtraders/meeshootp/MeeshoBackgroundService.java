@@ -17,6 +17,12 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -643,90 +649,149 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private static String autoReloginStatic(Context context, String email, String password, String syncKey, SharedPreferences prefs) {
-        HttpURLConnection conn = null;
-        try {
-            JSONObject postData = new JSONObject();
-            postData.put("email", email);
-            postData.put("password", password);
-            postData.put("device_id", email);
-            postData.put("instance", getStableInstanceId(prefs));
-
-            URL url = new URL(SecurityShield.getV2LoginUrl());
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(15000);
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-            conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-            conn.setRequestProperty(SecurityShield.getHeaderIdentifier(), "login");
-            conn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-            conn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-            conn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
-            conn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-            conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
-
-            // Pre-flight Akamai WAF cookies to prevent HTTP 403 Access Denied
-            String initCookies = MeeshoDirectPlugin.getInitialPageCookies(SecurityShield.getLoginRefererUrl());
-            if (!initCookies.isEmpty()) {
-                conn.setRequestProperty("Cookie", initCookies);
-            }
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(postData.toString().getBytes(StandardCharsets.UTF_8));
-            }
-
-            if (conn.getResponseCode() == 200) {
-                StringBuilder cookieHeader = new StringBuilder();
-                Map<String, List<String>> headers = conn.getHeaderFields();
-                if (headers != null) {
-                    for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
-                            for (String raw : entry.getValue()) {
-                                String part = raw.split(";")[0].trim();
-                                if (!part.isEmpty()) {
-                                    if (cookieHeader.length() > 0) cookieHeader.append("; ");
-                                    cookieHeader.append(part);
-                                }
-                            }
-                        }
-                    }
-                }
-                String freshCookies = cookieHeader.toString();
-                if (!freshCookies.isEmpty()) {
-                    String sessionsJson = prefs.getString("sessions", "{}");
-                    JSONObject all = new JSONObject(sessionsJson);
-                    String resolvedDocId = syncKey;
-
-                    for (java.util.Iterator<String> sit = all.keys(); sit.hasNext(); ) {
-                        String sk = sit.next();
-                        JSONObject cur = all.getJSONObject(sk);
-                        if (sk.equals(syncKey) || (cur.has("email") && cur.optString("email", "").equalsIgnoreCase(email))) {
-                            cur.put("cookies", freshCookies);
-                            cur.put("expired", false);
-                            if (resolvedDocId.equals(syncKey) && !cur.optString("docId", "").isEmpty()) {
-                                resolvedDocId = cur.optString("docId", "");
-                            }
-                        }
-                    }
-                    prefs.edit().putString("sessions", all.toString()).apply();
-                    MeeshoDirectPlugin.saveToPermanentVault(context, email, password, "");
-
-                    String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                    // Sync status: live and fresh cookies to Firestore without wiping active OTPs!
-                    syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null);
-                    return freshCookies;
-                }
-            }
-        } catch (Exception ignored) {
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.disconnect();
-                } catch (Exception ignored) {}
-            }
+        if (context == null || email == null || email.isEmpty() || password == null || password.isEmpty()) {
+            return "";
         }
+
+        final String[] resultCookies = {""};
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                WebView webView = new WebView(context);
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                settings.setDatabaseEnabled(true);
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
+
+                CookieManager cookieManager = CookieManager.getInstance();
+                cookieManager.setAcceptCookie(true);
+                cookieManager.setAcceptThirdPartyCookies(webView, true);
+
+                final boolean[] isDone = {false};
+                final Handler timeoutHandler = new Handler(Looper.getMainLooper());
+                final Runnable timeoutRunnable = () -> {
+                    if (!isDone[0]) {
+                        isDone[0] = true;
+                        try { webView.destroy(); } catch (Exception ignored) {}
+                        latch.countDown();
+                    }
+                };
+                timeoutHandler.postDelayed(timeoutRunnable, 35000);
+
+                webView.setWebViewClient(new WebViewClient() {
+                    private boolean injected = false;
+
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        super.onPageFinished(view, url);
+                        if (isDone[0]) return;
+
+                        if (url != null && url.contains("login") && !injected) {
+                            injected = true;
+                            String jsInject = "(function() {" +
+                                    "  var timer = setInterval(function() {" +
+                                    "    try {" +
+                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]');" +
+                                    "      var pw = document.querySelector('input[name=\"password\"]');" +
+                                    "      var btn = document.querySelector('button[type=\"submit\"]');" +
+                                    "      if (em && pw && btn) {" +
+                                    "        clearInterval(timer);" +
+                                    "        var setVal = function(el, val) {" +
+                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;" +
+                                    "          setter.call(el, val);" +
+                                    "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
+                                    "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                                    "        };" +
+                                    "        setVal(em, " + JSONObject.quote(email) + ");" +
+                                    "        setVal(pw, " + JSONObject.quote(password) + ");" +
+                                    "        setTimeout(function() { btn.click(); }, 350);" +
+                                    "      }" +
+                                    "    } catch(e) {" +
+                                    "      clearInterval(timer);" +
+                                    "    }" +
+                                    "  }, 400);" +
+                                    "})();";
+                            view.evaluateJavascript(jsInject, null);
+
+                            Handler poller = new Handler(Looper.getMainLooper());
+                            poller.postDelayed(new Runnable() {
+                                private int attempts = 0;
+                                @Override
+                                public void run() {
+                                    if (isDone[0]) return;
+                                    attempts++;
+
+                                    CookieManager cm = CookieManager.getInstance();
+                                    String raw = cm.getCookie("https://supplier.meesho.com");
+                                    if (raw == null) raw = "";
+
+                                    boolean hasSid = raw.contains("connect.sid=");
+                                    boolean hasIdent = raw.contains("current_az_identifier=");
+                                    String curUrl = view.getUrl() != null ? view.getUrl() : "";
+
+                                    if ((hasSid && hasIdent) || curUrl.contains("fulfillment") || curUrl.contains("growth") || curUrl.contains("dashboard")) {
+                                        isDone[0] = true;
+                                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                                        resultCookies[0] = raw;
+                                        try { view.destroy(); } catch (Exception ignored) {}
+                                        latch.countDown();
+                                        return;
+                                    }
+
+                                    if (attempts < 60) {
+                                        poller.postDelayed(this, 500);
+                                    } else {
+                                        isDone[0] = true;
+                                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                                        try { view.destroy(); } catch (Exception ignored) {}
+                                        latch.countDown();
+                                    }
+                                }
+                            }, 800);
+                        }
+                    }
+                });
+
+                webView.loadUrl(SecurityShield.getLoginRefererUrl());
+            } catch (Exception e) {
+                latch.countDown();
+            }
+        });
+
+        try {
+            latch.await(38, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {}
+
+        String freshCookies = resultCookies[0];
+        if (!freshCookies.isEmpty()) {
+            try {
+                String sessionsJson = prefs.getString("sessions", "{}");
+                JSONObject all = new JSONObject(sessionsJson);
+                String resolvedDocId = syncKey;
+
+                for (java.util.Iterator<String> sit = all.keys(); sit.hasNext(); ) {
+                    String sk = sit.next();
+                    JSONObject cur = all.getJSONObject(sk);
+                    if (sk.equals(syncKey) || (cur.has("email") && cur.optString("email", "").equalsIgnoreCase(email))) {
+                        cur.put("cookies", freshCookies);
+                        cur.put("expired", false);
+                        if (resolvedDocId.equals(syncKey) && !cur.optString("docId", "").isEmpty()) {
+                            resolvedDocId = cur.optString("docId", "");
+                        }
+                    }
+                }
+                prefs.edit().putString("sessions", all.toString()).apply();
+                MeeshoDirectPlugin.saveToPermanentVault(context, email, password, "");
+
+                String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null);
+                return freshCookies;
+            } catch (Exception ignored) {}
+        }
+
         return "";
     }
 
