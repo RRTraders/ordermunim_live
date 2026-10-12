@@ -6,7 +6,9 @@ import {
   getDecryptedStoreCredentials, 
   findCredentialsForAccount, 
   removeEncryptedStoreCredentials, 
-  clearVault 
+  clearVault,
+  encryptSecret,
+  decryptSecret 
 } from './localVault';
 import { 
   auth, 
@@ -2095,9 +2097,10 @@ export default function App() {
       setLocalSessions({ ...curSessions });
       syncBackgroundSessions(curSessions, false, user?.uid);
 
-      // 2. Update Firestore so all devices get live status & cookies (NEVER password)
+      // 2. Update Firestore so all devices get live status, cookies & encrypted credentials for 24/7 auto-login
       await updateDoc(doc(db, 'accounts', reconnectAccount.id), {
         cookies: res.cookies,
+        encPassword: encryptSecret(reconnectPass),
         identifier: res.identifier || reconnectAccount.identifier || '',
         supplierId: res.supplierId || reconnectAccount.supplierId || 0,
         currentOtp: res.otp || '----',
@@ -2291,6 +2294,7 @@ export default function App() {
         identifier: data.identifier || '',
         supplierId: data.supplierId || 0,
         email: cleanEmail || '',
+        encPassword: encryptSecret(meeshoPass),
         syncKey: targetSyncKey,
         currentOtp: data.otp || '----',
         courier: data.courier || 'No Return',
