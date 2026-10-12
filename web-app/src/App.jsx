@@ -58,6 +58,7 @@ import {
   Share2,
   Key,
   Crown,
+  Edit2,
   Mail,
   Lock,
   DollarSign,
@@ -2279,7 +2280,13 @@ export default function App() {
       );
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
-      const finalStoreName = newStoreName.trim() || data.storeName || autoStoreName;
+      const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase());
+      const finalStoreName = newStoreName.trim() || 
+        (existingStore?.storeName && isDataEmailFallback ? existingStore.storeName : null) || 
+        (data?.storeName && !isDataEmailFallback ? data.storeName : null) || 
+        existingStore?.storeName || 
+        data?.storeName || 
+        autoStoreName;
       const targetAccRef = doc(db, 'accounts', targetSyncKey);
 
       await setDoc(targetAccRef, {
@@ -2374,6 +2381,22 @@ export default function App() {
     setShowAddModal(true);
   };
 
+  // Edit / Rename Account Holder / Store Name directly
+  const handlePromptRenameStore = (acc) => {
+    const currentName = acc.storeName || '';
+    const newName = window.prompt('Enter Account Holder / Store Name:', currentName);
+    if (newName !== null && newName.trim() && newName.trim() !== currentName) {
+      const trimmed = newName.trim();
+      updateDoc(doc(db, 'accounts', acc.syncKey || acc.id), {
+        storeName: trimmed,
+        lastUpdated: new Date().toISOString()
+      }).then(() => {
+        showToast(`Store renamed to "${trimmed}"`, 'success');
+      }).catch(err => {
+        showToast(`Failed to update store name: ${err.message}`, 'error');
+      });
+    }
+  };
 
   // Delete an account with fancy confirmation dialog
   const handleDeleteAccount = (accId, storeName) => {
@@ -2988,9 +3011,22 @@ export default function App() {
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
-                                {acc.storeName}
-                              </span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
+                                  {acc.storeName}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePromptRenameStore(acc);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-sky-300 hover:bg-white/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                                  title="Rename Account Holder / Store Name"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                               {activeOtps.length > 0 ? (
                                 <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/30">
                                   {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
@@ -4607,9 +4643,22 @@ export default function App() {
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-base text-slate-900 truncate hover:text-[#083B82] transition-colors">
-                                  {acc.storeName}
-                                </span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold text-base text-slate-900 truncate hover:text-[#083B82] transition-colors">
+                                    {acc.storeName}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePromptRenameStore(acc);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
+                                    title="Rename Account Holder / Store Name"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                                 {activeOtps.length > 0 ? (
                                   <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
                                     {activeOtps.length} {activeOtps.length === 1 ? 'OTP' : 'OTPs'}
@@ -5314,11 +5363,11 @@ export default function App() {
 
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Store Nickname <span className="text-slate-400 font-normal">(Optional)</span>
+                    Account Holder / Store Name <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Kaanchan Export (leave empty to auto-detect)"
+                    placeholder="e.g. Kaanchan Export 1 (leave empty to auto-detect)"
                     value={newStoreName}
                     onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
