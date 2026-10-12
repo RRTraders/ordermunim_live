@@ -2554,13 +2554,8 @@ export default function App() {
       return { shouldPrompt: false };
     }
 
-    // CRITICAL: If user has already dismissed or downloaded this update, NEVER show dialog again!
-    if (updateDismissed || (dismissedUpdateCode && Number(dismissedUpdateCode) >= targetCode)) {
-      return { shouldPrompt: false };
-    }
-
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk';
+    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.7.apk';
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
@@ -2647,14 +2642,7 @@ export default function App() {
           setUpdateStatusText(`Downloading update... ${progress.percent}%`);
         } else if (progress.status === 'installing') {
           setDownloadProgress(100);
-          setUpdateStatusText('Download complete! Launching package installer...');
-          const newCode = Number(appUpdateConfig?.versionCode) || CURRENT_APP_VERSION_CODE;
-          const newName = String(appUpdateConfig?.versionName || CURRENT_APP_VERSION_NAME);
-          localStorage.setItem('om_installed_version_code', String(newCode));
-          localStorage.setItem('om_installed_version_name', String(newName));
-          setInstalledVersionCode(newCode);
-          setInstalledVersionName(newName);
-          handleDismissUpdate(newCode);
+          setUpdateStatusText('Download complete! Tap "Update" on the Android installer prompt to finish.');
         } else if (progress.status === 'connecting') {
           setUpdateStatusText('Connecting to update server...');
         }
@@ -2929,6 +2917,16 @@ export default function App() {
             >
               Dismiss / Continue to App
             </button>
+            <a
+              href={updateStatus.downloadUrl}
+              download="ordermunim_v4.7.apk"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full mt-2.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+            >
+              <DownloadCloud className="w-4 h-4" />
+              Download via Browser
+            </a>
             <p className="text-[11px] text-slate-500 mt-2">
               Tap above to download the APK. Your existing login and stores will remain intact.
             </p>
