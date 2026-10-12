@@ -138,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 37;
-const CURRENT_APP_VERSION_NAME = "4.7";
+const CURRENT_APP_VERSION_CODE = 38;
+const CURRENT_APP_VERSION_NAME = "4.8";
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -2092,10 +2092,9 @@ export default function App() {
       setLocalSessions({ ...curSessions });
       syncBackgroundSessions(curSessions, false, user?.uid);
 
-      // 2. Update Firestore so all devices get live status, cookies & encrypted credentials for 24/7 auto-login
+      // 2. Update Firestore so all devices get live status & cookies
       await updateDoc(doc(db, 'accounts', reconnectAccount.id), {
         cookies: res.cookies,
-        encPassword: encryptSecret(reconnectPass),
         identifier: res.identifier || reconnectAccount.identifier || '',
         supplierId: res.supplierId || reconnectAccount.supplierId || 0,
         currentOtp: res.otp || '----',
@@ -2289,7 +2288,6 @@ export default function App() {
         identifier: data.identifier || '',
         supplierId: data.supplierId || 0,
         email: cleanEmail || '',
-        encPassword: encryptSecret(meeshoPass),
         syncKey: targetSyncKey,
         currentOtp: data.otp || '----',
         courier: data.courier || 'No Return',

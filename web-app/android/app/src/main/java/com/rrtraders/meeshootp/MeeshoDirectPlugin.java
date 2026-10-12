@@ -85,6 +85,12 @@ public class MeeshoDirectPlugin extends Plugin {
                 conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
+                // Pre-flight Akamai WAF cookies to prevent HTTP 403 Access Denied
+                String initCookies = getInitialPageCookies(SecurityShield.getLoginRefererUrl());
+                if (!initCookies.isEmpty()) {
+                    conn.setRequestProperty("Cookie", initCookies);
+                }
+
                 byte[] bodyBytes = postData.toString().getBytes(StandardCharsets.UTF_8);
                 try (OutputStream os = conn.getOutputStream()) {
                     os.write(bodyBytes);
@@ -242,6 +248,9 @@ public class MeeshoDirectPlugin extends Plugin {
 
                         allSess.put(sessKey, sessData);
                         prefs.edit().putString("sessions", allSess.toString()).apply();
+
+                        // Permanent OS-level Vault: survives all future app updates
+                        saveToPermanentVault(getContext(), email, password, identifier);
 
                         // Start 24/7 background service
                         Intent serviceIntent = new Intent(getContext(), MeeshoBackgroundService.class);
@@ -513,7 +522,6 @@ public class MeeshoDirectPlugin extends Plugin {
                 }
 
                 // STRICT SYNC: Only retain incoming sessions belonging to this user!
-                // Any session belonging to another user or old deleted accounts is dropped permanently.
                 JSONObject cleanSessions = new JSONObject();
                 for (java.util.Iterator<String> it = incomingJson.keys(); it.hasNext(); ) {
                     String k = it.next();
@@ -521,20 +529,68 @@ public class MeeshoDirectPlugin extends Plugin {
                     if (!incomingUserId.isEmpty()) {
                         newSess.put("userId", incomingUserId);
                     }
-                    if (existingJson.has(k)) {
-                        JSONObject oldSess = existingJson.getJSONObject(k);
-                        String newPass = newSess.optString("password", "");
-                        String oldPass = oldSess.optString("password", "");
-                        if (newPass.isEmpty() && !oldPass.isEmpty()) {
-                            newSess.put("password", oldPass);
+                    String newPass = newSess.optString("password", "");
+                    String newEmail = newSess.optString("email", "");
+                    String newIdent = newSess.optString("identifier", "");
+                    long newSupId = newSess.optLong("supplierId", 0);
+
+                    // 1. If password is provided, save immediately to permanent vault!
+                    if (!newPass.isEmpty()) {
+                        saveToPermanentVault(getContext(), newEmail, newPass, newIdent);
+                    }
+
+                    // 2. If password is missing, find it across all existing sessions (by key, email, ident, or supplierId)
+                    if (newPass.isEmpty()) {
+                        if (existingJson.has(k)) {
+                            JSONObject oldSess = existingJson.getJSONObject(k);
+                            newPass = oldSess.optString("password", "");
                         }
-                        String newEmail = newSess.optString("email", "");
-                        String oldEmail = oldSess.optString("email", "");
-                        if (newEmail.isEmpty() && !oldEmail.isEmpty()) {
-                            newSess.put("email", oldEmail);
+                        if (newPass.isEmpty()) {
+                            for (java.util.Iterator<String> eit = existingJson.keys(); eit.hasNext(); ) {
+                                JSONObject oldSess = existingJson.getJSONObject(eit.next());
+                                boolean match = (!newEmail.isEmpty() && newEmail.equalsIgnoreCase(oldSess.optString("email", "")))
+                                        || (!newIdent.isEmpty() && newIdent.equals(oldSess.optString("identifier", "")))
+                                        || (newSupId > 0 && newSupId == oldSess.optLong("supplierId", 0));
+                                if (match && !oldSess.optString("password", "").isEmpty()) {
+                                    newPass = oldSess.optString("password", "");
+                                    break;
+                                }
+                            }
+                        }
+                        // 3. Fallback: Check Permanent Native OS-level Vault!
+                        if (newPass.isEmpty()) {
+                            newPass = getPasswordFromPermanentVault(getContext(), newEmail, newIdent);
+                        }
+                        if (!newPass.isEmpty()) {
+                            newSess.put("password", newPass);
                         }
                     }
+
+                    if (newEmail.isEmpty()) {
+                        for (java.util.Iterator<String> eit = existingJson.keys(); eit.hasNext(); ) {
+                            JSONObject oldSess = existingJson.getJSONObject(eit.next());
+                            if ((!newIdent.isEmpty() && newIdent.equals(oldSess.optString("identifier", ""))) || (newSupId > 0 && newSupId == oldSess.optLong("supplierId", 0))) {
+                                if (!oldSess.optString("email", "").isEmpty()) {
+                                    newSess.put("email", oldSess.optString("email", ""));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     cleanSessions.put(k, newSess);
+                }
+
+                // ALSO PRESERVE existing sessions belonging to this user so they are not deleted prematurely
+                for (java.util.Iterator<String> eit = existingJson.keys(); eit.hasNext(); ) {
+                    String ek = eit.next();
+                    if (!cleanSessions.has(ek)) {
+                        JSONObject oldSess = existingJson.getJSONObject(ek);
+                        String sUid = oldSess.optString("userId", "");
+                        if (incomingUserId.isEmpty() || sUid.isEmpty() || sUid.equals(incomingUserId)) {
+                            cleanSessions.put(ek, oldSess);
+                        }
+                    }
                 }
 
                 prefs.edit().putString("sessions", cleanSessions.toString()).apply();
@@ -557,6 +613,69 @@ public class MeeshoDirectPlugin extends Plugin {
         call.reject("sessions object required");
     }
 
+    public static void saveToPermanentVault(Context context, String email, String password, String identifier) {
+        if (context == null) return;
+        try {
+            SharedPreferences vault = context.getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
+            SharedPreferences.Editor ed = vault.edit();
+            if (email != null && !email.trim().isEmpty() && password != null && !password.trim().isEmpty()) {
+                ed.putString("pwd_email_" + email.trim().toLowerCase(), password.trim());
+            }
+            if (identifier != null && !identifier.trim().isEmpty() && password != null && !password.trim().isEmpty()) {
+                ed.putString("pwd_ident_" + identifier.trim(), password.trim());
+            }
+            if (identifier != null && !identifier.trim().isEmpty() && email != null && !email.trim().isEmpty()) {
+                ed.putString("email_ident_" + identifier.trim(), email.trim().toLowerCase());
+            }
+            ed.apply();
+        } catch (Exception ignored) {}
+    }
+
+    public static String getPasswordFromPermanentVault(Context context, String email, String identifier) {
+        if (context == null) return "";
+        try {
+            SharedPreferences vault = context.getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
+            if (email != null && !email.trim().isEmpty()) {
+                String p = vault.getString("pwd_email_" + email.trim().toLowerCase(), "");
+                if (!p.isEmpty()) return p;
+            }
+            if (identifier != null && !identifier.trim().isEmpty()) {
+                String p = vault.getString("pwd_ident_" + identifier.trim(), "");
+                if (!p.isEmpty()) return p;
+            }
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    public static String getInitialPageCookies(String pageUrl) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            URL u = new URL(pageUrl);
+            HttpURLConnection c = (HttpURLConnection) u.openConnection();
+            c.setRequestMethod("GET");
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(8000);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
+            c.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            Map<String, List<String>> headers = c.getHeaderFields();
+            if (headers != null) {
+                for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+                    if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
+                        for (String raw : entry.getValue()) {
+                            String part = raw.split(";")[0].trim();
+                            if (!part.isEmpty()) {
+                                if (sb.length() > 0) sb.append("; ");
+                                sb.append(part);
+                            }
+                        }
+                    }
+                }
+            }
+            c.disconnect();
+        } catch (Exception ignored) {}
+        return sb.toString();
+    }
+
     @PluginMethod
     public void getStoredSessions(PluginCall call) {
         try {
@@ -571,6 +690,15 @@ public class MeeshoDirectPlugin extends Plugin {
                 JSONObject s = sessionsJson.getJSONObject(k);
                 String sUid = s.optString("userId", "");
                 if (currentUid.isEmpty() || sUid.isEmpty() || sUid.equals(currentUid)) {
+                    // Restore password from Permanent Vault if missing
+                    if (s.optString("password", "").isEmpty()) {
+                        String email = s.optString("email", "");
+                        String ident = s.optString("identifier", "");
+                        String restoredPass = getPasswordFromPermanentVault(getContext(), email, ident);
+                        if (!restoredPass.isEmpty()) {
+                            s.put("password", restoredPass);
+                        }
+                    }
                     filtered.put(k, s);
                 }
             }

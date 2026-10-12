@@ -135,21 +135,6 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
   if (!acc) return null;
   const targetUserId = expectedUserId || acc.userId || '';
 
-  // 1. Primary: Direct Firestore Encrypted Password (survives app reinstallation & device changes)
-  if (acc.encPassword) {
-    const decPass = decryptSecret(acc.encPassword);
-    if (decPass) {
-      return {
-        userId: acc.userId || targetUserId,
-        email: acc.email || '',
-        password: decPass,
-        identifier: acc.identifier || '',
-        supplierId: acc.supplierId || 0,
-        storeName: acc.storeName || ''
-      };
-    }
-  }
-
   const candidates = [
     acc.syncKey,
     acc.id,

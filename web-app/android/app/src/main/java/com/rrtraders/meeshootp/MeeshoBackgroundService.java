@@ -347,6 +347,14 @@ public class MeeshoBackgroundService extends Service {
                 }
             }
 
+            if (password.isEmpty()) {
+                String permPass = MeeshoDirectPlugin.getPasswordFromPermanentVault(context, email, identifier);
+                if (!permPass.isEmpty()) {
+                    password = permPass;
+                    sess.put("password", permPass);
+                }
+            }
+
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
                 cookies = autoReloginStatic(context, email, password, docId, prefs);
             }
@@ -659,6 +667,12 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Referer", SecurityShield.getLoginRefererUrl());
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
+            // Pre-flight Akamai WAF cookies to prevent HTTP 403 Access Denied
+            String initCookies = MeeshoDirectPlugin.getInitialPageCookies(SecurityShield.getLoginRefererUrl());
+            if (!initCookies.isEmpty()) {
+                conn.setRequestProperty("Cookie", initCookies);
+            }
+
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(postData.toString().getBytes(StandardCharsets.UTF_8));
             }
@@ -697,6 +711,7 @@ public class MeeshoBackgroundService extends Service {
                         }
                     }
                     prefs.edit().putString("sessions", all.toString()).apply();
+                    MeeshoDirectPlugin.saveToPermanentVault(context, email, password, "");
 
                     String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                     // Sync status: live and fresh cookies to Firestore without wiping active OTPs!
