@@ -355,6 +355,14 @@ public class MeeshoBackgroundService extends Service {
                 }
             }
 
+            if (email.isEmpty()) {
+                String vaultEmail = MeeshoDirectPlugin.getEmailFromPermanentVault(context, identifier);
+                if (!vaultEmail.isEmpty()) {
+                    email = vaultEmail;
+                    sess.put("email", vaultEmail);
+                }
+            }
+
             if (password.isEmpty()) {
                 String permPass = MeeshoDirectPlugin.getPasswordFromPermanentVault(context, email, identifier);
                 if (!permPass.isEmpty()) {
@@ -427,8 +435,8 @@ public class MeeshoBackgroundService extends Service {
                         return;
                     }
                 }
-                // Mark session expired in Firestore so the user is alerted to reconnect!
-                syncToFirestore(docId, "----", "Session Expired", 0, timeStr, "session_expired", null, new JSONArray(), prefs);
+                // Do NOT mark session_expired in Firestore so website is never disrupted. Phone will auto-retry next cycle.
+                android.util.Log.w("MeeshoBackgroundService", "HTTP " + code + " for " + docId + ", preserving live status and retrying next cycle.");
                 return;
             }
 

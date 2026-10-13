@@ -1113,7 +1113,12 @@ export default function App() {
           }
         }
 
-        // Auto re-login silently on behalf of the client if session was marked expired
+        // Auto-heal any stale session_expired status back to live
+        if (acc.status === 'session_expired') {
+          updateDoc(doc(db, 'accounts', acc.id), { status: 'live' }).catch(() => {});
+        }
+
+        // Auto re-login silently on behalf of the client if cookies missing
         if ((acc.status === 'session_expired' || !acc.cookies) && restoredEmail && restoredPassword) {
           directMeeshoLogin(restoredEmail, restoredPassword).then(async (fresh) => {
             if (fresh && fresh.success) {
@@ -1355,24 +1360,10 @@ export default function App() {
             }
           }
 
-          // Guard: If session expired or auth error, flag session_expired in Firestore so user is notified to reconnect
+          // Guard: If error or temporary auth glitch, do NOT overwrite Firestore with session_expired so website is never disrupted.
+          // The native mobile app keeps retrying silently in the background with stored credentials.
           if (otpRes.error || otpRes.expired) {
-            console.warn(`[Native OTP Poll] Auto-sync error/expired for ${key}:`, otpRes.error || 'expired');
-            if (otpRes.expired || (otpRes.error && (otpRes.error.includes('401') || otpRes.error.includes('403') || otpRes.error.includes('1007') || otpRes.error.includes('supplier identifier')))) {
-              const currentTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-              setLiveCheckedTimes(prev => ({
-                ...prev,
-                [key]: currentTimeStr,
-                [targetDocId]: currentTimeStr,
-                ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
-                ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
-              }));
-              await updateDoc(doc(db, 'accounts', targetDocId), {
-                status: 'session_expired',
-                dateTime: currentTimeStr,
-                lastUpdated: new Date().toISOString()
-              }).catch(() => {});
-            }
+            console.warn(`[Native OTP Poll] Auto-sync retry scheduled for ${key}:`, otpRes.error || 'expired');
             continue;
           } else {
             if (sessions[key] && sessions[key].expired) {

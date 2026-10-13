@@ -897,6 +897,15 @@ public class MeeshoDirectPlugin extends Plugin {
         return "";
     }
 
+    public static String getEmailFromPermanentVault(Context context, String identifier) {
+        if (context == null || identifier == null || identifier.trim().isEmpty()) return "";
+        try {
+            SharedPreferences vault = context.getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
+            return vault.getString("email_ident_" + identifier.trim(), "");
+        } catch (Exception ignored) {}
+        return "";
+    }
+
     public static String getInitialPageCookies(String pageUrl) {
         StringBuilder sb = new StringBuilder();
         try {
