@@ -299,6 +299,10 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private static void pollSingleAccountStatic(Context context, String syncKey, JSONObject sess, SharedPreferences prefs) {
+        pollSingleAccountStatic(context, syncKey, sess, prefs, false);
+    }
+
+    private static void pollSingleAccountStatic(Context context, String syncKey, JSONObject sess, SharedPreferences prefs, boolean isRetry) {
         HttpURLConnection conn = null;
         try {
             String cookies = sess.optString("cookies", "");
@@ -404,8 +408,8 @@ public class MeeshoBackgroundService extends Service {
             int code = conn.getResponseCode();
 
             if (code == 401 || code == 403) {
-                // Auto re-login silently if cookie expired, then immediately retry fetch!
-                if (!email.isEmpty() && !password.isEmpty()) {
+                // Auto re-login silently once if cookie expired, then immediately retry fetch!
+                if (!isRetry && !email.isEmpty() && !password.isEmpty()) {
                     String freshCookies = autoReloginStatic(context, email, password, docId, prefs);
                     if (!freshCookies.isEmpty()) {
                         sess.put("cookies", freshCookies);
@@ -414,7 +418,7 @@ public class MeeshoBackgroundService extends Service {
                         sess.put("docId", docId);
                         sess.put("email", email);
                         sess.put("password", password);
-                        pollSingleAccountStatic(context, docId, sess, prefs);
+                        pollSingleAccountStatic(context, docId, sess, prefs, true);
                         return;
                     }
                 }
@@ -605,7 +609,7 @@ public class MeeshoBackgroundService extends Service {
             String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
             StringBuilder queryParams = new StringBuilder();
             if (otp == null) {
-                queryParams.append("?currentDocument.exists=true&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
+                queryParams.append("?currentDocument.exists=true&updateMask.fieldPaths=status");
             } else {
                 queryParams.append("?currentDocument.exists=true&updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
             }
@@ -817,14 +821,14 @@ public class MeeshoBackgroundService extends Service {
                                     if (raw == null) raw = "";
 
                                     boolean hasSid = raw.contains("connect.sid=");
-                                    boolean hasIdent = raw.contains("current_az_identifier=");
+                                    boolean hasIdent = raw.contains("current_az_identifier=") || (raw.contains("s_id=") && raw.contains("mixpanel="));
                                     String curUrl = view.getUrl() != null ? view.getUrl() : "";
 
                                     if ((hasSid && hasIdent) || curUrl.contains("fulfillment") || curUrl.contains("growth") || curUrl.contains("dashboard")) {
                                         isDone[0] = true;
                                         timeoutHandler.removeCallbacks(timeoutRunnable);
                                         resultCookies[0] = raw;
-                                        try { view.destroy(); } catch (Exception ignored) {}
+                                        try { webView.destroy(); } catch (Exception ignored) {}
                                         latch.countDown();
                                         return;
                                     }
@@ -859,6 +863,8 @@ public class MeeshoBackgroundService extends Service {
                 String sessionsJson = prefs.getString("sessions", "{}");
                 JSONObject all = new JSONObject(sessionsJson);
                 String resolvedDocId = syncKey;
+                String extractedIdent = MeeshoDirectPlugin.extractIdentifierFromCookies(freshCookies, "");
+                long extractedSupId = MeeshoDirectPlugin.extractSupplierIdFromCookies(freshCookies, 0);
 
                 for (java.util.Iterator<String> sit = all.keys(); sit.hasNext(); ) {
                     String sk = sit.next();
@@ -866,13 +872,15 @@ public class MeeshoBackgroundService extends Service {
                     if (sk.equals(syncKey) || (cur.has("email") && cur.optString("email", "").equalsIgnoreCase(email))) {
                         cur.put("cookies", freshCookies);
                         cur.put("expired", false);
+                        if (!extractedIdent.isEmpty()) cur.put("identifier", extractedIdent);
+                        if (extractedSupId > 0) cur.put("supplierId", extractedSupId);
                         if (resolvedDocId.equals(syncKey) && !cur.optString("docId", "").isEmpty()) {
                             resolvedDocId = cur.optString("docId", "");
                         }
                     }
                 }
                 prefs.edit().putString("sessions", all.toString()).apply();
-                MeeshoDirectPlugin.saveToPermanentVault(context, email, password, "");
+                MeeshoDirectPlugin.saveToPermanentVault(context, email, password, extractedIdent);
 
                 String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                 syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null, prefs);

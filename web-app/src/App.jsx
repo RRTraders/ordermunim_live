@@ -139,8 +139,35 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 43;
-const CURRENT_APP_VERSION_NAME = "5.3";
+const CURRENT_APP_VERSION_CODE = 44;
+const CURRENT_APP_VERSION_NAME = "5.4";
+
+export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
+  if (!acc) return acc;
+  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
+  let isStaleDay = false;
+  if (acc.lastUpdated) {
+    const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
+    if (updatedDay !== todayIST) {
+      isStaleDay = true;
+    }
+  }
+  const hasEmptyOtpListWithStaleOtp = Array.isArray(acc.otpList) && acc.otpList.length === 0 && acc.currentOtp && acc.currentOtp !== '----';
+  if (isStaleDay || hasEmptyOtpListWithStaleOtp) {
+    if (persistFirestore && acc.id && ((acc.currentOtp && acc.currentOtp !== '----') || (Array.isArray(acc.otpList) && acc.otpList.length > 0))) {
+      updateDoc(doc(db, 'accounts', acc.id), {
+        currentOtp: '----',
+        courier: 'No Return',
+        handoverCount: 0,
+        otpList: []
+      }).catch(() => {});
+    }
+    return { ...acc, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [] };
+  }
+  return acc;
+};
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
 const ADMIN_PASS = "admin249"; // Default secret password for Admin panel
@@ -716,7 +743,7 @@ export default function App() {
       const unsubAcc = onSnapshot(q, (snapshot) => {
         const accList = [];
         snapshot.forEach((d) => {
-          accList.push({ id: d.id, ...d.data() });
+          accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
         });
         setAccounts(accList);
       });
@@ -891,23 +918,10 @@ export default function App() {
     const unsubAcc = onSnapshot(q, (snapshot) => {
       const accList = [];
       snapshot.forEach((d) => {
-        accList.push({ id: d.id, ...d.data() });
+        accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
       });
-      // Clear stale OTP from yesterday before updating state
-      const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-      const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
-      const freshList = accList.map(acc => {
-        if (!acc.lastUpdated) return acc; // No timestamp — leave as-is (Firestore is live truth)
-        const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-        const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
-        if (updatedDay !== todayIST) {
-          // OTP stored in Firestore is from yesterday — clear it (polling will update shortly)
-          return { ...acc, currentOtp: '----', courier: '', handoverCount: 0, otpList: [] };
-        }
-        return acc;
-      });
-      setAccounts(freshList);
-      try { localStorage.setItem('cached_user_accounts', JSON.stringify(freshList)); } catch {}
+      setAccounts(accList);
+      try { localStorage.setItem('cached_user_accounts', JSON.stringify(accList)); } catch {}
     }, (err) => {
       console.error('[Firestore] Accounts listener error:', err.code, err.message);
     });
@@ -925,20 +939,9 @@ export default function App() {
       const unsub = onSnapshot(q, (snapshot) => {
         const accList = [];
         snapshot.forEach((d) => {
-          accList.push({ id: d.id, ...d.data() });
+          accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
         });
-        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-        const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
-        const freshList = accList.map(acc => {
-          if (!acc.lastUpdated) return acc;
-          const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-          const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
-          if (updatedDay !== todayIST) {
-            return { ...acc, currentOtp: '----', courier: '', handoverCount: 0, otpList: [] };
-          }
-          return acc;
-        });
-        setAccounts(freshList);
+        setAccounts(accList);
       });
       return () => unsub();
     }
@@ -2598,13 +2601,23 @@ export default function App() {
       const publishedDate = new Date();
       const deadlineDate = new Date(Date.now() + graceDaysNum * 24 * 60 * 60 * 1000);
 
+      const cleanVerName = (broadcastVersionName.trim() || '5.3').replace(/^v/i, '');
+      let finalDownloadUrl = broadcastUrl.trim() || `https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${cleanVerName}.apk`;
+      if (/ordermunim_v[0-9.]+\.apk/i.test(finalDownloadUrl)) {
+        finalDownloadUrl = finalDownloadUrl.replace(/ordermunim_v[0-9.]+\.apk/i, `ordermunim_v${cleanVerName}.apk`);
+      }
+      let finalTitle = broadcastTitle.trim() || `New Update Available (v${cleanVerName})!`;
+      if (/\(v[0-9.]+\)/i.test(finalTitle)) {
+        finalTitle = finalTitle.replace(/\(v[0-9.]+\)/i, `(v${cleanVerName})`);
+      }
+
       const updateData = {
         active: activateState,
         versionCode: Number(broadcastVersionCode) || 2,
-        versionName: broadcastVersionName.trim() || '1.1',
-        title: broadcastTitle.trim() || 'New Update Available!',
+        versionName: cleanVerName,
+        title: finalTitle,
         message: broadcastMessage.trim(),
-        downloadUrl: broadcastUrl.trim() || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.5.apk',
+        downloadUrl: finalDownloadUrl,
         updateMode: broadcastMode,
         graceDays: graceDaysNum,
         publishedAt: (appUpdateConfig?.publishedAt && !activateState) ? appUpdateConfig.publishedAt : publishedDate.toISOString(),
@@ -2612,6 +2625,8 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
+      setBroadcastUrl(finalDownloadUrl);
+      setBroadcastTitle(finalTitle);
       await setDoc(doc(db, 'config', 'app_update'), updateData, { merge: true });
       setBroadcastActive(activateState);
       showToast(
@@ -2665,7 +2680,7 @@ export default function App() {
     }
 
     const targetCode = Number(appUpdateConfig.versionCode) || 0;
-    const targetName = String(appUpdateConfig.versionName || '').trim();
+    const targetName = String(appUpdateConfig.versionName || '').trim().replace(/^v/i, '');
 
     // Check if installed app is genuinely older than target broadcast version
     const isOlder = checkIsVersionOlder(installedVersionCode, installedVersionName, targetCode, targetName);
@@ -2674,7 +2689,10 @@ export default function App() {
     }
 
     const mode = appUpdateConfig.updateMode || 'optional';
-    const downloadUrl = appUpdateConfig.downloadUrl || 'https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v4.7.apk';
+    let downloadUrl = appUpdateConfig.downloadUrl || `https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${targetName || CURRENT_APP_VERSION_NAME}.apk`;
+    if (targetName && /ordermunim_v[0-9.]+\.apk/i.test(downloadUrl)) {
+      downloadUrl = downloadUrl.replace(/ordermunim_v[0-9.]+\.apk/i, `ordermunim_v${targetName}.apk`);
+    }
     const versionName = targetName || `v${CURRENT_APP_VERSION_NAME}`;
 
     if (mode === 'force_immediate') {
@@ -2870,7 +2888,7 @@ export default function App() {
     const unsubAllAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
       const accList = [];
       snapshot.forEach((d) => {
-        accList.push({ id: d.id, ...d.data() });
+        accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
       });
       setAllPlatformAccounts(accList);
     }, (error) => {
@@ -6498,9 +6516,25 @@ export default function App() {
                   <input
                     type="text"
                     value={broadcastVersionName}
-                    onChange={(e) => setBroadcastVersionName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setBroadcastVersionName(val);
+                      const clean = val.trim().replace(/^v/i, '');
+                      if (clean && /^[0-9.]+$/.test(clean)) {
+                        setBroadcastUrl(prev =>
+                          /ordermunim_v[0-9.]+\.apk/i.test(prev)
+                            ? prev.replace(/ordermunim_v[0-9.]+\.apk/i, `ordermunim_v${clean}.apk`)
+                            : `https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${clean}.apk`
+                        );
+                        setBroadcastTitle(prev =>
+                          /\(v[0-9.]+\)/i.test(prev)
+                            ? prev.replace(/\(v[0-9.]+\)/i, `(v${clean})`)
+                            : prev
+                        );
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-cyan-500"
-                    placeholder="e.g. 1.1 or 2.0"
+                    placeholder="e.g. 5.3"
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">Shown in user badges (e.g. "v1.1").</span>
                 </div>
