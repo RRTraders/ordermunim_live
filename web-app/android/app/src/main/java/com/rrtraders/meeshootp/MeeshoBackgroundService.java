@@ -365,10 +365,15 @@ public class MeeshoBackgroundService extends Service {
 
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
                 cookies = autoReloginStatic(context, email, password, docId, prefs);
-                identifier = MeeshoDirectPlugin.extractIdentifierFromCookies(cookies, identifier);
-                supplierId = MeeshoDirectPlugin.extractSupplierIdFromCookies(cookies, supplierId);
             }
             if (cookies.isEmpty()) return;
+
+            // Always resolve true 5-char Meesho identifier & numeric supplierId from cookies or registration status API
+            JSONObject resolvedIdentity = MeeshoDirectPlugin.resolveSupplierIdentityStatic(cookies, identifier, supplierId);
+            identifier = resolvedIdentity.optString("identifier", identifier);
+            supplierId = resolvedIdentity.optLong("supplierId", supplierId);
+            if (!identifier.isEmpty()) sess.put("identifier", identifier);
+            if (supplierId > 0) sess.put("supplierId", supplierId);
 
             // Fetch Delivery OTPs
             URL url = new URL(SecurityShield.getFetchDeliveryOtpsUrl());
@@ -863,8 +868,9 @@ public class MeeshoBackgroundService extends Service {
                 String sessionsJson = prefs.getString("sessions", "{}");
                 JSONObject all = new JSONObject(sessionsJson);
                 String resolvedDocId = syncKey;
-                String extractedIdent = MeeshoDirectPlugin.extractIdentifierFromCookies(freshCookies, "");
-                long extractedSupId = MeeshoDirectPlugin.extractSupplierIdFromCookies(freshCookies, 0);
+                JSONObject resolvedIdentity = MeeshoDirectPlugin.resolveSupplierIdentityStatic(freshCookies, "", 0);
+                String extractedIdent = resolvedIdentity.optString("identifier", "");
+                long extractedSupId = resolvedIdentity.optLong("supplierId", 0);
 
                 for (java.util.Iterator<String> sit = all.keys(); sit.hasNext(); ) {
                     String sk = sit.next();

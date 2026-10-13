@@ -170,7 +170,8 @@ public class MeeshoDirectPlugin extends Plugin {
                     // Success!
                     isCompleted[0] = true;
                     timeoutHandler.removeCallbacks(timeoutRunnable);
-                    finishSuccessfulLogin(rawCookies, email, password, call, webView);
+                    String urlIdent = extractIdentifierFromUrl(currentUrl);
+                    finishSuccessfulLogin(rawCookies, urlIdent, email, password, call, webView);
                     return;
                 }
 
@@ -209,6 +210,19 @@ public class MeeshoDirectPlugin extends Plugin {
         };
 
         poller.postDelayed(checkTask, 800);
+    }
+
+    public static String extractIdentifierFromUrl(String url) {
+        if (url == null || url.isEmpty()) return "";
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("/panel/v3/new/(?:growth|fulfillment|dashboard)/([a-zA-Z0-9]{4,8})(?:/|$|\\?)")
+                    .matcher(url);
+            if (m.find()) {
+                return m.group(1).trim();
+            }
+        } catch (Exception ignored) {}
+        return "";
     }
 
     public static String extractIdentifierFromCookies(String cookies, String currentIdent) {
@@ -265,48 +279,69 @@ public class MeeshoDirectPlugin extends Plugin {
         return currentSupId;
     }
 
-    private void finishSuccessfulLogin(String cookies, String email, String password, PluginCall call, WebView webView) {
-        getBridge().execute(() -> {
+    public static JSONObject resolveSupplierIdentityStatic(String cookies, String currentIdent, long currentSupId) {
+        String identifier = extractIdentifierFromCookies(cookies, currentIdent);
+        long supplierId = extractSupplierIdFromCookies(cookies, currentSupId);
+        if (cookies != null && !cookies.isEmpty() && (supplierId <= 0 || identifier.isEmpty() || identifier.length() > 8)) {
             try {
-                String cookieIdentifier = extractIdentifierFromCookies(cookies, "");
-                long cookieSupplierId = extractSupplierIdFromCookies(cookies, 0);
-
-                // 1. Fetch registration status to get accurate identifier and numeric supplier_id
-                String identifier = cookieIdentifier;
-                long supplierId = cookieSupplierId;
-                try {
-                    URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
-                    HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
-                    regConn.setRequestMethod("POST");
-                    regConn.setConnectTimeout(10000);
-                    regConn.setReadTimeout(10000);
-                    regConn.setDoOutput(true);
-                    regConn.setRequestProperty("Content-Type", "application/json");
-                    regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                    regConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                    regConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                    regConn.setRequestProperty("Cookie", cookies);
-                    regConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                    regConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
-                    try (OutputStream os = regConn.getOutputStream()) {
-                        os.write("{}".getBytes(StandardCharsets.UTF_8));
-                    }
-                    if (regConn.getResponseCode() == 200) {
-                        String regBody = readStream(regConn.getInputStream());
-                        JSONObject regJson = new JSONObject(regBody.isEmpty() ? "{}" : regBody);
-                        JSONObject decToken = regJson.optJSONObject("decodedToken");
-                        if (decToken != null) {
-                            JSONArray idList = decToken.optJSONArray("supplier_identifiers");
-                            if (idList != null && idList.length() > 0) {
-                                identifier = idList.getString(0);
-                            }
-                            JSONObject idMap = decToken.optJSONObject("supplier_identifier_to_id_mapping");
-                            if (idMap != null && !identifier.isEmpty()) {
+                URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
+                HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
+                regConn.setRequestMethod("POST");
+                regConn.setConnectTimeout(8000);
+                regConn.setReadTimeout(8000);
+                regConn.setDoOutput(true);
+                regConn.setRequestProperty("Content-Type", "application/json");
+                regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                regConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                regConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                regConn.setRequestProperty("Cookie", cookies);
+                regConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                regConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+                try (OutputStream os = regConn.getOutputStream()) {
+                    os.write("{}".getBytes(StandardCharsets.UTF_8));
+                }
+                if (regConn.getResponseCode() == 200) {
+                    java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(regConn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sb.append(line);
+                    br.close();
+                    JSONObject regJson = new JSONObject(sb.length() == 0 ? "{}" : sb.toString());
+                    JSONObject decToken = regJson.optJSONObject("decodedToken");
+                    if (decToken != null) {
+                        JSONArray idList = decToken.optJSONArray("supplier_identifiers");
+                        if (idList != null && idList.length() > 0) {
+                            String regIdent = idList.optString(0, "").trim();
+                            if (!regIdent.isEmpty()) identifier = regIdent;
+                        }
+                        JSONObject idMap = decToken.optJSONObject("supplier_identifier_to_id_mapping");
+                        if (idMap != null) {
+                            if (!identifier.isEmpty() && idMap.has(identifier)) {
                                 supplierId = idMap.optLong(identifier, supplierId);
+                            } else if (idMap.length() > 0) {
+                                String firstKey = idMap.keys().next();
+                                if (identifier.isEmpty() || identifier.length() > 8) identifier = firstKey;
+                                supplierId = idMap.optLong(firstKey, supplierId);
                             }
                         }
                     }
-                } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        JSONObject res = new JSONObject();
+        try {
+            res.put("identifier", identifier);
+            res.put("supplierId", supplierId);
+        } catch (Exception ignored) {}
+        return res;
+    }
+
+    private void finishSuccessfulLogin(String cookies, String urlIdent, String email, String password, PluginCall call, WebView webView) {
+        getBridge().execute(() -> {
+            try {
+                JSONObject resolved = resolveSupplierIdentityStatic(cookies, urlIdent, 0);
+                String identifier = resolved.optString("identifier", "");
+                long supplierId = resolved.optLong("supplierId", 0);
 
                 if (identifier.isEmpty()) {
                     identifier = email.split("@")[0];
@@ -455,9 +490,10 @@ public class MeeshoDirectPlugin extends Plugin {
         def.put("otpList", new JSONArray());
 
         try {
-            // Always extract real 5-char Meesho identifier & numeric supplierId from cookies if available
-            identifier = extractIdentifierFromCookies(cookies, identifier);
-            supplierId = extractSupplierIdFromCookies(cookies, supplierId);
+            // Always resolve real 5-char Meesho identifier & numeric supplierId from cookies or registration status API
+            JSONObject resolvedIdentity = resolveSupplierIdentityStatic(cookies, identifier, supplierId);
+            identifier = resolvedIdentity.optString("identifier", identifier);
+            supplierId = resolvedIdentity.optLong("supplierId", supplierId);
 
             URL url = new URL(SecurityShield.getFetchDeliveryOtpsUrl());
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

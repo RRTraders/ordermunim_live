@@ -144,6 +144,8 @@ const CURRENT_APP_VERSION_NAME = "5.4";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
+  const rawFirestoreOtp = acc.currentOtp;
+  const rawFirestoreCourier = acc.courier;
   const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
   let isStaleDay = false;
@@ -164,9 +166,9 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
         otpList: []
       }).catch(() => {});
     }
-    return { ...acc, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [] };
+    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [] };
   }
-  return acc;
+  return { ...acc, rawFirestoreOtp, rawFirestoreCourier };
 };
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
@@ -1139,12 +1141,22 @@ export default function App() {
                 saveEncryptedStoreCredentials(key, updatedSess, user.uid);
               } catch {}
 
+              const freshOtp = fresh.otp || '----';
+              const freshCourier = fresh.courier || 'No Return';
+              const freshCount = fresh.handoverCount || 0;
+              const freshOtpList = Array.isArray(fresh.otpList) ? fresh.otpList : [];
+              const freshTime = fresh.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
               await updateDoc(doc(db, 'accounts', acc.id), {
                 status: 'live',
                 cookies: fresh.cookies,
                 identifier: freshIdent,
                 supplierId: freshSupId,
-                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                currentOtp: freshOtp,
+                courier: freshCourier,
+                handoverCount: freshCount,
+                otpList: freshOtpList,
+                dateTime: freshTime,
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -1271,17 +1283,23 @@ export default function App() {
             const fresh = await directMeeshoLogin(sess.email, sess.password);
             if (fresh.success) {
               const freshIdent = resolveRealIdentifier(fresh) || effectiveIdent;
+              const freshSupId = fresh.supplierId || effectiveSupId;
               sessions[key].cookies = fresh.cookies;
               sessions[key].identifier = freshIdent;
-              sessions[key].supplierId = fresh.supplierId || effectiveSupId;
+              sessions[key].supplierId = freshSupId;
               sessions[key].storeName = fresh.storeName;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
               setLocalSessions(sessions);
               await updateDoc(doc(db, 'accounts', targetDocId), {
+                status: 'live',
                 cookies: fresh.cookies,
                 identifier: freshIdent,
-                supplierId: fresh.supplierId || effectiveSupId,
-                dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                supplierId: freshSupId,
+                currentOtp: fresh.otp || '----',
+                courier: fresh.courier || 'No Return',
+                handoverCount: fresh.handoverCount || 0,
+                otpList: Array.isArray(fresh.otpList) ? fresh.otpList : [],
+                dateTime: fresh.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -1325,7 +1343,11 @@ export default function App() {
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
-                  dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                  currentOtp: fresh.otp || '----',
+                  courier: fresh.courier || 'No Return',
+                  handoverCount: fresh.handoverCount || 0,
+                  otpList: Array.isArray(fresh.otpList) ? fresh.otpList : [],
+                  dateTime: fresh.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                   lastUpdated: new Date().toISOString()
                 }).catch(() => {});
                 otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
@@ -1377,13 +1399,15 @@ export default function App() {
             ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
           }));
 
-          // Check if data is already identical in Firestore or in our last synced cache
-          const existingAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key);
+          // Compare against raw unmasked Firestore value so if Firestore still holds a stale OTP, we always send updateDoc to erase it
+          const existingAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key || a.id === targetDocId);
           const prevSynced = lastSyncedDocRef.current[key];
+          const rawDbOtp = existingAcc ? (existingAcc.rawFirestoreOtp ?? existingAcc.currentOtp ?? '----') : '----';
+          const rawDbCourier = existingAcc ? (existingAcc.rawFirestoreCourier ?? existingAcc.courier ?? 'No Return') : 'No Return';
 
           const isSameAsExisting = existingAcc && (
-            (existingAcc.currentOtp || '----') === newOtp &&
-            (existingAcc.courier || 'No Return') === newCourier &&
+            rawDbOtp === newOtp &&
+            rawDbCourier === newCourier &&
             (existingAcc.handoverCount || 0) === newCount &&
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
@@ -1405,7 +1429,7 @@ export default function App() {
             syncedAt: Date.now()
           };
 
-          // Update Firestore immediately so UI and all devices reflect current OTP and fresh timestamp
+          // Update Firestore immediately so UI and all devices reflect current OTP (or erase to '----' if no OTP) and fresh timestamp
           await updateDoc(doc(db, 'accounts', targetDocId), {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1968,9 +1992,15 @@ export default function App() {
                 syncBackgroundSessions(sessions, false, user?.uid);
               } catch {}
               await updateDoc(doc(db, 'accounts', targetAcc?.id || syncKey), {
+                status: 'live',
                 cookies: fresh.cookies,
                 identifier: sess.identifier,
                 supplierId: sess.supplierId,
+                currentOtp: fresh.otp || '----',
+                courier: fresh.courier || 'No Return',
+                handoverCount: fresh.handoverCount || 0,
+                otpList: Array.isArray(fresh.otpList) ? fresh.otpList : [],
+                dateTime: fresh.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
             }
@@ -2003,6 +2033,11 @@ export default function App() {
                   cookies: fresh.cookies,
                   identifier: freshIdent,
                   supplierId: freshSupId,
+                  currentOtp: fresh.otp || '----',
+                  courier: fresh.courier || 'No Return',
+                  handoverCount: fresh.handoverCount || 0,
+                  otpList: Array.isArray(fresh.otpList) ? fresh.otpList : [],
+                  dateTime: fresh.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                   lastUpdated: new Date().toISOString()
                 }).catch(() => {});
                 otpRes = await directFetchDeliveryOTPs(freshIdent, fresh.cookies, freshSupId);
