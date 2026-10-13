@@ -226,8 +226,8 @@ public class MeeshoBackgroundService extends Service {
 
     /**
      * Polling schedule:
-     * - Day time (08:00 AM to 09:00 PM): 12 seconds interval for near-instant return OTP updates
-     * - Night time (09:00 PM to 08:00 AM): 300 seconds (5 minutes) interval
+     * - Courier time (08:00 AM to 09:00 PM): 120 seconds (2 minutes) interval
+     * - Non-courier time (09:00 PM to 08:00 AM): 3600 seconds (60 minutes) interval
      */
     public static long getDynamicPollDelaySecondsStatic() {
         try {
@@ -240,9 +240,9 @@ public class MeeshoBackgroundService extends Service {
             int dayEnd = 21 * 60;   // 09:00 PM (1260 minutes)
 
             if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 120; // 2 minutes (120 seconds) during daytime (08:00 AM to 09:00 PM)
+                return 120; // 2 minutes (120 seconds) during courier time (08:00 AM to 09:00 PM)
             } else {
-                return 300; // 5 minutes during night (09:00 PM to 08:00 AM)
+                return 3600; // 60 minutes (3600 seconds) during non-courier time (09:00 PM to 08:00 AM)
             }
         } catch (Exception e) {
             return 120;
@@ -272,11 +272,14 @@ public class MeeshoBackgroundService extends Service {
                 return;
             }
 
-            java.util.Set<String> polledSet = new java.util.HashSet<>();
-
+            java.util.List<String> keysList = new java.util.ArrayList<>();
             for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
-                String syncKey = it.next();
-                JSONObject sess = allSessions.getJSONObject(syncKey);
+                keysList.add(it.next());
+            }
+
+            for (String syncKey : keysList) {
+                JSONObject sess = allSessions.optJSONObject(syncKey);
+                if (sess == null) continue;
 
                 // Cross-Account Isolation Guard:
                 // Strictly only poll sessions matching the current logged-in user!
@@ -287,13 +290,6 @@ public class MeeshoBackgroundService extends Service {
                     }
                 }
 
-                String ident = sess.optString("identifier", "");
-                long supId = sess.optLong("supplierId", 0);
-                String dedupKey = !ident.isEmpty() ? ident : (supId > 0 ? ("sup_" + supId) : syncKey);
-                if (polledSet.contains(dedupKey)) {
-                    continue;
-                }
-                polledSet.add(dedupKey);
                 pollSingleAccountStatic(context, syncKey, sess, prefs);
             }
         } catch (Exception ignored) {
@@ -305,9 +301,9 @@ public class MeeshoBackgroundService extends Service {
     private static void pollSingleAccountStatic(Context context, String syncKey, JSONObject sess, SharedPreferences prefs) {
         HttpURLConnection conn = null;
         try {
-            String identifier = sess.optString("identifier", "");
-            long supplierId = sess.optLong("supplierId", 0);
             String cookies = sess.optString("cookies", "");
+            String identifier = MeeshoDirectPlugin.extractIdentifierFromCookies(cookies, sess.optString("identifier", ""));
+            long supplierId = MeeshoDirectPlugin.extractSupplierIdFromCookies(cookies, sess.optLong("supplierId", 0));
             String storeName = sess.optString("storeName", "Meesho Store");
             String email = sess.optString("email", "");
             String password = sess.optString("password", "");
@@ -326,7 +322,8 @@ public class MeeshoBackgroundService extends Service {
                         String sk = sit.next();
                         if (sk.startsWith("MSH-")) {
                             JSONObject sObj = allSessions.getJSONObject(sk);
-                            if (sObj.optString("identifier", "").equals(identifier) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email))) {
+                            String sIdent = MeeshoDirectPlugin.extractIdentifierFromCookies(sObj.optString("cookies", ""), sObj.optString("identifier", ""));
+                            if (sIdent.equals(identifier) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email))) {
                                 docId = sk;
                                 break;
                             }
@@ -341,7 +338,8 @@ public class MeeshoBackgroundService extends Service {
                 for (java.util.Iterator<String> sit = allSessions.keys(); sit.hasNext(); ) {
                     String sk = sit.next();
                     JSONObject sObj = allSessions.getJSONObject(sk);
-                    boolean match = (!identifier.isEmpty() && sObj.optString("identifier", "").equals(identifier)) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email));
+                    String sIdent = MeeshoDirectPlugin.extractIdentifierFromCookies(sObj.optString("cookies", ""), sObj.optString("identifier", ""));
+                    boolean match = (!identifier.isEmpty() && sIdent.equals(identifier)) || (!email.isEmpty() && sObj.optString("email", "").equalsIgnoreCase(email));
                     if (match) {
                         if (password.isEmpty() && !sObj.optString("password", "").isEmpty()) {
                             password = sObj.optString("password", "");
@@ -363,6 +361,8 @@ public class MeeshoBackgroundService extends Service {
 
             if (cookies.isEmpty() && (!email.isEmpty() && !password.isEmpty())) {
                 cookies = autoReloginStatic(context, email, password, docId, prefs);
+                identifier = MeeshoDirectPlugin.extractIdentifierFromCookies(cookies, identifier);
+                supplierId = MeeshoDirectPlugin.extractSupplierIdFromCookies(cookies, supplierId);
             }
             if (cookies.isEmpty()) return;
 
@@ -386,10 +386,13 @@ public class MeeshoBackgroundService extends Service {
             conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
 
-            // 1. Primary Desktop Payload (matches Meesho desktop portal exactly)
+            // 1. Primary Payload with both identifier and supplier_id (prevents HTTP 500 on m-web sessions)
             JSONObject payload = new JSONObject();
             if (!identifier.isEmpty()) {
                 payload.put("identifier", identifier);
+            }
+            if (supplierId > 0) {
+                payload.put("supplier_id", supplierId);
             }
             payload.put("child_supplier_identifier", JSONObject.NULL);
             payload.put("child_supplier_id", JSONObject.NULL);
@@ -406,6 +409,8 @@ public class MeeshoBackgroundService extends Service {
                     String freshCookies = autoReloginStatic(context, email, password, docId, prefs);
                     if (!freshCookies.isEmpty()) {
                         sess.put("cookies", freshCookies);
+                        sess.put("identifier", MeeshoDirectPlugin.extractIdentifierFromCookies(freshCookies, identifier));
+                        sess.put("supplierId", MeeshoDirectPlugin.extractSupplierIdFromCookies(freshCookies, supplierId));
                         sess.put("docId", docId);
                         sess.put("email", email);
                         sess.put("password", password);
@@ -414,8 +419,43 @@ public class MeeshoBackgroundService extends Service {
                     }
                 }
                 // Mark session expired in Firestore so the user is alerted to reconnect!
-                syncToFirestore(docId, "----", "Session Expired", 0, timeStr, "session_expired", null, new JSONArray());
+                syncToFirestore(docId, "----", "Session Expired", 0, timeStr, "session_expired", null, new JSONArray(), prefs);
                 return;
+            }
+
+            // Fallback retry without supplier_id if non-200
+            if (code != 200 && supplierId > 0) {
+                try {
+                    HttpURLConnection retryConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
+                    retryConn.setRequestMethod("POST");
+                    retryConn.setConnectTimeout(8000);
+                    retryConn.setReadTimeout(8000);
+                    retryConn.setDoInput(true);
+                    retryConn.setDoOutput(true);
+                    retryConn.setRequestProperty("Content-Type", "application/json");
+                    retryConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                    retryConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                    retryConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                    retryConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
+                    if (!identifier.isEmpty()) retryConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                    retryConn.setRequestProperty("Cookie", cookies);
+                    retryConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                    retryConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                    retryConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+
+                    JSONObject retryPayload = new JSONObject();
+                    if (!identifier.isEmpty()) retryPayload.put("identifier", identifier);
+                    retryPayload.put("child_supplier_identifier", JSONObject.NULL);
+                    retryPayload.put("child_supplier_id", JSONObject.NULL);
+
+                    try (OutputStream ros = retryConn.getOutputStream()) {
+                        ros.write(retryPayload.toString().getBytes(StandardCharsets.UTF_8));
+                    }
+                    if (retryConn.getResponseCode() == 200) {
+                        conn = retryConn;
+                        code = 200;
+                    }
+                } catch (Exception ignored) {}
             }
 
             if (code == 200) {
@@ -440,50 +480,6 @@ public class MeeshoBackgroundService extends Service {
                     } else if (d instanceof JSONArray) {
                         otps = (JSONArray) d;
                     }
-                }
-
-                // If empty and supplierId exists, retry once with supplier_id included in payload
-                if ((otps == null || otps.length() == 0) && supplierId > 0) {
-                    try {
-                        HttpURLConnection retryConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
-                        retryConn.setRequestMethod("POST");
-                        retryConn.setConnectTimeout(8000);
-                        retryConn.setReadTimeout(8000);
-                        retryConn.setDoOutput(true);
-                        retryConn.setRequestProperty("Content-Type", "application/json");
-                        retryConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        retryConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                        retryConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                        retryConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId(prefs));
-                        if (!identifier.isEmpty()) retryConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
-                        retryConn.setRequestProperty("Cookie", cookies);
-                        retryConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                        retryConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-                        retryConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
-
-                        JSONObject retryPayload = new JSONObject();
-                        if (!identifier.isEmpty()) retryPayload.put("identifier", identifier);
-                        retryPayload.put("supplier_id", supplierId);
-                        retryPayload.put("child_supplier_identifier", JSONObject.NULL);
-                        retryPayload.put("child_supplier_id", JSONObject.NULL);
-
-                        try (OutputStream ros = retryConn.getOutputStream()) {
-                            ros.write(retryPayload.toString().getBytes(StandardCharsets.UTF_8));
-                        }
-                        if (retryConn.getResponseCode() == 200) {
-                            String retryResp = readStream(retryConn.getInputStream());
-                            JSONObject retryJson = new JSONObject(retryResp.isEmpty() ? "{}" : retryResp);
-                            JSONArray retryOtps = retryJson.optJSONArray("supplier_delivery_otp");
-                            if (retryOtps == null && retryJson.has("data")) {
-                                Object rd = retryJson.get("data");
-                                if (rd instanceof JSONObject) retryOtps = ((JSONObject) rd).optJSONArray("supplier_delivery_otp");
-                                else if (rd instanceof JSONArray) retryOtps = (JSONArray) rd;
-                            }
-                            if (retryOtps != null && retryOtps.length() > 0) {
-                                otps = retryOtps;
-                            }
-                        }
-                    } catch (Exception ignored) {}
                 }
 
                 boolean anyActiveOtp = false;
@@ -577,7 +573,7 @@ public class MeeshoBackgroundService extends Service {
                 }
 
                 if (anyActiveOtp) {
-                    syncToFirestore(docId, firstOtp, firstCourier, firstCount, timeStr, "live", null, collectedOtpList);
+                    syncToFirestore(docId, firstOtp, firstCourier, firstCount, timeStr, "live", null, collectedOtpList, prefs);
                 } else {
                     // Reset notified flags when no active returns are pending
                     SharedPreferences.Editor editor = prefs.edit();
@@ -588,8 +584,8 @@ public class MeeshoBackgroundService extends Service {
                     }
                     editor.apply();
 
-                    // Sync fresh timestamp to Firestore on every poll (60s daytime, 15m off-hours) so website updates in real time
-                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", null, new JSONArray());
+                    // Sync fresh timestamp to Firestore on every poll so website updates in real time
+                    syncToFirestore(docId, "----", "No Return", 0, timeStr, "live", null, new JSONArray(), prefs);
                 }
             }
         } catch (Exception ignored) {
@@ -602,16 +598,16 @@ public class MeeshoBackgroundService extends Service {
         }
     }
 
-    private static void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies, JSONArray otpList) {
-        if (docId == null || docId.trim().isEmpty()) return;
+    private static void syncToFirestore(String docId, String otp, String courier, int count, String dateTime, String status, String cookies, JSONArray otpList, SharedPreferences prefs) {
+        if (docId == null || !docId.trim().startsWith("MSH-")) return;
         HttpURLConnection conn = null;
         try {
-            String encodedDocId = java.net.URLEncoder.encode(docId, "UTF-8");
+            String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
             StringBuilder queryParams = new StringBuilder();
             if (otp == null) {
-                queryParams.append("?updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
+                queryParams.append("?currentDocument.exists=true&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
             } else {
-                queryParams.append("?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
+                queryParams.append("?currentDocument.exists=true&updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=status&updateMask.fieldPaths=lastUpdated");
             }
             if (cookies != null && !cookies.isEmpty()) {
                 queryParams.append("&updateMask.fieldPaths=cookies");
@@ -666,7 +662,18 @@ public class MeeshoBackgroundService extends Service {
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(body.toString().getBytes(StandardCharsets.UTF_8));
             }
-            conn.getResponseCode();
+            int fCode = conn.getResponseCode();
+            if (fCode == 404 && prefs != null) {
+                // Document was deleted in Firestore — purge this dead session key from SharedPreferences!
+                try {
+                    String sJson = prefs.getString("sessions", "{}");
+                    JSONObject all = new JSONObject(sJson);
+                    if (all.has(docId.trim())) {
+                        all.remove(docId.trim());
+                        prefs.edit().putString("sessions", all.toString()).apply();
+                    }
+                } catch (Exception ignored) {}
+            }
         } catch (Exception ignored) {
         } finally {
             if (conn != null) {
@@ -868,7 +875,7 @@ public class MeeshoBackgroundService extends Service {
                 MeeshoDirectPlugin.saveToPermanentVault(context, email, password, "");
 
                 String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null);
+                syncToFirestore(resolvedDocId, null, null, -1, timeStr, "live", freshCookies, null, prefs);
                 return freshCookies;
             } catch (Exception ignored) {}
         }

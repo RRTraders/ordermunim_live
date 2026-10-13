@@ -54,6 +54,29 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        // Instant OTP fetch whenever user opens or returns to the app
+        try {
+            final Context appCtx = getApplicationContext();
+            java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+                try {
+                    MeeshoBackgroundService.pollAllAccountsStatic(appCtx);
+                } catch (Exception ignored) {}
+            });
+        } catch (Exception ignored) {}
+
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().evaluateJavascript(
+                    "try { window.dispatchEvent(new Event('nativeAppResume')); } catch(e){}",
+                    null
+                );
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @Override
     public void onBackPressed() {
         try {
             if (bridge != null && bridge.getWebView() != null) {

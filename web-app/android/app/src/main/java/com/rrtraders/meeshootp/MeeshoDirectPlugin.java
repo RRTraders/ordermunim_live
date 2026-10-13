@@ -211,22 +211,65 @@ public class MeeshoDirectPlugin extends Plugin {
         poller.postDelayed(checkTask, 800);
     }
 
+    public static String extractIdentifierFromCookies(String cookies, String currentIdent) {
+        if (cookies != null && !cookies.isEmpty()) {
+            // 1. Check current_az_identifier cookie
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && kv[0].equalsIgnoreCase("current_az_identifier") && !kv[1].trim().isEmpty()) {
+                    return kv[1].trim();
+                }
+            }
+            // 2. Check mixpanel cookie (mp_..._mixpanel) for Supplier_tag or distinct_id
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && kv[0].contains("mixpanel")) {
+                    try {
+                        String decoded = java.net.URLDecoder.decode(kv[1].trim(), "UTF-8");
+                        JSONObject mp = new JSONObject(decoded);
+                        String tag = mp.optString("Supplier_tag", "").trim();
+                        if (!tag.isEmpty() && !tag.equalsIgnoreCase("Direct")) return tag;
+                        String dist = mp.optString("distinct_id", "").trim();
+                        if (!dist.isEmpty() && !dist.equalsIgnoreCase("Direct") && dist.length() <= 8) return dist;
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return currentIdent != null ? currentIdent.trim() : "";
+    }
+
+    public static long extractSupplierIdFromCookies(String cookies, long currentSupId) {
+        if (currentSupId > 0) return currentSupId;
+        if (cookies != null && !cookies.isEmpty()) {
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && kv[0].equalsIgnoreCase("s_id")) {
+                    try {
+                        long val = Long.parseLong(kv[1].trim());
+                        if (val > 0) return val;
+                    } catch (Exception ignored) {}
+                }
+            }
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && kv[0].contains("mixpanel")) {
+                    try {
+                        String decoded = java.net.URLDecoder.decode(kv[1].trim(), "UTF-8");
+                        JSONObject mp = new JSONObject(decoded);
+                        long val = mp.optLong("Supplier_id", 0);
+                        if (val > 0) return val;
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return currentSupId;
+    }
+
     private void finishSuccessfulLogin(String cookies, String email, String password, PluginCall call, WebView webView) {
         getBridge().execute(() -> {
             try {
-                String cookieIdentifier = "";
-                long cookieSupplierId = 0;
-                for (String part : cookies.split(";")) {
-                    String[] kv = part.trim().split("=", 2);
-                    if (kv.length == 2) {
-                        if (kv[0].equalsIgnoreCase("current_az_identifier") && !kv[1].isEmpty()) {
-                            cookieIdentifier = kv[1];
-                        }
-                        if (kv[0].equalsIgnoreCase("s_id")) {
-                            try { cookieSupplierId = Long.parseLong(kv[1]); } catch (Exception ignored) {}
-                        }
-                    }
-                }
+                String cookieIdentifier = extractIdentifierFromCookies(cookies, "");
+                long cookieSupplierId = extractSupplierIdFromCookies(cookies, 0);
 
                 // 1. Fetch registration status to get accurate identifier and numeric supplier_id
                 String identifier = cookieIdentifier;
@@ -412,15 +455,9 @@ public class MeeshoDirectPlugin extends Plugin {
         def.put("otpList", new JSONArray());
 
         try {
-            // If supplierId is missing, extract from cookie
-            if (supplierId == 0) {
-                for (String part : cookies.split(";")) {
-                    String[] kv = part.trim().split("=", 2);
-                    if (kv.length == 2 && kv[0].equalsIgnoreCase("s_id")) {
-                        try { supplierId = Long.parseLong(kv[1]); } catch (Exception ignored) {}
-                    }
-                }
-            }
+            // Always extract real 5-char Meesho identifier & numeric supplierId from cookies if available
+            identifier = extractIdentifierFromCookies(cookies, identifier);
+            supplierId = extractSupplierIdFromCookies(cookies, supplierId);
 
             URL url = new URL(SecurityShield.getFetchDeliveryOtpsUrl());
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -441,10 +478,13 @@ public class MeeshoDirectPlugin extends Plugin {
             conn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
 
-            // 1. Primary Desktop Payload (matches Meesho desktop portal exactly)
+            // 1. Primary Payload with both identifier and supplier_id (required for m-web cookies to avoid HTTP 500)
             JSONObject payload = new JSONObject();
             if (!identifier.isEmpty()) {
                 payload.put("identifier", identifier);
+            }
+            if (supplierId > 0) {
+                payload.put("supplier_id", supplierId);
             }
             payload.put("child_supplier_identifier", JSONObject.NULL);
             payload.put("child_supplier_id", JSONObject.NULL);
@@ -455,7 +495,44 @@ public class MeeshoDirectPlugin extends Plugin {
             }
 
             int code = conn.getResponseCode();
-            android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs response code: " + code + " for identifier: " + identifier);
+            android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs response code: " + code + " for identifier: " + identifier + " supplierId: " + supplierId);
+
+            // If non-200 (e.g. 500/400) and not auth error, retry once without supplier_id
+            if (code != 200 && code != 401 && code != 403 && supplierId > 0) {
+                try {
+                    HttpURLConnection fallbackConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
+                    fallbackConn.setRequestMethod("POST");
+                    fallbackConn.setConnectTimeout(8000);
+                    fallbackConn.setReadTimeout(8000);
+                    fallbackConn.setDoInput(true);
+                    fallbackConn.setDoOutput(true);
+                    fallbackConn.setRequestProperty("Content-Type", "application/json");
+                    fallbackConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                    fallbackConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                    fallbackConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                    fallbackConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
+                    if (!identifier.isEmpty()) fallbackConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                    fallbackConn.setRequestProperty("Cookie", cookies);
+                    fallbackConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                    fallbackConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                    fallbackConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+
+                    JSONObject fbPayload = new JSONObject();
+                    if (!identifier.isEmpty()) fbPayload.put("identifier", identifier);
+                    fbPayload.put("child_supplier_identifier", JSONObject.NULL);
+                    fbPayload.put("child_supplier_id", JSONObject.NULL);
+
+                    try (OutputStream fos = fallbackConn.getOutputStream()) {
+                        fos.write(fbPayload.toString().getBytes(StandardCharsets.UTF_8));
+                    }
+                    int fbCode = fallbackConn.getResponseCode();
+                    if (fbCode == 200) {
+                        conn = fallbackConn;
+                        code = 200;
+                    }
+                } catch (Exception ignored) {}
+            }
+
             if (code == 200) {
                 String resp = readStream(conn.getInputStream());
                 android.util.Log.d("MeeshoDirect", "fetchDeliveryOTPs body: " + (resp.length() > 500 ? resp.substring(0, 500) : resp));
@@ -479,50 +556,6 @@ public class MeeshoDirectPlugin extends Plugin {
                     } else if (d instanceof JSONArray) {
                         otps = (JSONArray) d;
                     }
-                }
-
-                // If empty and supplierId exists, retry once with supplier_id included in payload
-                if ((otps == null || otps.length() == 0) && supplierId > 0) {
-                    try {
-                        HttpURLConnection retryConn = (HttpURLConnection) new URL(SecurityShield.getFetchDeliveryOtpsUrl()).openConnection();
-                        retryConn.setRequestMethod("POST");
-                        retryConn.setConnectTimeout(8000);
-                        retryConn.setReadTimeout(8000);
-                        retryConn.setDoOutput(true);
-                        retryConn.setRequestProperty("Content-Type", "application/json");
-                        retryConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                        retryConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                        retryConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                        retryConn.setRequestProperty(SecurityShield.getHeaderBrowserId(), getStableBrowserId());
-                        if (!identifier.isEmpty()) retryConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
-                        retryConn.setRequestProperty("Cookie", cookies);
-                        retryConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                        retryConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-                        retryConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
-
-                        JSONObject retryPayload = new JSONObject();
-                        if (!identifier.isEmpty()) retryPayload.put("identifier", identifier);
-                        retryPayload.put("supplier_id", supplierId);
-                        retryPayload.put("child_supplier_identifier", JSONObject.NULL);
-                        retryPayload.put("child_supplier_id", JSONObject.NULL);
-
-                        try (OutputStream ros = retryConn.getOutputStream()) {
-                            ros.write(retryPayload.toString().getBytes(StandardCharsets.UTF_8));
-                        }
-                        if (retryConn.getResponseCode() == 200) {
-                            String retryResp = readStream(retryConn.getInputStream());
-                            JSONObject retryJson = new JSONObject(retryResp.isEmpty() ? "{}" : retryResp);
-                            JSONArray retryOtps = retryJson.optJSONArray("supplier_delivery_otp");
-                            if (retryOtps == null && retryJson.has("data")) {
-                                Object rd = retryJson.get("data");
-                                if (rd instanceof JSONObject) retryOtps = ((JSONObject) rd).optJSONArray("supplier_delivery_otp");
-                                else if (rd instanceof JSONArray) retryOtps = (JSONArray) rd;
-                            }
-                            if (retryOtps != null && retryOtps.length() > 0) {
-                                otps = retryOtps;
-                            }
-                        }
-                    } catch (Exception ignored) {}
                 }
 
                 if (otps != null && otps.length() > 0) {
@@ -748,18 +781,29 @@ public class MeeshoDirectPlugin extends Plugin {
                         }
                     }
 
+                    String cleanCookies = newSess.optString("cookies", "");
+                    String extractedIdent = extractIdentifierFromCookies(cleanCookies, newIdent);
+                    if (!extractedIdent.isEmpty()) {
+                        newSess.put("identifier", extractedIdent);
+                    }
+                    long extractedSupId = extractSupplierIdFromCookies(cleanCookies, newSupId);
+                    if (extractedSupId > 0) {
+                        newSess.put("supplierId", extractedSupId);
+                    }
+
                     cleanSessions.put(k, newSess);
                 }
 
-                // ALSO PRESERVE existing sessions belonging to this user so they are not deleted prematurely
+                // Backup any passwords from existingJson to Permanent Vault, and DO NOT keep ghost/duplicate keys
                 for (java.util.Iterator<String> eit = existingJson.keys(); eit.hasNext(); ) {
                     String ek = eit.next();
-                    if (!cleanSessions.has(ek)) {
-                        JSONObject oldSess = existingJson.getJSONObject(ek);
-                        String sUid = oldSess.optString("userId", "");
-                        if (incomingUserId.isEmpty() || sUid.isEmpty() || sUid.equals(incomingUserId)) {
-                            cleanSessions.put(ek, oldSess);
-                        }
+                    JSONObject oldSess = existingJson.getJSONObject(ek);
+                    String oldEmail = oldSess.optString("email", "");
+                    String oldPass = oldSess.optString("password", "");
+                    String oldIdent = extractIdentifierFromCookies(oldSess.optString("cookies", ""), oldSess.optString("identifier", ""));
+                    long oldSupId = extractSupplierIdFromCookies(oldSess.optString("cookies", ""), oldSess.optLong("supplierId", 0));
+                    if (!oldPass.isEmpty()) {
+                        saveToPermanentVault(getContext(), oldEmail, oldPass, oldIdent);
                     }
                 }
 

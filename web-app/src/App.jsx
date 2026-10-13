@@ -951,6 +951,30 @@ export default function App() {
   const lastSyncedDocRef = useRef({});
   const isPollingRef = useRef(false);
   const userRef = useRef(user);
+  const pollAllNativeSessionsRef = useRef(null);
+  const hasInitialPolledAfterAccountsRef = useRef(false);
+  const pendingForcePollRef = useRef(false);
+
+  const resolveRealIdentifier = (accOrSess) => {
+    if (!accOrSess) return '';
+    if (accOrSess.fulfillmentId && String(accOrSess.fulfillmentId).trim().length <= 8) {
+      return String(accOrSess.fulfillmentId).trim();
+    }
+    const cookies = accOrSess.cookies || '';
+    if (cookies) {
+      const mAz = cookies.match(/(?:^|;\s*)current_az_identifier=([^;\s]+)/i);
+      if (mAz && mAz[1]) return mAz[1].trim();
+      const mMp = cookies.match(/mixpanel=([^;]+)/i);
+      if (mMp && mMp[1]) {
+        try {
+          const mpObj = JSON.parse(decodeURIComponent(mMp[1]));
+          if (mpObj.Supplier_tag && mpObj.Supplier_tag !== 'Direct') return String(mpObj.Supplier_tag).trim();
+          if (mpObj.distinct_id && mpObj.distinct_id !== 'Direct' && String(mpObj.distinct_id).length <= 8) return String(mpObj.distinct_id).trim();
+        } catch {}
+      }
+    }
+    return String(accOrSess.identifier || '').trim();
+  };
 
   useEffect(() => {
     accountsRef.current = accounts;
@@ -1019,34 +1043,16 @@ export default function App() {
       const myAccounts = accounts.filter(acc => acc.userId === user.uid);
       if (myAccounts.length === 0) return;
 
-      const validKeys = new Set();
+      const activeDocKeys = new Set();
       myAccounts.forEach(acc => {
-        if (acc.id) validKeys.add(acc.id);
-        if (acc.syncKey) validKeys.add(acc.syncKey);
-        if (acc.identifier) validKeys.add(acc.identifier);
-        if (acc.supplierId) validKeys.add(`sup_${acc.supplierId}`);
+        if (acc.id) activeDocKeys.add(acc.id);
+        if (acc.syncKey) activeDocKeys.add(acc.syncKey);
       });
-
-      // SAFE PURGE: Only remove session keys that definitely do not match any of this user's accounts
-      if (validKeys.size > 0) {
-        for (const k of Object.keys(cur)) {
-          if (!validKeys.has(k)) {
-            const matchesAny = myAccounts.some(acc => 
-              acc.id === k || acc.syncKey === k || acc.identifier === k || 
-              (acc.supplierId && `sup_${acc.supplierId}` === k) ||
-              (acc.email && acc.email.trim().toLowerCase() === k.toLowerCase())
-            );
-            if (!matchesAny) {
-              delete cur[k];
-              changed = true;
-            }
-          }
-        }
-      }
 
       for (const acc of myAccounts) {
         const key = acc.syncKey || acc.id;
-        const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null) || (acc.identifier ? cur[acc.identifier] : null) || Object.values(cur).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
+        const realIdent = resolveRealIdentifier(acc);
+        const existing = cur[key] || (acc.id ? cur[acc.id] : null) || (acc.syncKey ? cur[acc.syncKey] : null) || (realIdent ? cur[realIdent] : null) || (acc.identifier ? cur[acc.identifier] : null) || Object.values(cur).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && (s.identifier === realIdent || s.identifier === acc.identifier)) || (s.supplierId && acc.supplierId && Number(s.supplierId) === Number(acc.supplierId)));
         const vaultCred = findCredentialsForAccount(acc, user.uid);
         const restoredPassword = (existing && existing.password) ? existing.password : (vaultCred?.password || '');
         const restoredEmail = (existing && existing.email) ? existing.email : (acc.email || vaultCred?.email || '');
@@ -1057,7 +1063,7 @@ export default function App() {
             userId: user.uid,
             email: restoredEmail,
             password: restoredPassword,
-            identifier: acc.identifier || (vaultCred?.identifier || ''),
+            identifier: realIdent || acc.identifier || (vaultCred?.identifier || ''),
             supplierId: acc.supplierId || (vaultCred?.supplierId || 0),
             storeName: acc.storeName || (vaultCred?.storeName || ''),
             cookies: acc.cookies || '',
@@ -1073,6 +1079,10 @@ export default function App() {
         } else if (existing) {
           if (user.uid) existing.userId = user.uid;
           if (acc.id) existing.docId = acc.id;
+          if (realIdent && existing.identifier !== realIdent) {
+            existing.identifier = realIdent;
+            changed = true;
+          }
           if (!existing.password && restoredPassword) {
             existing.password = restoredPassword;
             changed = true;
@@ -1102,7 +1112,7 @@ export default function App() {
         if ((acc.status === 'session_expired' || !acc.cookies) && restoredEmail && restoredPassword) {
           directMeeshoLogin(restoredEmail, restoredPassword).then(async (fresh) => {
             if (fresh && fresh.success) {
-              const freshIdent = fresh.identifier || acc.identifier || '';
+              const freshIdent = resolveRealIdentifier(fresh) || realIdent || acc.identifier || '';
               const freshSupId = fresh.supplierId || acc.supplierId || 0;
               const updatedSess = {
                 ...(cur[key] || {}),
@@ -1139,10 +1149,26 @@ export default function App() {
         }
       }
 
+      // STRICT PURGE: Remove any ghost/deleted session keys not belonging to active accounts
+      if (activeDocKeys.size > 0) {
+        for (const k of Object.keys(cur)) {
+          if (!activeDocKeys.has(k)) {
+            delete cur[k];
+            changed = true;
+          }
+        }
+      }
+
       if (changed) {
         localStorage.setItem('native_meesho_sessions', JSON.stringify(cur));
         setLocalSessions(cur);
         syncBackgroundSessions(cur, false, user.uid);
+      }
+
+      // INSTANT OTP ON APP OPEN: As soon as accounts hydrate on startup, trigger immediate live OTP fetch!
+      if (!hasInitialPolledAfterAccountsRef.current && pollAllNativeSessionsRef.current) {
+        hasInitialPolledAfterAccountsRef.current = true;
+        pollAllNativeSessionsRef.current(true);
       }
     } catch (e) {}
   }, [accounts, user]);
@@ -1160,7 +1186,7 @@ export default function App() {
         if (sess && !acc.cookies) {
           updateDoc(doc(db, 'accounts', acc.id), {
             cookies: sess.cookies || '',
-            identifier: sess.identifier || acc.identifier || '',
+            identifier: resolveRealIdentifier(sess) || resolveRealIdentifier(acc) || '',
             supplierId: sess.supplierId || acc.supplierId || 0,
             email: sess.email || acc.email || ''
           }).catch(() => {});
@@ -1173,62 +1199,13 @@ export default function App() {
   useEffect(() => {
     if (!isNativeMobile()) return;
 
-    // Immediately restore sessions from Android Native SharedPreferences (survives app updates & restarts)
-    (async () => {
-      try {
-        const nativeStored = await getNativeStoredSessions();
-        if (nativeStored && typeof nativeStored === 'object' && Object.keys(nativeStored).length > 0) {
-          const rawLocal = localStorage.getItem('native_meesho_sessions');
-          let merged = rawLocal ? JSON.parse(rawLocal) : {};
-          let hasUpdates = false;
-
-          for (const [k, v] of Object.entries(nativeStored)) {
-            if (!v) continue;
-            // Cross-user guard: skip any session that belongs to another user
-            if (user && v.userId && v.userId !== user.uid) continue;
-            if (!merged[k]) {
-              merged[k] = v;
-              hasUpdates = true;
-            } else {
-              if (!merged[k].password && v.password) {
-                merged[k].password = v.password;
-                hasUpdates = true;
-              }
-              if (!merged[k].email && v.email) {
-                merged[k].email = v.email;
-                hasUpdates = true;
-              }
-              if (!merged[k].cookies && v.cookies) {
-                merged[k].cookies = v.cookies;
-                hasUpdates = true;
-              }
-            }
-            if (v.password) {
-              saveEncryptedStoreCredentials(k, v, user?.uid);
-            }
-          }
-
-          if (hasUpdates || !rawLocal) {
-            localStorage.setItem('native_meesho_sessions', JSON.stringify(merged));
-            setLocalSessions(merged);
-          }
+    const pollAllNativeSessions = async (forceInstant = false) => {
+      if (isPollingRef.current) {
+        if (forceInstant) {
+          pendingForcePollRef.current = true;
         }
-      } catch (err) {
-        console.warn('[Native App] getNativeStoredSessions restoration error:', err);
+        return;
       }
-
-      try {
-        const rawSessions = localStorage.getItem('native_meesho_sessions');
-        if (rawSessions) {
-          const sessions = JSON.parse(rawSessions);
-          syncBackgroundSessions(sessions, false, user?.uid);
-        }
-        startBackgroundMonitoring();
-      } catch (e) {}
-    })();
-
-    const pollAllNativeSessions = async () => {
-      if (isPollingRef.current) return;
       isPollingRef.current = true;
       try {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
@@ -1241,31 +1218,41 @@ export default function App() {
         if (accountsRef.current && Array.isArray(accountsRef.current)) {
           for (const acc of accountsRef.current) {
             const key = acc.syncKey || acc.id;
+            const realIdent = resolveRealIdentifier(acc);
             if (key && !sessions[key]) {
               const vaultCred = findCredentialsForAccount(acc, userRef.current?.uid);
               sessions[key] = {
+                docId: acc.id || key,
                 email: acc.email || vaultCred?.email || '',
                 password: vaultCred?.password || '',
-                identifier: acc.identifier || '',
+                identifier: realIdent || acc.identifier || '',
                 supplierId: acc.supplierId || 0,
                 storeName: acc.storeName || '',
                 cookies: acc.cookies || '',
                 expired: false
               };
+            } else if (key && sessions[key] && realIdent && sessions[key].identifier !== realIdent) {
+              sessions[key].identifier = realIdent;
             }
           }
         }
 
         const polledIdentifiers = new Set();
         for (const [key, sess] of Object.entries(sessions)) {
-          if (!sess.identifier && !sess.email) continue;
-          const dedupKey = sess.identifier || (sess.supplierId ? `sup_${sess.supplierId}` : (sess.email || key));
+          const targetAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key || (a.email && sess.email && a.email.toLowerCase() === sess.email.toLowerCase()) || (a.identifier && sess.identifier && a.identifier === sess.identifier) || (a.supplierId && sess.supplierId && Number(a.supplierId) === Number(sess.supplierId)));
+          if (accountsRef.current && accountsRef.current.length > 0 && !targetAcc) {
+            continue;
+          }
+          const targetDocId = targetAcc?.id || sess.docId || key;
+          if (!targetDocId || !String(targetDocId).startsWith('MSH-')) continue;
+
+          const effectiveIdent = resolveRealIdentifier(targetAcc) || resolveRealIdentifier(sess) || sess.identifier || '';
+          const effectiveSupId = targetAcc?.supplierId || sess.supplierId || 0;
+          if (!effectiveIdent && !sess.email && !effectiveSupId) continue;
+
+          const dedupKey = targetDocId;
           if (polledIdentifiers.has(dedupKey)) continue;
           polledIdentifiers.add(dedupKey);
-
-          const targetAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key || (a.email && sess.email && a.email.toLowerCase() === sess.email.toLowerCase()) || (a.identifier && sess.identifier && a.identifier === sess.identifier));
-          if (!targetAcc) continue;
-          const targetDocId = targetAcc.id || key;
 
           // Restore credentials from encrypted local vault if missing
           if (!sess.password) {
@@ -1280,16 +1267,17 @@ export default function App() {
           if (!sess.cookies && sess.email && sess.password) {
             const fresh = await directMeeshoLogin(sess.email, sess.password);
             if (fresh.success) {
+              const freshIdent = resolveRealIdentifier(fresh) || effectiveIdent;
               sessions[key].cookies = fresh.cookies;
-              sessions[key].identifier = fresh.identifier;
-              sessions[key].supplierId = fresh.supplierId;
+              sessions[key].identifier = freshIdent;
+              sessions[key].supplierId = fresh.supplierId || effectiveSupId;
               sessions[key].storeName = fresh.storeName;
               localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
               setLocalSessions(sessions);
               await updateDoc(doc(db, 'accounts', targetDocId), {
                 cookies: fresh.cookies,
-                identifier: fresh.identifier,
-                supplierId: fresh.supplierId,
+                identifier: freshIdent,
+                supplierId: fresh.supplierId || effectiveSupId,
                 dateTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 lastUpdated: new Date().toISOString()
               }).catch(() => {});
@@ -1298,9 +1286,9 @@ export default function App() {
 
           if (!sess.cookies && targetAcc?.cookies) {
             sess.cookies = targetAcc.cookies;
-            if (targetAcc.identifier && !sess.identifier) sess.identifier = targetAcc.identifier;
-            if (targetAcc.supplierId && !sess.supplierId) sess.supplierId = targetAcc.supplierId;
           }
+          if (effectiveIdent) sess.identifier = effectiveIdent;
+          if (effectiveSupId) sess.supplierId = effectiveSupId;
 
           if (!sess.cookies) continue;
 
@@ -1315,8 +1303,8 @@ export default function App() {
               console.log(`[Auto Re-login] Meesho session expired for ${loginEmail}. Re-authenticating automatically on client behalf...`);
               const fresh = await directMeeshoLogin(loginEmail, loginPass);
               if (fresh.success) {
-                const freshIdent = fresh.identifier || sess.identifier || targetAcc?.identifier || '';
-                const freshSupId = fresh.supplierId || sess.supplierId || targetAcc?.supplierId || 0;
+                const freshIdent = resolveRealIdentifier(fresh) || effectiveIdent || sess.identifier || targetAcc?.identifier || '';
+                const freshSupId = fresh.supplierId || effectiveSupId || sess.supplierId || targetAcc?.supplierId || 0;
                 sessions[key].cookies = fresh.cookies;
                 sessions[key].identifier = freshIdent;
                 sessions[key].supplierId = freshSupId;
@@ -1397,16 +1385,15 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Sync fresh timestamp to Firestore on every 120s poll so website and all devices reflect live checking
+          // Sync fresh timestamp to Firestore on every 120s poll (or immediately when user opens/resumes app!)
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= 100 * 1000; // Fresh check every ~2 minutes
+          const isStaleTimestamp = forceInstant || !lastSyncedAt || timeSinceLastSyncMs >= 100 * 1000;
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
           }
 
-          // Data has changed OR 100+ seconds elapsed since last Firestore write
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
             courier: newCourier,
@@ -1422,6 +1409,7 @@ export default function App() {
             handoverCount: newCount,
             dateTime: currentTimeStr,
             otpList: otpRes.otpList || [],
+            identifier: sess.identifier || existingAcc?.identifier || '',
             status: 'live',
             lastUpdated: new Date().toISOString()
           }).catch(() => {});
@@ -1430,54 +1418,122 @@ export default function App() {
         console.warn('Native OTP poll error:', err);
       } finally {
         isPollingRef.current = false;
+        if (pendingForcePollRef.current) {
+          pendingForcePollRef.current = false;
+          setTimeout(() => pollAllNativeSessions(true), 150);
+        }
       }
     };
 
-    // 1. Instant zero-delay poll immediately on mount
-    pollAllNativeSessions();
+    pollAllNativeSessionsRef.current = pollAllNativeSessions;
+
+    // Immediately restore sessions from Android Native SharedPreferences, then trigger instant OTP poll!
+    (async () => {
+      try {
+        const nativeStored = await getNativeStoredSessions();
+        if (nativeStored && typeof nativeStored === 'object' && Object.keys(nativeStored).length > 0) {
+          const rawLocal = localStorage.getItem('native_meesho_sessions');
+          let merged = rawLocal ? JSON.parse(rawLocal) : {};
+          let hasUpdates = false;
+
+          for (const [k, v] of Object.entries(nativeStored)) {
+            if (!v) continue;
+            if (user && v.userId && v.userId !== user.uid) continue;
+            if (v.password) {
+              saveEncryptedStoreCredentials(k, v, user?.uid);
+            }
+            // If accounts are already loaded, skip merging deleted MSH- ghost keys
+            if (accountsRef.current && accountsRef.current.length > 0) {
+              const isKnownActive = accountsRef.current.some(a => a.id === k || a.syncKey === k);
+              if (!isKnownActive) continue;
+            }
+            if (!merged[k]) {
+              merged[k] = v;
+              hasUpdates = true;
+            } else {
+              if (!merged[k].password && v.password) {
+                merged[k].password = v.password;
+                hasUpdates = true;
+              }
+              if (!merged[k].email && v.email) {
+                merged[k].email = v.email;
+                hasUpdates = true;
+              }
+              if (!merged[k].cookies && v.cookies) {
+                merged[k].cookies = v.cookies;
+                hasUpdates = true;
+              }
+            }
+          }
+
+          if (hasUpdates || !rawLocal) {
+            localStorage.setItem('native_meesho_sessions', JSON.stringify(merged));
+            setLocalSessions(merged);
+          }
+        }
+      } catch (err) {
+        console.warn('[Native App] getNativeStoredSessions restoration error:', err);
+      }
+
+      try {
+        const rawSessions = localStorage.getItem('native_meesho_sessions');
+        if (rawSessions) {
+          const sessions = JSON.parse(rawSessions);
+          syncBackgroundSessions(sessions, false, user?.uid);
+        }
+        startBackgroundMonitoring();
+      } catch (e) {}
+
+      // 1. Instant zero-delay poll immediately after native session restoration
+      pollAllNativeSessions(true);
+    })();
 
     // 2. Dynamic polling schedule:
-    // Daytime (08:00 AM to 09:00 PM): every 120 seconds (2 minutes)
-    // Night (09:00 PM to 08:00 AM): every 5 minutes (300 seconds)
+    // Courier time (08:00 AM to 09:00 PM): every 120 seconds (2 minutes)
+    // Non-courier time (09:00 PM to 08:00 AM): every 60 minutes (3600 seconds)
     const getPollIntervalMs = () => {
       const now = new Date();
       const hour = now.getHours();
       if (hour >= 8 && hour < 21) {
-        return 120 * 1000; // 120 seconds (2 minutes)
+        return 120 * 1000; // 120 seconds (2 minutes) during courier hours
       }
-      return 5 * 60 * 1000; // 5 minutes (300 seconds)
+      return 60 * 60 * 1000; // 60 minutes (1 hour) during non-courier hours
     };
 
     let pollTimerId = null;
     const scheduleNextForegroundPoll = () => {
       const delay = getPollIntervalMs();
       pollTimerId = setTimeout(async () => {
-        await pollAllNativeSessions();
+        await pollAllNativeSessions(false);
         scheduleNextForegroundPoll();
       }, delay);
     };
 
     scheduleNextForegroundPoll();
 
-    // 3. Instant trigger whenever user clicks notification or returns to app
+    // 3. Instant trigger whenever user opens app, clicks notification, or returns to app
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        pollAllNativeSessions();
+        pollAllNativeSessions(true);
       }
     };
     const onFocus = () => {
-      pollAllNativeSessions();
+      pollAllNativeSessions(true);
+    };
+    const onNativeResume = () => {
+      pollAllNativeSessions(true);
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('nativeAppResume', onNativeResume);
 
     let appStateListener = null;
     if (typeof Capacitor !== 'undefined' && Capacitor.addListener) {
       try {
         appStateListener = Capacitor.addListener('appStateChange', (state) => {
           if (state && state.isActive) {
-            pollAllNativeSessions();
+            pollAllNativeSessions(true);
           }
         });
       } catch (e) {}
@@ -1487,6 +1543,7 @@ export default function App() {
       if (pollTimerId) clearTimeout(pollTimerId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('nativeAppResume', onNativeResume);
       if (appStateListener && appStateListener.remove) {
         appStateListener.remove();
       }
