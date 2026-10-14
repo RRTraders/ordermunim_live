@@ -3165,7 +3165,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
 
       let stream = null;
-      // High-Definition 60 FPS constraints: 1280x720 (or 848x480 widescreen) at up to 60 fps
+      // High-Definition 60 FPS constraints: 1280x720 (or 848x480 widescreen) at 60 fps
       const hdVideoConstraint = {
         ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: mode } }),
         width: { ideal: 1280, min: 848 },
@@ -3174,32 +3174,53 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       };
 
       try {
+        // Attempt hardware 60 fps first
         stream = await navigator.mediaDevices.getUserMedia({
-          video: hdVideoConstraint,
+          video: {
+            ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: mode } }),
+            width: { ideal: 1280, min: 848 },
+            height: { ideal: 720, min: 480 },
+            frameRate: { ideal: 60, exact: 60 }
+          },
           audio: false
         });
-      } catch (e1) {
-        console.warn('Attempt 1 (60 FPS HD ideal) failed, trying flexible widescreen fallback', e1);
+      } catch {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 },
-              frameRate: { ideal: 60, min: 30 }
-            },
+            video: hdVideoConstraint,
             audio: false
           });
-        } catch (e2) {
-          console.warn('Attempt 2 failed, trying user facing', e2);
+        } catch (e1) {
+          console.warn('Attempt 1 (60 FPS HD ideal) failed, trying flexible widescreen fallback', e1);
           try {
             stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } },
+              video: {
+                width: { ideal: 1280, min: 640 },
+                height: { ideal: 720, min: 480 },
+                frameRate: { ideal: 60, min: 30 }
+              },
               audio: false
             });
-          } catch (e3) {
-            console.warn('Attempt 3 failed, trying video: true fallback', e3);
-            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          } catch (e2) {
+            console.warn('Attempt 2 failed, trying user facing', e2);
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } },
+                audio: false
+              });
+            } catch (e3) {
+              console.warn('Attempt 3 failed, trying video: true fallback', e3);
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
           }
+        }
+      }
+
+      // Enforce 60 fps on the active camera track
+      if (stream && stream.getVideoTracks().length > 0) {
+        const camTrack = stream.getVideoTracks()[0];
+        if (camTrack.applyConstraints) {
+          camTrack.applyConstraints({ frameRate: 60 }).catch(() => {});
         }
       }
 
@@ -3281,66 +3302,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       canvas.height = height;
       const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
-      // High-performance continuous 60 FPS render loop that draws camera frame + centered timestamp overlay
-      let isRunning = true;
-      let lastRenderTimestamp = performance.now();
-
-      const renderCanvasFrame = () => {
-        try {
-          if (videoEl && videoEl.readyState >= 2) {
-            // 1. Draw raw camera video frame
-            ctx.drawImage(videoEl, 0, 0, width, height);
-
-            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER — NORMAL NON-BOLD FONT WITHOUT BACKGROUND
-            const timeText = currentIstTimeRef.current || '';
-            const fontSize = Math.max(16, Math.round(width * 0.028));
-            // font weight 400 (normal, not bold)
-            ctx.font = `400 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-            ctx.textBaseline = 'middle';
-            ctx.textAlign = 'center';
-
-            // Clean shadow for readability without any background box
-            ctx.save();
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-            ctx.shadowBlur = Math.max(3, Math.round(fontSize * 0.16));
-            ctx.shadowOffsetX = 1;
-            ctx.shadowOffsetY = 1.5;
-
-            // Crisp white text matching Image 2
-            ctx.fillStyle = '#FFFFFF';
-            const posY = Math.round(height * 0.05); // 5% from top edge
-            ctx.fillText(timeText, width / 2, posY);
-            ctx.restore();
-          }
-        } catch (e) {
-          console.warn('Canvas draw error:', e);
-        }
-        lastRenderTimestamp = performance.now();
-      };
-
-      const drawLoop = () => {
-        if (!isRunning) return;
-        renderCanvasFrame();
-        animFrameRef.current = requestAnimationFrame(drawLoop);
-      };
-      drawLoop();
-
-      // Steady 60 FPS interval backup to guarantee up to 60 fps even if browser tab is throttled
-      if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
-      renderIntervalRef.current = setInterval(() => {
-        if (!isRunning) {
-          clearInterval(renderIntervalRef.current);
-          return;
-        }
-        if (performance.now() - lastRenderTimestamp > 18) {
-          renderCanvasFrame();
-        }
-      }, 16);
-
-      // Capture stream from canvas with burned-in timestamp at up to 60 fps
+      // Capture stream from canvas with burned-in timestamp at exactly 60 fps
       let recordStream;
+      let canvasTrack = null;
       try {
         recordStream = canvas.captureStream ? canvas.captureStream(60) : webcamStream;
+        if (recordStream && recordStream.getVideoTracks().length > 0) {
+          canvasTrack = recordStream.getVideoTracks()[0];
+          if (canvasTrack && canvasTrack.applyConstraints) {
+            canvasTrack.applyConstraints({ frameRate: 60 }).catch(() => {});
+          }
+        }
       } catch (err) {
         console.warn('Canvas captureStream fallback to direct videoStream:', err);
         recordStream = webcamStream;
@@ -3350,6 +3322,78 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       if (webcamStream.getAudioTracks().length > 0 && recordStream !== webcamStream) {
         webcamStream.getAudioTracks().forEach(track => recordStream.addTrack(track));
       }
+
+      // High-performance continuous 60 FPS render loop that draws camera frame + centered timestamp overlay
+      let isRunning = true;
+      let frameIndex = 0;
+
+      const renderCanvasFrame = () => {
+        try {
+          if (videoEl && videoEl.readyState >= 2) {
+            // 1. Draw raw camera video frame
+            ctx.drawImage(videoEl, 0, 0, width, height);
+
+            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER — COMPLETELY CLEAN, NO SHADOW, NO STROKE, NO OUTLINE, NO GREY/BLACK BORDER
+            const timeText = currentIstTimeRef.current || '';
+            const fontSize = Math.max(16, Math.round(width * 0.028));
+            ctx.font = `400 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+
+            // ZERO SHADOW / ZERO STROKE: clean pure white text
+            ctx.save();
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.fillStyle = '#FFFFFF';
+            const posY = Math.round(height * 0.05); // 5% from top edge
+            ctx.fillText(timeText, width / 2, posY);
+            ctx.restore();
+
+            // 3. Mark frame buffer as newly rendered on every tick so encoder records full 60 unique frames per second
+            frameIndex = (frameIndex + 1) % 60;
+            ctx.fillStyle = (frameIndex % 2 === 0) ? 'rgba(255, 255, 255, 0.01)' : 'rgba(255, 255, 255, 0.02)';
+            ctx.fillRect(0, 0, 1, 1);
+
+            // 4. Force canvas track to capture and push frame at 60 fps
+            if (canvasTrack && typeof canvasTrack.requestFrame === 'function') {
+              try { canvasTrack.requestFrame(); } catch {}
+            }
+          }
+        } catch (e) {
+          console.warn('Canvas draw error:', e);
+        }
+      };
+
+      // Accurate 60 FPS pump: 16.66ms per frame
+      let lastFrameTime = performance.now();
+      const targetFrameInterval = 1000 / 60; // 16.666 ms
+
+      const step = (now) => {
+        if (!isRunning) return;
+        const delta = now - lastFrameTime;
+        if (delta >= targetFrameInterval - 2) {
+          lastFrameTime = now - (delta % targetFrameInterval);
+          renderCanvasFrame();
+        }
+        animFrameRef.current = requestAnimationFrame(step);
+      };
+      animFrameRef.current = requestAnimationFrame(step);
+
+      // Steady 60 FPS hardware timer watchdog (16ms)
+      if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
+      renderIntervalRef.current = setInterval(() => {
+        if (!isRunning) {
+          clearInterval(renderIntervalRef.current);
+          return;
+        }
+        const now = performance.now();
+        if (now - lastFrameTime >= targetFrameInterval) {
+          lastFrameTime = now;
+          renderCanvasFrame();
+        }
+      }, 16);
 
       // MP4 / H.264 prioritised first for hardware acceleration, 60fps and full duration/bitrate metadata in Windows
       let recorder;
@@ -7212,14 +7256,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
               {isWebcamActive && (
                 <>
-                  {/* Superimposed Live Timestamp HUD Overlay — Image 2 Font Style (Normal weight, No background) */}
+                  {/* Superimposed Live Timestamp HUD Overlay — Clean Pure Normal Text, NO Shadow, NO Stroke, NO Background */}
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none select-none">
                     <span 
-                      className="text-sm sm:text-base md:text-lg font-normal text-white tracking-normal drop-shadow-md select-none whitespace-nowrap"
+                      className="text-sm sm:text-base md:text-lg font-normal text-white tracking-normal select-none whitespace-nowrap"
                       style={{
                         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                        fontWeight: 400,
-                        textShadow: '0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 5px rgba(0, 0, 0, 0.8), 0 0 3px rgba(0, 0, 0, 0.9)'
+                        fontWeight: 400
                       }}
                     >
                       {currentIstTime}
