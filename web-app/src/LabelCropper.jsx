@@ -3889,13 +3889,32 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         if (skuMatch && skuMatch[1].trim().length > 1) {
           sku = skuMatch[1].trim().replace(/\s+/g, ' ');
         } else {
-          const suborderTableMatch = rawText.match(/\d{8,14}\s*\|\s*([A-Za-z0-9_\-\.\/\(\)\s&]+?)(?:\n|\b1\b)/);
+          const suborderTableMatch = rawText.match(/\d{8,14}\s*\|\s*([A-Za-z0-9_\-\.\/\(\)\s&]+?)(?:\n|\b[1-9]\b)/);
           if (suborderTableMatch && suborderTableMatch[1].trim().length > 1) {
             sku = suborderTableMatch[1].trim().replace(/\s+/g, ' ');
           }
         }
-        const qtyMatch = rawText.match(/QUANTITY[\s\S]*?\b(\d+)\b/i) || rawText.match(/QTY[\s\S]*?\b(\d+)\b/i);
-        if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
+
+        // Accurately parse Quantity: look for "TOTAL ITEMS <n>" box first, or 1-3 digit number under QTY
+        const totalItemsMatch = rawText.match(/TOTAL\s*ITEMS\s*[:\s]*\n*([1-9]\d{0,2})\b/i);
+        if (totalItemsMatch) {
+          quantity = parseInt(totalItemsMatch[1], 10) || 1;
+        } else {
+          const invQtyMatch = rawText.match(/\bQTY\b[\s\S]{0,40}?\b([1-9]\d{0,2})\b/i);
+          if (invQtyMatch) {
+            quantity = parseInt(invQtyMatch[1], 10) || 1;
+          } else {
+            const suborderQtyMatch = rawText.match(/QUANTITY\s*[:\s]*\n*([1-9]\d{0,2})\b/i);
+            if (suborderQtyMatch) {
+              quantity = parseInt(suborderQtyMatch[1], 10) || 1;
+            }
+          }
+        }
+
+        // Strict sanity check: An item parcel quantity is never a 12-digit order/barcode number
+        if (isNaN(quantity) || quantity < 1 || quantity > 500) {
+          quantity = 1;
+        }
 
         // 6. Dynamic Crop Bounds Calculation
         const viewport = page.getViewport({ scale: 1.0 });
