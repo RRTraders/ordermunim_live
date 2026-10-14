@@ -139,8 +139,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 44;
-const CURRENT_APP_VERSION_NAME = "5.4";
+const CURRENT_APP_VERSION_CODE = 45;
+const CURRENT_APP_VERSION_NAME = "5.5";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -525,7 +525,7 @@ export default function App() {
   const [installedVersionCode, setInstalledVersionCode] = useState(() => {
     try {
       const stored = localStorage.getItem('om_installed_version_code');
-      if (stored && Number(stored) < 44) {
+      if (stored && Number(stored) < 45) {
         localStorage.removeItem('om_installed_version_code');
         localStorage.removeItem('om_installed_version_name');
         return null;
