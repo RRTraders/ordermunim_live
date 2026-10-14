@@ -522,13 +522,32 @@ export default function App() {
 
   // In-App Update, Platform Detection & Broadcast State
   const [isMobileApp, setIsMobileApp] = useState(() => isNativeMobile());
-  const [installedVersionCode, setInstalledVersionCode] = useState(CURRENT_APP_VERSION_CODE);
-  const [installedVersionName, setInstalledVersionName] = useState(CURRENT_APP_VERSION_NAME);
+  const [installedVersionCode, setInstalledVersionCode] = useState(() => {
+    try {
+      const stored = localStorage.getItem('om_installed_version_code');
+      if (stored && Number(stored) < 44) {
+        localStorage.removeItem('om_installed_version_code');
+        localStorage.removeItem('om_installed_version_name');
+        return null;
+      }
+      return stored ? Number(stored) : null;
+    } catch { return null; }
+  });
+  const [installedVersionName, setInstalledVersionName] = useState(() => {
+    try {
+      const stored = localStorage.getItem('om_installed_version_name');
+      if (stored && (stored === '3.3' || stored === '2.9' || stored === '2.6')) {
+        localStorage.removeItem('om_installed_version_name');
+        return null;
+      }
+      return stored || null;
+    } catch { return null; }
+  });
   const [appPlatformInfo, setAppPlatformInfo] = useState(() => ({
     isNative: isNativeMobile(),
     platform: isNativeMobile() ? 'android' : 'web',
-    versionCode: CURRENT_APP_VERSION_CODE,
-    versionName: CURRENT_APP_VERSION_NAME,
+    versionCode: null,
+    versionName: null,
     packageName: isNativeMobile() ? 'com.rrtraders.meeshootp' : null
   }));
   const [liveCheckedTimes, setLiveCheckedTimes] = useState({});
@@ -2722,6 +2741,11 @@ export default function App() {
     const targetCode = Number(appUpdateConfig.versionCode) || 0;
     const targetName = String(appUpdateConfig.versionName || '').trim().replace(/^v/i, '');
 
+    // Wait until native Android PackageManager returns real installed version info
+    if (installedVersionCode === null && installedVersionName === null) {
+      return { shouldPrompt: false };
+    }
+
     // Check if installed app is genuinely older than target broadcast version
     const isOlder = checkIsVersionOlder(installedVersionCode, installedVersionName, targetCode, targetName);
     if (!isOlder) {
@@ -4023,11 +4047,13 @@ export default function App() {
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                 </strong>
               </div>
-              {isMobileApp && (
+              {isMobileApp ? (
                 <div className="flex items-center justify-between text-slate-600">
                   <span>App Version</span>
                   <div className="flex items-center gap-2">
-                    <strong className="text-slate-900 font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
+                    <strong className="text-slate-900 font-mono font-bold">
+                      {installedVersionName ? `v${installedVersionName}` : 'Checking...'}
+                    </strong>
                     {!Boolean(appUpdateConfig?.active && checkIsVersionOlder(installedVersionCode, installedVersionName, Number(appUpdateConfig.versionCode), appUpdateConfig.versionName)) ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                         <Check className="w-2.5 h-2.5" /> Up to date
@@ -4037,6 +4063,16 @@ export default function App() {
                         Update Available
                       </span>
                     )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Web Portal</span>
+                  <div className="flex items-center gap-2">
+                    <strong className="text-slate-900 font-mono font-bold">v{CURRENT_APP_VERSION_NAME} (Cloud)</strong>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <Check className="w-2.5 h-2.5" /> Live
+                    </span>
                   </div>
                 </div>
               )}
@@ -5926,10 +5962,17 @@ export default function App() {
                     <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                   </strong>
                 </div>
-                {isMobileApp && (
+                {isMobileApp ? (
                   <div className="flex items-center justify-between text-slate-600">
                     <span>App Version</span>
-                    <strong className="text-slate-900 font-mono font-bold">v{installedVersionName || CURRENT_APP_VERSION_NAME}</strong>
+                    <strong className="text-slate-900 font-mono font-bold">
+                      {installedVersionName ? `v${installedVersionName}` : 'Checking...'}
+                    </strong>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Web Portal</span>
+                    <strong className="text-slate-900 font-mono font-bold">v{CURRENT_APP_VERSION_NAME} (Cloud)</strong>
                   </div>
                 )}
               </div>
