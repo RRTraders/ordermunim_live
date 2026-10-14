@@ -157,6 +157,15 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
     }
   }
   const hasEmptyOtpListWithStaleOtp = Array.isArray(acc.otpList) && acc.otpList.length === 0 && acc.currentOtp && acc.currentOtp !== '----';
+  const hasFalseExpiredStatus = acc.status === 'session_expired' || acc.courier === 'Session Expired';
+
+  if (hasFalseExpiredStatus && persistFirestore && acc.id) {
+    updateDoc(doc(db, 'accounts', acc.id), {
+      status: 'live',
+      courier: acc.courier === 'Session Expired' ? 'No Return' : (acc.courier || 'No Return')
+    }).catch(() => {});
+  }
+
   if (isStaleDay || hasEmptyOtpListWithStaleOtp) {
     if (persistFirestore && acc.id && ((acc.currentOtp && acc.currentOtp !== '----') || (Array.isArray(acc.otpList) && acc.otpList.length > 0))) {
       updateDoc(doc(db, 'accounts', acc.id), {
@@ -166,8 +175,13 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
         otpList: []
       }).catch(() => {});
     }
-    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [] };
+    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [], status: 'live' };
   }
+
+  if (hasFalseExpiredStatus) {
+    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, courier: acc.courier === 'Session Expired' ? 'No Return' : acc.courier, status: 'live' };
+  }
+
   return { ...acc, rawFirestoreOtp, rawFirestoreCourier };
 };
 
