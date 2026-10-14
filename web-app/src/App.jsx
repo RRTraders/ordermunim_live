@@ -518,6 +518,15 @@ export default function App() {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminCurrentPage, setAdminCurrentPage] = useState(1);
+  const [expandedAdminUserIds, setExpandedAdminUserIds] = useState({});
+  const [adminSettingsUser, setAdminSettingsUser] = useState(null);
+
+  const toggleAdminUserExpand = (uid) => {
+    setExpandedAdminUserIds(prev => ({
+      ...prev,
+      [uid]: !prev[uid]
+    }));
+  };
   const ADMIN_PAGE_SIZE = 10;
 
   // In-App Update, Platform Detection & Broadcast State
@@ -568,6 +577,10 @@ export default function App() {
     }
 
     // 3. If any modal is open, close it
+    if (adminSettingsUser) {
+      setAdminSettingsUser(null);
+      return 'handled';
+    }
     if (showAddModal) {
       setShowAddModal(false);
       return 'handled';
@@ -4392,154 +4405,129 @@ export default function App() {
                           const userStores = allPlatformAccounts.filter(a => a.userId === u.id);
                           const quota = u.maxAccounts !== undefined ? u.maxAccounts : 0;
                           const sequenceNum = startIndex + idx + 1;
+                          const isExpanded = Boolean(expandedAdminUserIds[u.id]);
 
                           return (
-                            <div key={u.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-md">
-                              {/* Top: Client Info & Actions */}
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
-                                <div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {/* Sequence Number Badge */}
-                                    <span className="px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800/80 text-cyan-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" title={`Account #${sequenceNum}`}>
-                                      #{sequenceNum}
+                            <div key={u.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700/80 rounded-2xl shadow-md transition-all overflow-hidden">
+                              {/* Sleek, Compact User Row */}
+                              <div 
+                                onClick={() => toggleAdminUserExpand(u.id)}
+                                className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-900/40 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  {/* Sequence Badge */}
+                                  <span className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-800/80 text-cyan-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" title={`Account #${sequenceNum}`}>
+                                    #{sequenceNum}
+                                  </span>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-white text-sm md:text-base hover:text-cyan-400 transition-colors flex items-center gap-1.5">
+                                        📱 {u.mobile || u.email || 'Client User'}
+                                      </span>
+
+                                      {/* Status Badges */}
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                        u.status === 'on_hold' 
+                                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
+                                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                      }`}>
+                                        {u.status === 'on_hold' ? 'On Hold' : 'Active'}
+                                      </span>
+
+                                      {u.paymentAlert && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
+                                          <BellRing className="w-2.5 h-2.5" /> Due Alert
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2.5 flex-wrap">
+                                      {u.name && <span className="text-slate-400 font-sans">Name: <strong>{u.name}</strong></span>}
+                                      <span>UID: {u.id.slice(0, 10)}...</span>
+                                      {u.createdAt && (
+                                        <span>Joined: {new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right side: Clickable Stores Counter Pill & Settings Button */}
+                                <div className="flex items-center gap-2.5 shrink-0 self-end md:self-auto" onClick={(e) => e.stopPropagation()}>
+                                  {/* Clickable Stores Counter Pill (toggles store view) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleAdminUserExpand(u.id)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 border transition-all cursor-pointer ${
+                                      userStores.length > quota
+                                        ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                                        : userStores.length > 0
+                                        ? 'bg-sky-500/10 border-sky-500/30 text-sky-300 hover:bg-sky-500/20'
+                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
+                                    }`}
+                                    title="Click to view added stores"
+                                  >
+                                    <Package className="w-3.5 h-3.5 text-sky-400" />
+                                    <span>{userStores.length} / {quota} Stores</span>
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-sky-300' : 'text-slate-500'}`} />
+                                  </button>
+
+                                  {/* Unified Settings Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAdminSettingsUser(u)}
+                                    className="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-cyan-500 hover:text-slate-950 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer group"
+                                    title="Manage Account Settings, Quota & Actions"
+                                  >
+                                    <Settings className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform duration-300" />
+                                    <span>Settings</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expandable Added Stores Section (Only shows when clicked!) */}
+                              {isExpanded && (
+                                <div className="px-4 pb-4 pt-2 border-t border-slate-800/80 bg-slate-900/30 space-y-2 animate-in fade-in duration-150">
+                                  <div className="flex items-center justify-between pt-1">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                      <Package className="w-3.5 h-3.5 text-sky-400" /> Connected Meesho Stores ({userStores.length})
                                     </span>
-                                    <span className="font-bold text-white text-base">
-                                      📱 {u.mobile || u.email || 'Client User'}
-                                    </span>
-                                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase tracking-wider flex items-center gap-1">
-                                      <CheckCircle2 className="w-2.5 h-2.5" /> Activated
-                                    </span>
-                                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                                      u.status === 'on_hold' 
-                                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
-                                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                                    }`}>
-                                      {u.status === 'on_hold' ? 'On Hold' : 'Active'}
-                                    </span>
-                                    {u.paymentAlert && (
-                                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
-                                        <BellRing className="w-2.5 h-2.5" /> Payment Alert Sent
+                                    {userStores.length > quota && (
+                                      <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-full">
+                                        ⚠️ Quota Exceeded ({userStores.length - quota} extra)
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-3 flex-wrap">
-                                    <span>UID: {u.id}</span>
-                                    {u.name && <span className="text-slate-400 font-sans">Name: <strong>{u.name}</strong></span>}
-                                    {u.createdAt && (
-                                      <span>Joined: {new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                    )}
-                                  </div>
-                                </div>
 
-                                {/* Quick Admin Action Buttons */}
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {/* Toggle On Hold */}
-                                  <button
-                                    onClick={() => handleToggleUserStatus(u.id, u.status)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
-                                      u.status === 'on_hold'
-                                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow'
-                                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
-                                    }`}
-                                  >
-                                    <PauseCircle className="w-3.5 h-3.5" />
-                                    {u.status === 'on_hold' ? 'Activate Account' : 'Put On Hold'}
-                                  </button>
-
-                                  {/* Send Payment Alert */}
-                                  <button
-                                    onClick={() => handleTogglePaymentAlert(u.id, u.paymentAlert, quota)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
-                                      u.paymentAlert
-                                        ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
-                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                                    }`}
-                                  >
-                                    <BellRing className="w-3.5 h-3.5" />
-                                    {u.paymentAlert ? 'Cancel Payment Alert' : 'Send Payment Alert'}
-                                  </button>
-
-                                  {/* Delete Main Account */}
-                                  <button
-                                    onClick={() => handleDeleteUserAccount(u.id, u.mobile || u.email)}
-                                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1.5"
-                                    title="Delete client account and stores"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Delete Account
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Middle: Store Slot Management */}
-                              <div className="bg-slate-900/80 p-3.5 rounded-xl flex items-center justify-between gap-3 border border-slate-800">
-                                <div>
-                                  <span className="text-xs text-slate-400 font-medium block">
-                                    Store Quota
-                                  </span>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-sm font-bold text-white font-mono">
-                                      {quota} {quota === 1 ? 'Store Slot' : 'Store Slots'}
-                                    </span>
-                                    <span className="text-xs text-slate-400">
-                                      ({userStores.length} Used)
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Plus / Minus Buttons for Store Quota */}
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleUpdateUserQuota(u.id, Math.max(0, quota - 1), quota, u.mobile || u.email || u.name)}
-                                    disabled={quota <= 0}
-                                    className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white font-bold flex items-center justify-center text-sm transition-colors"
-                                    title="Decrease slot limit"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="text-sm font-bold text-white px-2 font-mono">
-                                    {quota}
-                                  </span>
-                                  <button
-                                    onClick={() => handleUpdateUserQuota(u.id, quota + 1, quota, u.mobile || u.email || u.name)}
-                                    className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-cyan-500/20"
-                                    title="Add store slot (+1)"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Add Store Slot (+1)
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Bottom: Linked Stores List (NO OTP SHOWN) */}
-                              <div>
-                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                                  Linked Stores ({userStores.length})
-                                </span>
-                                {userStores.length === 0 ? (
-                                  <span className="text-xs text-slate-500 italic block">
-                                    No Meesho stores linked yet.
-                                  </span>
-                                ) : (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {userStores.map(store => (
-                                      <div key={store.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-xs">
-                                        <div>
-                                          <span className="font-bold text-white block">📦 {store.storeName}</span>
-                                          <span className="text-[11px] text-slate-400 font-mono">Sync: {store.syncKey} {store.email ? `• ${store.email}` : ''}</span>
+                                  {userStores.length === 0 ? (
+                                    <div className="py-3 px-4 rounded-xl bg-slate-900/60 border border-slate-800/60 text-xs text-slate-500 italic text-center">
+                                      No Meesho stores added yet by this client.
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                      {userStores.map(store => (
+                                        <div key={store.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-xs hover:border-slate-700 transition-colors">
+                                          <div className="min-w-0 flex-1 pr-2">
+                                            <span className="font-bold text-white block truncate">📦 {store.storeName}</span>
+                                            <span className="text-[11px] text-slate-400 font-mono block truncate">Sync: {store.syncKey} {store.email ? `• ${store.email}` : ''}</span>
+                                            {store.dateTime && (
+                                              <span className="text-[10px] text-slate-500 font-mono">Last check: {store.dateTime}</span>
+                                            )}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteAccount(store.id, store.storeName)}
+                                            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                                            title="Delete store"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
                                         </div>
-                                        <button
-                                          onClick={() => handleDeleteAccount(store.id, store.storeName)}
-                                          className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
-                                          title="Delete store"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })
@@ -4696,6 +4684,142 @@ export default function App() {
                       )}
                     </div>
                   )}
+
+                  {/* Unified Account Settings Modal */}
+                  {adminSettingsUser && (() => {
+                    const targetUser = allUsersList.find(u => u.id === adminSettingsUser.id) || adminSettingsUser;
+                    const userStores = allPlatformAccounts.filter(a => a.userId === targetUser.id);
+                    const quota = targetUser.maxAccounts !== undefined ? targetUser.maxAccounts : 0;
+
+                    return (
+                      <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 text-white animate-in fade-in duration-150">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl shadow-cyan-950/40 animate-in zoom-in-95 duration-150">
+                          {/* Header */}
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
+                                <Settings className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="text-base font-bold text-white truncate">
+                                  Account Settings
+                                </h3>
+                                <p className="text-xs text-slate-400 font-mono truncate">
+                                  📱 {targetUser.mobile || targetUser.email || targetUser.id}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAdminSettingsUser(null)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+
+                          {/* 1. Store Quota */}
+                          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-xs text-white block">Store Slot Quota</span>
+                                <span className="text-[11px] text-slate-400">
+                                  {userStores.length} of {quota} slots currently used
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateUserQuota(targetUser.id, Math.max(0, quota - 1), quota, targetUser.mobile || targetUser.email || targetUser.name)}
+                                  disabled={quota <= 0}
+                                  className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
+                                  title="Decrease quota"
+                                >
+                                  -
+                                </button>
+                                <span className="text-sm font-bold text-white px-2 font-mono">
+                                  {quota}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateUserQuota(targetUser.id, quota + 1, quota, targetUser.mobile || targetUser.email || targetUser.name)}
+                                  className="w-8 h-8 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold flex items-center justify-center text-sm transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                                  title="Increase quota (+1)"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2. Account Status */}
+                          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 flex items-center justify-between gap-3">
+                            <div>
+                              <span className="font-bold text-xs text-white block">Account Status</span>
+                              <span className="text-[11px] text-slate-400">
+                                {targetUser.status === 'on_hold' ? 'Account is paused' : 'Account is active and syncing'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserStatus(targetUser.id, targetUser.status)}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                                targetUser.status === 'on_hold'
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md'
+                                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                              }`}
+                            >
+                              <PauseCircle className="w-3.5 h-3.5" />
+                              {targetUser.status === 'on_hold' ? 'Activate Account' : 'Put On Hold'}
+                            </button>
+                          </div>
+
+                          {/* 3. Payment Alert */}
+                          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 flex items-center justify-between gap-3">
+                            <div>
+                              <span className="font-bold text-xs text-white block">Payment Due Notification</span>
+                              <span className="text-[11px] text-slate-400">
+                                {targetUser.paymentAlert ? 'Due alert active' : 'No payment alert displayed'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePaymentAlert(targetUser.id, targetUser.paymentAlert, quota)}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                                targetUser.paymentAlert
+                                  ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                              }`}
+                            >
+                              <BellRing className="w-3.5 h-3.5" />
+                              {targetUser.paymentAlert ? 'Cancel Alert' : 'Send Alert'}
+                            </button>
+                          </div>
+
+                          {/* 4. Delete Account */}
+                          <div className="border border-rose-500/30 bg-rose-500/5 rounded-2xl p-4 flex items-center justify-between gap-3">
+                            <div>
+                              <span className="font-bold text-xs text-rose-300 block">Delete Account</span>
+                              <span className="text-[11px] text-rose-400/80">
+                                Permanently remove account & stores
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdminSettingsUser(null);
+                                handleDeleteUserAccount(targetUser.id, targetUser.mobile || targetUser.email);
+                              }}
+                              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               );
             })()}
