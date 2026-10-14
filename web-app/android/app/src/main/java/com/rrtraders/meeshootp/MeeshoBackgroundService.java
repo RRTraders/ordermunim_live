@@ -797,27 +797,41 @@ public class MeeshoBackgroundService extends Service {
                         if (url != null && url.contains("login") && !injected) {
                             injected = true;
                             String jsInject = "(function() {" +
+                                    "  var retryCount = 0;" +
                                     "  var timer = setInterval(function() {" +
+                                    "    retryCount++;" +
                                     "    try {" +
-                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]');" +
-                                    "      var pw = document.querySelector('input[name=\"password\"]');" +
-                                    "      var btn = document.querySelector('button[type=\"submit\"]');" +
+                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]') || " +
+                                    "               document.querySelector('input[name=\"email\"]') || " +
+                                    "               document.querySelector('input[type=\"email\"]') || " +
+                                    "               document.querySelector('input:not([type=\"password\"]):not([type=\"hidden\"])');" +
+                                    "      var pw = document.querySelector('input[name=\"password\"]') || " +
+                                    "               document.querySelector('input[type=\"password\"]');" +
+                                    "      var btn = document.querySelector('button[type=\"submit\"]') || " +
+                                    "                document.querySelector('form button') || " +
+                                    "                Array.from(document.querySelectorAll('button')).find(function(b) { return /log\\s*in|sign\\s*in|submit/i.test(b.innerText || ''); });" +
                                     "      if (em && pw && btn) {" +
                                     "        clearInterval(timer);" +
                                     "        var setVal = function(el, val) {" +
-                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;" +
-                                    "          setter.call(el, val);" +
+                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ? " +
+                                    "                       Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set : null;" +
+                                    "          if (setter) { setter.call(el, val); } else { el.value = val; }" +
                                     "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
                                     "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                                    "          el.dispatchEvent(new Event('blur', { bubbles: true }));" +
                                     "        };" +
                                     "        setVal(em, " + JSONObject.quote(email) + ");" +
                                     "        setVal(pw, " + JSONObject.quote(password) + ");" +
-                                    "        setTimeout(function() { btn.click(); }, 350);" +
+                                    "        setTimeout(function() {" +
+                                    "          try {" +
+                                    "            btn.click();" +
+                                    "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }" +
+                                    "          } catch(e) {}" +
+                                    "        }, 400);" +
                                     "      }" +
-                                    "    } catch(e) {" +
-                                    "      clearInterval(timer);" +
-                                    "    }" +
-                                    "  }, 400);" +
+                                    "    } catch(e) {}" +
+                                    "    if (retryCount > 60) { clearInterval(timer); }" +
+                                    "  }, 350);" +
                                     "})();";
                             view.evaluateJavascript(jsInject, null);
 

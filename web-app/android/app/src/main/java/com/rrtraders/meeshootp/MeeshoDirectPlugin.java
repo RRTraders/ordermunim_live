@@ -85,6 +85,9 @@ public class MeeshoDirectPlugin extends Plugin {
                 CookieManager cookieManager = CookieManager.getInstance();
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(webView, true);
+                // Clear old cookies so authentication starts with a 100% fresh session
+                cookieManager.removeAllCookies(null);
+                cookieManager.flush();
 
                 final boolean[] isCompleted = {false};
                 final Handler timeoutHandler = new Handler(Looper.getMainLooper());
@@ -94,7 +97,7 @@ public class MeeshoDirectPlugin extends Plugin {
                         try { webView.destroy(); } catch (Exception ignored) {}
                         JSObject ret = new JSObject();
                         ret.put("success", false);
-                        ret.put("error", "Connection timed out. Please check your internet connection.");
+                        ret.put("error", "Connection timed out. Please check your credentials and internet connection.");
                         call.resolve(ret);
                     }
                 };
@@ -110,29 +113,43 @@ public class MeeshoDirectPlugin extends Plugin {
 
                         if (url != null && url.contains("login") && !injected) {
                             injected = true;
-                            // Inject credentials into login form with retry interval until elements mount
+                            // Inject credentials into login form with resilient element selectors and event bubbling
                             String jsInject = "(function() {" +
+                                    "  var retryCount = 0;" +
                                     "  var timer = setInterval(function() {" +
+                                    "    retryCount++;" +
                                     "    try {" +
-                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]');" +
-                                    "      var pw = document.querySelector('input[name=\"password\"]');" +
-                                    "      var btn = document.querySelector('button[type=\"submit\"]');" +
+                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]') || " +
+                                    "               document.querySelector('input[name=\"email\"]') || " +
+                                    "               document.querySelector('input[type=\"email\"]') || " +
+                                    "               document.querySelector('input:not([type=\"password\"]):not([type=\"hidden\"])');" +
+                                    "      var pw = document.querySelector('input[name=\"password\"]') || " +
+                                    "               document.querySelector('input[type=\"password\"]');" +
+                                    "      var btn = document.querySelector('button[type=\"submit\"]') || " +
+                                    "                document.querySelector('form button') || " +
+                                    "                Array.from(document.querySelectorAll('button')).find(function(b) { return /log\\s*in|sign\\s*in|submit/i.test(b.innerText || ''); });" +
                                     "      if (em && pw && btn) {" +
                                     "        clearInterval(timer);" +
                                     "        var setVal = function(el, val) {" +
-                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;" +
-                                    "          setter.call(el, val);" +
+                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ? " +
+                                    "                       Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set : null;" +
+                                    "          if (setter) { setter.call(el, val); } else { el.value = val; }" +
                                     "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
                                     "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                                    "          el.dispatchEvent(new Event('blur', { bubbles: true }));" +
                                     "        };" +
                                     "        setVal(em, " + JSONObject.quote(email) + ");" +
                                     "        setVal(pw, " + JSONObject.quote(password) + ");" +
-                                    "        setTimeout(function() { btn.click(); }, 350);" +
+                                    "        setTimeout(function() {" +
+                                    "          try {" +
+                                    "            btn.click();" +
+                                    "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }" +
+                                    "          } catch(e) {}" +
+                                    "        }, 400);" +
                                     "      }" +
-                                    "    } catch(e) {" +
-                                    "      clearInterval(timer);" +
-                                    "    }" +
-                                    "  }, 400);" +
+                                    "    } catch(e) {}" +
+                                    "    if (retryCount > 60) { clearInterval(timer); }" +
+                                    "  }, 350);" +
                                     "})();";
 
                             view.evaluateJavascript(jsInject, null);
@@ -182,14 +199,29 @@ public class MeeshoDirectPlugin extends Plugin {
                     return;
                 }
 
-                // Check for login error text on screen
+                // Check for real login error text on screen (ignoring form field labels / fieldsets)
                 String checkErrJs = "(function() {" +
                         "  try {" +
-                        "    var alerts = document.querySelectorAll('[role=\"alert\"], [class*=\"error\" i], [class*=\"helper\" i]');" +
-                        "    for (var i = 0; i < alerts.length; i++) {" +
-                        "      var txt = alerts[i].innerText || '';" +
-                        "      if (txt.trim().length > 3) return txt.trim();" +
+                        "    var errEls = Array.from(document.querySelectorAll('[data-error=\"true\"], [role=\"alert\"], [class*=\"toast\" i], [class*=\"banner\" i]'));" +
+                        "    for (var i = 0; i < errEls.length; i++) {" +
+                        "      var t = (errEls[i].innerText || '').trim();" +
+                        "      if (!t) continue;" +
+                        "      if (t.includes('Email Id') || t.includes('mobile number') || t === 'Show' || t === 'Hide') continue;" +
+                        "      if (/invalid|incorrect|wrong|blocked|suspended|disabled|failed|not found|exist|locked/i.test(t)) {" +
+                        "        var lines = t.split('\\n');" +
+                        "        for (var j = 0; j < lines.length; j++) {" +
+                        "          var line = lines[j].trim();" +
+                        "          if (/invalid|incorrect|wrong|blocked|suspended|disabled|failed|not found|exist|locked/i.test(line) && line.length > 3) {" +
+                        "            return line;" +
+                        "          }" +
+                        "        }" +
+                        "        return t;" +
+                        "      }" +
                         "    }" +
+                        "    var bodyTxt = document.body ? document.body.innerText || '' : '';" +
+                        "    if (bodyTxt.includes('Invalid credentials')) return 'Invalid credentials';" +
+                        "    if (bodyTxt.includes('Incorrect password')) return 'Incorrect password';" +
+                        "    if (bodyTxt.includes('User does not exist')) return 'User does not exist';" +
                         "  } catch(e) {}" +
                         "  return '';" +
                         "})();";
@@ -197,7 +229,8 @@ public class MeeshoDirectPlugin extends Plugin {
                 webView.evaluateJavascript(checkErrJs, val -> {
                     if (isCompleted[0]) return;
                     String cleanVal = (val != null && !val.equals("null") && !val.equals("\"\"")) ? val.replace("\"", "").trim() : "";
-                    if (!cleanVal.isEmpty() && attempts > 4) {
+                    // Only evaluate explicit errors after attempt 6 (giving 3+ seconds for form submission)
+                    if (!cleanVal.isEmpty() && attempts > 6) {
                         isCompleted[0] = true;
                         timeoutHandler.removeCallbacks(timeoutRunnable);
                         try { webView.destroy(); } catch (Exception ignored) {}
@@ -209,7 +242,7 @@ public class MeeshoDirectPlugin extends Plugin {
                         return;
                     }
 
-                    if (attempts < 60) {
+                    if (attempts < 65) {
                         poller.postDelayed(this, 500);
                     }
                 });
@@ -979,11 +1012,16 @@ public class MeeshoDirectPlugin extends Plugin {
 
     /**
      * Decrypts an AES-256/CBC/PKCS5Padding encrypted string.
-     * Input must be "IV:CipherText" Base64 format from aesEncrypt.
+     * Supports both OrderMunim native "IV:CipherText" format AND CryptoJS OpenSSL "U2FsdGVkX1..." format.
      */
     public static String aesDecrypt(Context context, String encrypted) {
         if (encrypted == null || encrypted.isEmpty()) return "";
-        // If not in IV:CipherText format, treat as legacy plaintext
+        // 1. Support CryptoJS OpenSSL AES format (e.g. from localVault.js / Firestore)
+        if (encrypted.startsWith("U2FsdGVkX1")) {
+            String cjs = decryptCryptoJsAes(encrypted, "ORDERMUNIM_LOCAL_DB_SECURE_MEESHO_VAULT_PERMANENT_KEY_v2");
+            if (!cjs.isEmpty() && !cjs.equals(encrypted)) return cjs;
+        }
+        // 2. If not in IV:CipherText format, treat as legacy plaintext
         if (!encrypted.contains(":")) return encrypted;
         try {
             String[] parts = encrypted.split(":", 2);
@@ -998,6 +1036,54 @@ public class MeeshoDirectPlugin extends Plugin {
         } catch (Exception e) {
             android.util.Log.w("MeeshoDirectPlugin", "aesDecrypt failed: " + e.getMessage());
             // Fallback: return as-is (legacy plaintext)
+            return encrypted;
+        }
+    }
+
+    /**
+     * Decrypts CryptoJS AES OpenSSL format (Salted__ + 8-byte salt + ciphertext) via standard EVP_BytesToKey.
+     */
+    private static String decryptCryptoJsAes(String encrypted, String passphrase) {
+        try {
+            byte[] raw = Base64.decode(encrypted, Base64.NO_WRAP);
+            if (raw.length < 16) return encrypted;
+            byte[] salt = new byte[8];
+            System.arraycopy(raw, 8, salt, 0, 8);
+            byte[] ciphertext = new byte[raw.length - 16];
+            System.arraycopy(raw, 16, ciphertext, 0, raw.length - 16);
+
+            java.security.MessageDigest md5 = java.security.MessageDigest.getInstance("MD5");
+            byte[] passBytes = passphrase.getBytes(StandardCharsets.UTF_8);
+
+            byte[] passAndSalt = new byte[passBytes.length + salt.length];
+            System.arraycopy(passBytes, 0, passAndSalt, 0, passBytes.length);
+            System.arraycopy(salt, 0, passAndSalt, passBytes.length, salt.length);
+
+            byte[] d0 = md5.digest(passAndSalt);
+
+            byte[] d0PassAndSalt = new byte[d0.length + passBytes.length + salt.length];
+            System.arraycopy(d0, 0, d0PassAndSalt, 0, d0.length);
+            System.arraycopy(passBytes, 0, d0PassAndSalt, d0.length, passBytes.length);
+            System.arraycopy(salt, 0, d0PassAndSalt, d0.length + passBytes.length, salt.length);
+            byte[] d1 = md5.digest(d0PassAndSalt);
+
+            byte[] d1PassAndSalt = new byte[d1.length + passBytes.length + salt.length];
+            System.arraycopy(d1, 0, d1PassAndSalt, 0, d1.length);
+            System.arraycopy(passBytes, 0, d1PassAndSalt, d1.length, passBytes.length);
+            System.arraycopy(salt, 0, d1PassAndSalt, d1.length + passBytes.length, salt.length);
+            byte[] d2 = md5.digest(d1PassAndSalt);
+
+            byte[] key = new byte[32];
+            System.arraycopy(d0, 0, key, 0, 16);
+            System.arraycopy(d1, 0, key, 16, 16);
+
+            byte[] iv = new byte[16];
+            System.arraycopy(d2, 0, iv, 0, 16);
+
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+        } catch (Exception e) {
             return encrypted;
         }
     }

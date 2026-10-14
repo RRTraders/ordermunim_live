@@ -991,8 +991,8 @@ export default function App() {
               currentSessions[key] = {
                 docId: acc.id,
                 userId: uid,
-                email: acc.email || '',
-                password: '', // Will be restored from AES vault by Android side
+                email: acc.email || (acc.encryptedEmail ? decryptSecret(acc.encryptedEmail) : ''),
+                password: acc.encryptedPassword ? decryptSecret(acc.encryptedPassword) : '',
                 identifier: acc.identifier || '',
                 supplierId: acc.supplierId || 0,
                 storeName: acc.storeName || '',
