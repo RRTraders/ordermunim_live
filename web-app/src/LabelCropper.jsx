@@ -2974,20 +2974,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         const effectiveMs = clockMode === 'custom' ? (nowMs + customClockOffsetMs) : nowMs;
         const targetDate = new Date(effectiveMs);
         
-        // Use Indian Standard Time
-        const istFormatter = new Intl.DateTimeFormat('en-IN', {
+        // Format exactly as Image 2: "Jul 29, 2026 11:39:51 AM" in Indian Standard Time (IST)
+        const istFormatter = new Intl.DateTimeFormat('en-US', {
           timeZone: 'Asia/Kolkata',
-          day: '2-digit',
-          month: '2-digit',
+          month: 'short',
+          day: 'numeric',
           year: 'numeric',
-          hour: '2-digit',
+          hour: 'numeric',
           minute: '2-digit',
           second: '2-digit',
           hour12: true,
         });
         
         const parts = istFormatter.formatToParts(targetDate);
-        let day = '01', month = '01', year = '2026', hour = '12', min = '00', sec = '00', dayPeriod = 'AM';
+        let day = '01', month = 'Jan', year = '2026', hour = '12', min = '00', sec = '00', dayPeriod = 'AM';
         for (const p of parts) {
           if (p.type === 'day') day = p.value;
           if (p.type === 'month') month = p.value;
@@ -2998,8 +2998,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           if (p.type === 'dayPeriod') dayPeriod = p.value.toUpperCase();
         }
         
-        // Exact format from Image 2: "19.06.2024 08:22:42AM"
-        setCurrentIstTime(`${day}.${month}.${year} ${hour}:${min}:${sec}${dayPeriod}`);
+        // Exact format matching Image 2: "Jul 29, 2026 11:39:51 AM"
+        setCurrentIstTime(`${month} ${day}, ${year} ${hour}:${min}:${sec} ${dayPeriod}`);
       } catch (e) {
         setCurrentIstTime(new Date().toLocaleTimeString());
       }
@@ -3213,38 +3213,27 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             // 1. Draw raw camera video frame
             ctx.drawImage(videoEl, 0, 0, width, height);
 
-            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER (Matching Image 2 format & style)
-            const timeText = currentIstTimeRef.current || '19.06.2024 08:22:42AM';
+            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER (Matching Image 2 font style without background)
+            const timeText = currentIstTimeRef.current || '';
             
             // Adaptive font size based on video resolution
-            const fontSize = Math.max(16, Math.round(width * 0.026));
-            ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace, sans-serif`;
+            const fontSize = Math.max(16, Math.round(width * 0.028));
+            ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
 
-            const textMetrics = ctx.measureText(timeText);
-            const textWidth = textMetrics.width;
-            const paddingX = Math.round(fontSize * 0.7);
-            const paddingY = Math.round(fontSize * 0.45);
-            const boxWidth = textWidth + (paddingX * 2);
-            const boxHeight = fontSize + (paddingY * 2);
-            
-            // Centered horizontally, at the top of video frame
-            const boxX = (width - boxWidth) / 2;
-            const boxY = Math.round(height * 0.04); // 4% from top edge
+            // NO BACKGROUND RECTANGLE / NO BORDER (As requested: "without any background")
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+            ctx.shadowBlur = Math.max(3, Math.round(fontSize * 0.16));
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1.5;
 
-            // Semi-transparent background badge matching Image 2
-            ctx.fillStyle = 'rgba(51, 65, 85, 0.75)'; // slate-700 translucent
-            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            // Subtle border
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.06));
-            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-
-            // Crisp white text
+            // Crisp white text matching Image 2
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(timeText, width / 2, boxY + (boxHeight / 2));
+            const posY = Math.round(height * 0.05); // 5% from top edge
+            ctx.fillText(timeText, width / 2, posY);
+            ctx.restore();
           }
         } catch (e) {
           console.warn('Canvas draw error:', e);
@@ -7098,13 +7087,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
               {isWebcamActive && (
                 <>
-                  {/* Superimposed Live Timestamp HUD Overlay */}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                    <div className="bg-black/65 backdrop-blur-md border border-white/20 rounded-xl px-3.5 py-1.5 shadow-lg flex items-center justify-center">
-                      <span className="font-mono text-xs sm:text-sm md:text-base font-black text-white tracking-wide drop-shadow-sm select-none whitespace-nowrap">
-                        {currentIstTime}
-                      </span>
-                    </div>
+                  {/* Superimposed Live Timestamp HUD Overlay — Image 2 Font Style (No background) */}
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none select-none">
+                    <span 
+                      className="text-sm sm:text-base md:text-lg font-semibold text-white tracking-normal drop-shadow-md select-none whitespace-nowrap"
+                      style={{
+                        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        textShadow: '0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 5px rgba(0, 0, 0, 0.8), 0 0 3px rgba(0, 0, 0, 0.9)'
+                      }}
+                    >
+                      {currentIstTime}
+                    </span>
                   </div>
 
                   {/* Top-Right Recording Indicator */}
