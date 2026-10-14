@@ -3835,7 +3835,8 @@ export default function App() {
                       { id: 'amazon', name: 'Amazon', letter: 'a', bg: 'bg-[#131921] text-[#FF9900]', desc: 'Easy Ship Label Filter' },
                       { id: 'flipcart', name: 'Flipkart', letter: 'F', bg: 'bg-[#2874F0] text-[#FFE500]', desc: '4x6 Thermal Cropping' },
                       { id: 'meesho', name: 'Meesho', letter: 'm', bg: 'bg-fuchsia-800 text-white', desc: 'Label Crop & SKU Sort' },
-                      { id: 'myntra', name: 'Myntra', letter: 'M', bg: 'bg-[#FF3F6C] text-white', desc: 'Direct Label Downloader' }
+                      { id: 'myntra', name: 'Myntra', letter: 'M', bg: 'bg-[#FF3F6C] text-white', desc: 'Direct Label Downloader' },
+                      { id: 'snapdeal', name: 'Snapdeal', letter: 'S', bg: 'bg-[#E40046] text-white', desc: 'Crop Label & Remove Invoice' }
                     ].map((item) => (
                       <button
                         key={item.id}
@@ -5405,7 +5406,7 @@ export default function App() {
                     </div>
                     {/* Marketplace chips */}
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                      {['Meesho', 'Flipkart', 'Amazon', 'Ajio', 'Myntra'].map(p => (
+                      {['Meesho', 'Flipkart', 'Amazon', 'Ajio', 'Myntra', 'Snapdeal'].map(p => (
                         <span key={p} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
                           {p}
                         </span>
@@ -5709,6 +5710,15 @@ export default function App() {
                     className="hover:text-orange-400 transition-colors cursor-pointer text-left"
                   >
                     Myntra Direct Downloader
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveCropperMarketplace('snapdeal'); setActiveTab('cropper'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-orange-400 transition-colors cursor-pointer text-left"
+                  >
+                    Snapdeal Label Cropper
                   </button>
                 </li>
                 <li>

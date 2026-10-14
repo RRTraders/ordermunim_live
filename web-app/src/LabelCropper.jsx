@@ -122,6 +122,17 @@ export const MARKETPLACES = [
     ready: true
   },
   {
+    id: 'snapdeal',
+    name: 'Snapdeal',
+    shortName: 'Snapdeal',
+    tagline: 'Snapdeal Marketplace & Seller Zone',
+    badgeText: 'snapdeal',
+    badgeStyle: 'bg-gradient-to-tr from-[#E40046] to-[#b30037] text-white shadow-rose-950/20',
+    iconLetter: 'S',
+    description: 'Crop Snapdeal combined PDF to extract 4x6 thermal shipping labels and automatically eliminate tax invoices.',
+    ready: true
+  },
+  {
     id: 'webcam',
     name: 'Webcam',
     shortName: 'Webcam',
@@ -466,6 +477,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     flipcart: createInitialMarketplaceState(),
     meesho: createInitialMarketplaceState(),
     myntra: createInitialMarketplaceState(),
+    snapdeal: createInitialMarketplaceState(),
     webcam: createInitialMarketplaceState(),
   }));
 
@@ -3828,6 +3840,122 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         };
       }
 
+      // ================= SNAPDEAL PARSING & BOUNDS =================
+      if (marketplaceId === 'snapdeal') {
+        // 1. Detect Courier
+        let courier = 'Shadowfax';
+        if (/shadowfax/i.test(rawText)) courier = 'Shadowfax';
+        else if (/delhivery/i.test(rawText)) courier = 'Delhivery';
+        else if (/xpressbees/i.test(rawText) || /xpress\s*bees/i.test(rawText)) courier = 'XpressBees';
+        else if (/ecom\s*express/i.test(rawText)) courier = 'Ecom Express';
+        else if (/blue\s*dart/i.test(rawText) || /bluedart/i.test(rawText)) courier = 'Blue Dart';
+        else if (/smartr/i.test(rawText)) courier = 'Smartr';
+        else if (/dtdc/i.test(rawText)) courier = 'DTDC';
+        else {
+          const cMatch = rawText.match(/(?:Courier|Logistics|Carrier)[\s:#-]*([A-Za-z0-9\s\-]{3,25})/i);
+          if (cMatch) courier = cMatch[1].trim();
+        }
+
+        // 2. Detect Suborder / Order ID
+        let orderNumber = '';
+        const soMatch = rawText.match(/SUBORDER\s*(?:CODE|NO\.?)[\s:]*(\d{8,14})/i);
+        const orderMatch = rawText.match(/ORDER\s*(?:NO\.?|NUMBER)[\s:]*(\d{8,14})/i);
+        if (soMatch) orderNumber = soMatch[1];
+        else if (orderMatch) orderNumber = orderMatch[1];
+        else {
+          const invMatch = rawText.match(/INVOICE\s*NUMBER[\s:]*([A-Za-z0-9\/\-]+)/i);
+          if (invMatch) orderNumber = invMatch[1];
+        }
+
+        // 3. Detect AWB / Tracking barcode
+        let awb = '';
+        const sfAwb = rawText.match(/\b(SF\d{10,14}[A-Za-z0-9]*)\b/);
+        const slpAwb = rawText.match(/\b(SLP\d{9,14})\b/);
+        const genAwb = rawText.match(/\b(\d{12,16})\b/);
+        if (sfAwb) awb = sfAwb[1];
+        else if (slpAwb) awb = slpAwb[1];
+        else if (genAwb) awb = genAwb[1];
+        if (!awb) awb = orderNumber || `SNAP-${pageNum}`;
+
+        // 4. Detect Store / Seller Name
+        let storeName = 'Snapdeal Seller';
+        const sellerMatch = rawText.match(/SELLER\s*(?:ADDRESS)?\s*\n\s*([A-Za-z0-9\s,\.\-&]+?)(?:\n|SHREE|SHOP|UG-|GSTIN)/i);
+        if (sellerMatch) storeName = sellerMatch[1].trim().replace(/\s+/g, ' ');
+
+        // 5. Detect SKU & Quantity
+        let sku = 'Snapdeal-Item';
+        let quantity = 1;
+        const skuMatch = rawText.match(/SKU\s*CODE\s*:?\s*([A-Za-z0-9_\-\.\/\(\)\s&]+?)(?:\n|COLOR|ORDER|SUBORDER)/i);
+        if (skuMatch && skuMatch[1].trim().length > 1) {
+          sku = skuMatch[1].trim().replace(/\s+/g, ' ');
+        } else {
+          const suborderTableMatch = rawText.match(/\d{8,14}\s*\|\s*([A-Za-z0-9_\-\.\/\(\)\s&]+?)(?:\n|\b1\b)/);
+          if (suborderTableMatch && suborderTableMatch[1].trim().length > 1) {
+            sku = suborderTableMatch[1].trim().replace(/\s+/g, ' ');
+          }
+        }
+        const qtyMatch = rawText.match(/QUANTITY[\s\S]*?\b(\d+)\b/i) || rawText.match(/QTY[\s\S]*?\b(\d+)\b/i);
+        if (qtyMatch) quantity = parseInt(qtyMatch[1], 10) || 1;
+
+        // 6. Dynamic Crop Bounds Calculation
+        const viewport = page.getViewport({ scale: 1.0 });
+        const pageW = viewport.width;
+        const pageH = viewport.height;
+
+        // In Snapdeal A4 Landscape (pageW ~842pt, pageH ~595pt):
+        // Physical label bounding box from calibrated pixel coordinates:
+        // Left: 3.3% of page width, Right: 44.6% of page width
+        // Top: 95.8% of page height (4.2% from top), Bottom: 27.8% of page height (72.2% from top)
+        const defLeft = pageW * 0.033;
+        const defRight = pageW * 0.446;
+        const defTop = pageH * 0.958;
+        const defBottom = pageH * 0.278;
+
+        let cropBox = {
+          left: defLeft,
+          right: defRight,
+          top: defTop,
+          bottom: defBottom,
+        };
+
+        const visibleItems = content.items.filter(it => it.str && it.str.trim().length > 0 && it.transform);
+        const leftLabelItems = visibleItems.filter(it => 
+          it.transform[4] >= pageW * 0.02 &&
+          it.transform[4] <= pageW * 0.48 &&
+          it.transform[5] >= pageH * 0.20 &&
+          it.transform[5] <= pageH * 0.98
+        );
+
+        if (leftLabelItems.length >= 6) {
+          const minX = Math.min(...leftLabelItems.map(it => it.transform[4]));
+          const maxX = Math.max(...leftLabelItems.map(it => it.transform[4] + (it.width || 0)));
+          const minY = Math.min(...leftLabelItems.map(it => it.transform[5]));
+          const maxY = Math.max(...leftLabelItems.map(it => it.transform[5] + (it.height || 0)));
+
+          cropBox = {
+            left: Math.max(0, Math.min(defLeft, minX - 10)),
+            right: Math.min(pageW * 0.48, Math.max(defRight, maxX + 8)),
+            top: Math.min(pageH, Math.max(defTop, maxY + 10)),
+            bottom: Math.max(0, Math.min(defBottom, minY - 10)),
+          };
+        }
+
+        return {
+          success: true,
+          awb,
+          courier,
+          sku,
+          size: '',
+          color: '',
+          quantity,
+          orderNumber,
+          storeName,
+          cropBox,
+          isTop: true,
+          rawText
+        };
+      }
+
       // ================= MEESHO PARSING (ORIGINAL) =================
       // 1. Detect Courier Name with priority on known logistics networks
       let baseCourier = '';
@@ -4064,7 +4192,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       // 100% Matching LabelMantra.in's exact page crop architecture:
       // Uses direct copyPages + translateContent + setCropBox + setMediaBox
       // This physically clips off everything below the top 345.6pt (TAX INVOICE completely eliminated)
-      const buildPdf = async (items, title = (targetMarketplace === 'flipcart' ? 'Flipkart Shipping Labels' : 'Meesho Shipping Labels')) => {
+      const buildPdf = async (items, title = (targetMarketplace === 'flipcart' ? 'Flipkart Shipping Labels' : (targetMarketplace === 'snapdeal' ? 'Snapdeal Shipping Labels' : 'Meesho Shipping Labels'))) => {
         const outDoc = await PDFDocument.create();
         const helveticaFont = await outDoc.embedFont(StandardFonts.Helvetica);
         const helveticaBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
@@ -4135,16 +4263,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           const pageSize = srcPage.getSize();
 
           if (targetLabelAction === 'crop') {
-            if (targetMarketplace === 'flipcart') {
-              // ================= FLIPCART TIGHT CROPPING (VERY LITTLE WHITE SPACE) =================
-              let cLeft = item.cropBox?.left ?? 189.5;
-              let cRight = item.cropBox?.right ?? 406.2;
-              let cTop = item.cropBox?.top ?? 813.5;
-              let cBottom = item.cropBox?.bottom ?? 464.0;
+            if (targetMarketplace === 'flipcart' || targetMarketplace === 'snapdeal') {
+              // ================= FLIPCART & SNAPDEAL TIGHT CROPPING (VERY LITTLE WHITE SPACE) =================
+              let cLeft = item.cropBox?.left ?? (targetMarketplace === 'snapdeal' ? pageSize.width * 0.033 : 189.5);
+              let cRight = item.cropBox?.right ?? (targetMarketplace === 'snapdeal' ? pageSize.width * 0.446 : 406.2);
+              let cTop = item.cropBox?.top ?? (targetMarketplace === 'snapdeal' ? pageSize.height * 0.958 : 813.5);
+              let cBottom = item.cropBox?.bottom ?? (targetMarketplace === 'snapdeal' ? pageSize.height * 0.278 : 464.0);
 
               // Apply crop nudge fine-tuning
               cTop = Math.min(pageSize.height, cTop + targetCropNudge);
               cBottom = Math.max(0, cBottom - targetCropNudge);
+              if (targetMarketplace === 'snapdeal') {
+                cRight = Math.min(pageSize.width, cRight + targetCropNudge);
+                cLeft = Math.max(0, cLeft - targetCropNudge);
+              }
 
               const srcW = Math.max(10, cRight - cLeft);
               const srcH = Math.max(10, cTop - cBottom);
@@ -4451,9 +4583,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             }
             skuSummaryMap[skuKey].qty += q;
 
-            let rawCourier = it.courier || (targetMarketplace === 'flipcart' ? 'E-Kart Logistics' : 'Valmo');
+            let rawCourier = it.courier || (targetMarketplace === 'flipcart' ? 'E-Kart Logistics' : (targetMarketplace === 'snapdeal' ? 'Shadowfax' : 'Valmo'));
             rawCourier = String(rawCourier).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-            const cName = rawCourier || 'Valmo';
+            const cName = rawCourier || (targetMarketplace === 'snapdeal' ? 'Shadowfax' : 'Valmo');
             if (!courierSummaryMap[cName]) {
               courierSummaryMap[cName] = { parcels: 0, qty: 0 };
             }
@@ -4494,7 +4626,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             color: cDark,
           });
 
-          const mpLabel = targetMarketplace === 'flipcart' ? 'Flipkart' : 'Meesho';
+          const mpLabel = targetMarketplace === 'flipcart' ? 'Flipkart' : (targetMarketplace === 'snapdeal' ? 'Snapdeal' : 'Meesho');
           const subText = `Marketplace: ${mpLabel}  •  Generated: ${batchDateTimeStr}`;
           curSlipPage.drawText(subText, {
             x: marginX,
@@ -4848,7 +4980,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
       // STEP 3: Handle Output File Type
       const dateTag = new Date().toISOString().slice(0, 10);
-      const mpPrefix = targetMarketplace === 'flipcart' ? 'Flipkart' : 'Meesho';
+      const mpPrefix = targetMarketplace === 'flipcart' ? 'Flipkart' : (targetMarketplace === 'snapdeal' ? 'Snapdeal' : 'Meesho');
 
       let resultDownloadReady = null;
 
@@ -4964,7 +5096,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     <div className="bg-white text-slate-900 p-4 md:p-8 font-sans -m-4 md:-m-6 rounded-3xl border border-slate-200/90 shadow-xs min-h-screen">
       {/* ================= MARKETPLACE WORKSPACE CONTENT ================= */}
 
-      {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart') ? (
+      {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart' || selectedMarketplace === 'snapdeal') ? (
         <>
           {/* ================= HEADER SECTION ================= */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-6">
@@ -7679,7 +7811,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     ? `Ajio Merged Label & Invoice Preview (${ajioState.mergedDownload?.totalPages || 0} Pages)`
                     : selectedMarketplace === 'amazon'
                     ? `Amazon Clean Shipping Labels Preview (${amazonState.result?.totalPages || 0} Labels)`
-                    : `Cropped Thermal Label Preview (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : '4x6" Landscape'})`}
+                    : `Cropped Thermal Label Preview (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : (selectedMarketplace === 'snapdeal' ? 'Snapdeal Thermal' : '4x6" Landscape')})`}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
@@ -7727,7 +7859,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   ? `Ajio Interleaved Document • Alternating Label and Invoice Pages`
                   : selectedMarketplace === 'amazon'
                   ? `Amazon Pure Shipping Labels • ${amazonState.result?.invoicesCount || 0} Invoices Filtered Out`
-                  : `${activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : 'LabelMantra Format'})`}
+                  : `${activeMarketplace?.name} Pure Shipping Label • 100% Tax Invoice Eliminated (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Format' : (selectedMarketplace === 'snapdeal' ? 'Snapdeal Thermal Format' : 'LabelMantra Format')})`}
               </span>
               <div className="flex items-center gap-2">
                 <button
