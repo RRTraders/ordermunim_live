@@ -684,100 +684,151 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     const isContinuation = pageCurrent > 1 || (!invoiceNumber && !orderId);
 
     // 7. Extract Item SKUs & Quantities from invoice table
-    // Matches patterns like:
-    // - Women Embroidered 2-Piece Co-Ord Set,blue,704105368013 (LESPSNFLRBLUXXL),LE_SP_SNFLR_BLU_XXL
-    // - (FRWNLLNBLU32),FR_WN_LLN_BLU_32
-    // - Men Relaxed Fit Flat-Front Trousers,grey,703666422025 (O1PANTDARKGREY32),O1 PANT DARK GREY-32
-    // - Standalone style codes: LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32
     const invoiceItems = [];
+
+    // Helper: System keywords to avoid mistaking headers/footers for SKUs
+    const isSystemLine = (str) => {
+      if (!str) return true;
+      const s = str.trim();
+      if (s.length < 2) return true;
+      return /^(?:TAX\s*INVOICE|ORIGINAL\s*FOR|SELLER|CONSIGNOR|CUSTOMER|GSTIN|BILL\s*TO|SHIP\s*TO|ORDER\s*NUMBER|CARRIER|PAYMENT\s*MODE|AWB\s*NUMBER|HSN\s*Code|Qty|MRP|Trade\s*Discount|Other\s*Discount|Net\s*Unit|Base\s*Price|Taxable\s*Value|Tax\s*Amt|Total\s*Amount|Convenience\s*Fee|Amount\s*in\s*Words|Authorized\s*Signatory|Terms|Page\s*\d+|This\s*is\s*a\s*computer|Customer\s*Support)/i.test(s);
+    };
+
+    // Helper: Extract SKU from a line using multiple pattern detectors
+    const parseSkuFromLine = (line) => {
+      if (!line || isSystemLine(line)) return '';
+      const l = line.trim();
+
+      // Pattern 1: ... (CODE),SKU_NAME (with support for _, -, spaces, dots, slashes)
+      const m1 = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)\s*$/);
+      if (m1) return m1[1].trim();
+
+      // Pattern 1b: If not strictly at end of line (e.g. trailing comma)
+      const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\-\.\/]+(?:[ \t]+[A-Za-z0-9_\-\.\/]+)*)/);
+      if (m1b && !/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST)/i.test(m1b[1])) {
+        return m1b[1].trim();
+      }
+
+      // Pattern 1c: Code in parentheses at end of line: ... 704105368013 (LE_SP_SNFLR_BLU_XXL)
+      const m1c = l.match(/\b\d{8,14}\s*\(([A-Za-z0-9_\s\-\.\/\+]+)\)\s*$/);
+      if (m1c) return m1c[1].trim();
+
+      // Pattern 2: Code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
+      const m2 = l.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/);
+      if (m2 && !/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR)/i.test(m2[1])) {
+        return m2[1].trim();
+      }
+
+      // Pattern 3: Separated by comma where second part is SKU (e.g. "Men Flat-Front Relaxed Fit Trousers,white, BJ LILN WHITE-36")
+      if (l.includes(',')) {
+        const parts = l.split(',').map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const lastPart = parts[parts.length - 1];
+          if (/^[A-Za-z0-9_\-\s\.\/]{3,40}$/.test(lastPart) && !isSystemLine(lastPart) && /[A-Za-z]/.test(lastPart)) {
+            return lastPart;
+          }
+        }
+      }
+
+      // Pattern 4: Standalone style code line (e.g. "BJ LILN WHITE-36", "O1 PANT DARK GREY-32", "DNM-REG-34", "SH-01-WHITE-L")
+      const clean = l.replace(/[,;]+$/, '').trim();
+      if (clean.length >= 3 && clean.length <= 45 && !isSystemLine(clean)) {
+        // Alphanumeric with spaces, hyphens, slashes, numbers (typical style code)
+        if (/^[A-Za-z0-9][A-Za-z0-9_\-\s\.\/\+]{2,44}$/.test(clean)) {
+          if (/[A-Za-z]/.test(clean) && (/[\d\-]/.test(clean) || /\b(?:XS|S|M|L|XL|XXL|XXXL|3XL|4XL|FREE|\d{2})\b/i.test(clean))) {
+            return clean;
+          }
+        }
+      }
+
+      return '';
+    };
+
+    // STRATEGY 1 (Primary): Table HSN Row Anchoring
+    // In every Ajio Tax Invoice, each product item has an HSN row (e.g. "61034200 1.0 2499.0...")
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]?.trim() || '';
       if (!l) continue;
 
-      let sku = '';
+      // Detect HSN row: 6 to 8 digit number followed by quantity (e.g. 61034200 1.0)
+      const hsnMatch = l.match(/\b([1-9]\d{5,7})\b\s+(\d+(?:\.\d+)?)/);
+      if (hsnMatch && !isSystemLine(l)) {
+        const rawQty = parseFloat(hsnMatch[2]);
+        const qty = (rawQty > 0 && rawQty <= 500) ? Math.max(1, Math.round(rawQty)) : 1;
 
-      // Pattern 1: ... (CODE),SKU_NAME (with support for _, -, spaces, dots, slashes)
-      const m1 = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)\s*$/);
-      if (m1) {
-        sku = m1[1].trim();
-      }
+        let detectedSku = '';
 
-      // Pattern 1b: If not strictly at end of line (e.g. trailing comma or text)
-      if (!sku) {
-        const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\-\.\/]+(?:[ \t]+[A-Za-z0-9_\-\.\/]+)*)/);
-        if (m1b && !/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST)/i.test(m1b[1])) {
-          sku = m1b[1].trim();
-        }
-      }
+        // Check candidate lines directly above this HSN row (working backwards)
+        for (let back = 1; back <= 4 && (i - back) >= 0; back++) {
+          const prevLine = lines[i - back]?.trim() || '';
+          if (!prevLine || isSystemLine(prevLine)) continue;
+          if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break; // Hit previous HSN row
 
-      // Pattern 1c: SKU is inside parentheses at the end: ... 704105368013 (LE_SP_SNFLR_BLU_XXL)
-      if (!sku) {
-        const m1c = l.match(/\b\d{8,14}\s*\(([A-Za-z0-9_\s\-\.\/\+]+)\)\s*$/);
-        if (m1c) {
-          sku = m1c[1].trim();
-        }
-      }
-
-      // Pattern 1d: Any word in the line matching style code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
-      if (!sku) {
-        const m1d = l.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/);
-        if (m1d && !/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR)/i.test(m1d[1])) {
-          sku = m1d[1].trim();
-        }
-      }
-
-      // Pattern 2: Standalone SKU with apparel keywords (e.g. O1 PANT DARK GREY-32)
-      if (!sku) {
-        const m2 = l.match(/^([A-Z0-9_\-]{2,15}\s+(?:PANT|PNT|PT|KURTI|SHIRT|TSHIRT|JEANS|SET|DRESS)[A-Z0-9_\s\-]+)$/i);
-        if (m2 && !l.includes('Total') && !l.includes('TAX') && !l.includes('HSN')) {
-          sku = m2[1].trim();
-        }
-      }
-
-      // Pattern 3: Standalone alphanumeric style code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
-      if (!sku) {
-        const m3 = l.match(/^([A-Z0-9]{2,10}_[A-Z0-9_]{2,30})$/i);
-        if (m3 && !l.includes('GST') && !l.includes('TAX') && !l.includes('INVOICE') && !l.includes('BILL')) {
-          sku = m3[1].trim();
-        }
-      }
-
-      if (sku) {
-        // Clean up any trailing commas or semicolons
-        sku = sku.replace(/[,;]+$/, '').trim();
-        // Ignore table headers or invalid keywords
-        if (/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST|Convenience|Description)/i.test(sku) || sku.length < 2) {
-          sku = '';
-        }
-      }
-
-      if (sku) {
-        let qty = 1;
-        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-          const lineJ = lines[j]?.trim() || '';
-          // Match HSN (6-8 digits) followed by Qty (e.g. 61044400 1.0 or 61044400 2)
-          const qm = lineJ.match(/\b\d{6,8}\s+(\d+(?:\.\d+)?)\b/);
-          if (qm) {
-            qty = Math.max(1, Math.round(parseFloat(qm[1])));
-            break;
-          }
-          // Fallback: starts with quantity like "1.0 2499.0"
-          const qm2 = lineJ.match(/^(\d+(?:\.0+)?)\s+\d+(?:\.\d+)?/);
-          if (qm2 && parseFloat(qm2[1]) > 0 && parseFloat(qm2[1]) <= 50) {
-            qty = Math.max(1, Math.round(parseFloat(qm2[1])));
+          const parsed = parseSkuFromLine(prevLine);
+          if (parsed) {
+            detectedSku = parsed;
             break;
           }
         }
-        invoiceItems.push({ sku, qty });
+
+        // If no parsed pattern matched, grab the immediate non-empty line above HSN (e.g. "BJ LILN WHITE-36")
+        if (!detectedSku) {
+          for (let back = 1; back <= 3 && (i - back) >= 0; back++) {
+            const prevLine = lines[i - back]?.trim() || '';
+            if (!prevLine || isSystemLine(prevLine)) continue;
+            if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break;
+
+            const clean = prevLine.replace(/[,;]+$/, '').trim();
+            if (clean.length >= 2 && clean.length <= 60 && !isSystemLine(clean)) {
+              detectedSku = clean;
+              break;
+            }
+          }
+        }
+
+        if (detectedSku) {
+          detectedSku = detectedSku.replace(/[,;]+$/, '').trim();
+          if (detectedSku.length >= 2 && !isSystemLine(detectedSku)) {
+            invoiceItems.push({ sku: detectedSku, qty });
+          }
+        }
       }
     }
 
-    // Global fallback for page: if invoiceItems is still empty, scan rawText for style code with underscores
+    // STRATEGY 2: Fallback line-by-line scanner if Strategy 1 found no HSN rows
+    if (invoiceItems.length === 0) {
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i]?.trim() || '';
+        if (!l || isSystemLine(l)) continue;
+
+        let sku = parseSkuFromLine(l);
+        if (sku) {
+          sku = sku.replace(/[,;]+$/, '').trim();
+          if (sku.length >= 2 && !isSystemLine(sku)) {
+            let qty = 1;
+            for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+              const lineJ = lines[j]?.trim() || '';
+              const qm = lineJ.match(/\b\d{6,8}\s+(\d+(?:\.\d+)?)\b/) || lineJ.match(/^(\d+(?:\.0+)?)\s+\d+(?:\.\d+)?/);
+              if (qm) {
+                const parsedQ = parseFloat(qm[1]);
+                if (parsedQ > 0 && parsedQ <= 50) {
+                  qty = Math.max(1, Math.round(parsedQ));
+                  break;
+                }
+              }
+            }
+            invoiceItems.push({ sku, qty });
+          }
+        }
+      }
+    }
+
+    // STRATEGY 3: Global style code regex fallback
     if (invoiceItems.length === 0) {
       const globalMatches = rawText.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/g);
       if (globalMatches) {
         for (const candidate of globalMatches) {
-          if (!/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR|CUSTOMER|BILL_TO|SHIP_TO)/i.test(candidate)) {
+          if (!isSystemLine(candidate)) {
             invoiceItems.push({ sku: candidate.trim(), qty: 1 });
             break;
           }
@@ -785,7 +836,21 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
     }
 
-    return { shipToName, orderId, pincode, lines, isContinuation, invoiceNumber, pageCurrent, pageTotal, invoiceItems };
+    // Consolidate identical items by summing quantities
+    const consolidatedItems = [];
+    const skuMap = new Map();
+    for (const itm of invoiceItems) {
+      const normKey = itm.sku.trim().toLowerCase();
+      if (skuMap.has(normKey)) {
+        skuMap.get(normKey).qty += itm.qty;
+      } else {
+        const entry = { sku: itm.sku.trim(), qty: itm.qty };
+        skuMap.set(normKey, entry);
+        consolidatedItems.push(entry);
+      }
+    }
+
+    return { shipToName, orderId, pincode, lines, isContinuation, invoiceNumber, pageCurrent, pageTotal, invoiceItems: consolidatedItems };
   };
 
   // Determine if a label page matches an invoice document (single or multi-page)
@@ -1386,6 +1451,24 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
         const lbl = labelPagesInfo[pair.labelNum - 1];
         const matchedDoc = pair.matchedDoc;
+        let labelItems = matchedDoc?.items || [];
+
+        // Secondary fallback: If invoice items were empty but Excel was uploaded, match by Order ID
+        if ((!labelItems || labelItems.length === 0) && ajioState.excelData && ajioState.excelData.length > 0) {
+          const ordId = (lbl.orderId || matchedDoc?.orderId || '').toLowerCase().trim();
+          if (ordId) {
+            const excelRows = ajioState.excelData.filter(r => {
+              const rOrd = String(r['Order Number'] || r['Order ID'] || r['Customer Order Number'] || r['PO Number'] || r['order_id'] || '').toLowerCase().trim();
+              return rOrd && (rOrd === ordId || rOrd.includes(ordId) || ordId.includes(rOrd));
+            });
+            if (excelRows.length > 0) {
+              labelItems = excelRows.map(r => ({
+                sku: String(r['Seller SKU'] || r['SKU'] || r['Merchant SKU Code'] || r['Product Title'] || r['Item Description'] || 'ITEM').trim(),
+                qty: Number(r['Quantity'] || r['Qty'] || 1) || 1
+              })).filter(it => it.sku);
+            }
+          }
+        }
 
         // Add label page with matched invoice items (for SKU stamping)
         mergeSequence.push({
@@ -1396,7 +1479,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           pageNum: lbl.pageNum,
           name: lbl.shipToName,
           labelNum: pair.labelNum,
-          items: matchedDoc?.items || [],
+          items: labelItems,
         });
 
         // Append all invoice pages belonging to this matched document (only if includeInvoices is true)
@@ -1433,7 +1516,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
           // Stamp SKU name and Quantity in the bottom-right corner of the shipping label
           // Uses a solid white background rectangle so the vertical table line does not interfere/cut through the text,
-          // and maintains a consistent clean font size (6.5pt) for both single and multi-item orders.
+          // and maintains a bold, clear, highly legible font size for warehouse picking and packing.
           if (item.items && item.items.length > 0) {
             const pageWidth = copiedPage.getWidth();
             const pageHeight = copiedPage.getHeight();
@@ -1443,11 +1526,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             const scale = Math.min(scaleX, scaleY);
 
             const boxX = 172 * scaleX; // Safely right of Consignor address (ends at <= 168 on 288pt)
-            const boxY = 12 * scaleY;
-            const boxW = Math.min(106 * scaleX, pageWidth - boxX - (4 * scaleX)); // Extends clear of right border
-            const boxH = 48 * scaleY; // Extends under the Total box horizontal separator
+            const boxY = 8 * scaleY;
+            const boxW = Math.min(110 * scaleX, pageWidth - boxX - (3 * scaleX)); // Extends clear of right border
+            const boxH = 50 * scaleY; // Extends under the Total box horizontal separator
 
-            // 1. Solid white background to cleanly erase the vertical line
+            // 1. Solid white background to cleanly erase the vertical line and any artifacts
             copiedPage.drawRectangle({
               x: boxX,
               y: boxY,
@@ -1456,21 +1539,21 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               color: rgb(1, 1, 1),
             });
 
-            // 2. Draw text with single line per SKU and compact font size
+            // 2. Draw text with single line per SKU and prominent font size
             const textStartX = 175 * scaleX;
             const maxTextWidth = boxW - (6 * scaleX);
 
             if (item.items.length === 1) {
               const itm = item.items[0];
               const text = `${itm.sku} (${itm.qty || 1})`;
-              let fSize = 5.5 * scale;
+              let fSize = 7.5 * scale;
               while (fSize > (3.5 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
                 fSize -= 0.3 * scale;
               }
               // Vertically centered in the bottom-right box
               copiedPage.drawText(text, {
                 x: textStartX,
-                y: 33 * scaleY,
+                y: 31 * scaleY,
                 size: fSize,
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
@@ -1479,13 +1562,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               for (let k = 0; k < 2; k++) {
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
-                let fSize = 5.2 * scale;
+                let fSize = 6.2 * scale;
                 while (fSize > (3.5 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
                   fSize -= 0.3 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: (39 - (k * 12)) * scaleY,
+                  y: (38 - (k * 13)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
@@ -1495,13 +1578,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               for (let k = 0; k < 3; k++) {
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
-                let fSize = 4.8 * scale;
+                let fSize = 5.2 * scale;
                 while (fSize > (3.2 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
                   fSize -= 0.3 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: (43 - (k * 10)) * scaleY,
+                  y: (43 - (k * 11)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
@@ -1512,13 +1595,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               for (let k = 0; k < count; k++) {
                 const itm = item.items[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
-                let fSize = 4.4 * scale;
+                let fSize = 4.6 * scale;
                 while (fSize > (3.0 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
                   fSize -= 0.3 * scale;
                 }
                 copiedPage.drawText(text, {
                   x: textStartX,
-                  y: (46 - (k * 9)) * scaleY,
+                  y: (46 - (k * 10)) * scaleY,
                   size: fSize,
                   font: helveticaBold,
                   color: rgb(0, 0, 0),
