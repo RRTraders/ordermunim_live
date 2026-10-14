@@ -4719,9 +4719,23 @@ export default function App() {
                   <div className="text-2xl font-black text-slate-900 mt-1 font-mono">
                     {accounts.length} <span className="text-xs text-slate-400 font-normal font-sans">/ {profile.maxAccounts ?? 0} slots</span>
                   </div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> All slots configured
-                  </div>
+                  {accounts.length > (profile.maxAccounts ?? 0) ? (
+                    <div className="text-[11px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-rose-500" /> Quota exceeded ({accounts.length - (profile.maxAccounts ?? 0)} extra)
+                    </div>
+                  ) : (profile.maxAccounts ?? 0) === 0 ? (
+                    <div className="text-[11px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 text-rose-500" /> 0 slots allowed
+                    </div>
+                  ) : accounts.length === (profile.maxAccounts ?? 0) ? (
+                    <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> All slots configured
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-sky-600 font-medium mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> {(profile.maxAccounts ?? 0) - accounts.length} slots available
+                    </div>
+                  )}
                 </div>
                 <div className="w-11 h-11 rounded-xl bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
                   <Package className="w-5 h-5" />
@@ -4852,32 +4866,71 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
-                {accounts.map((acc) => {
-                  const isLive = acc.status === 'live';
-                  const isOnHold = profile.status === 'on_hold';
-                  const isExpanded = Boolean(expandedStoreIds[acc.id]);
-                  const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
-                  const vaultCred = findCredentialsForAccount(acc, user?.uid);
-                  const isSessionExpired = false;
-                  const isAutoSync = true;
-                  const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
-                    ? acc.otpList
-                    : (acc.currentOtp && acc.currentOtp !== '----'
-                        ? [{ courier: acc.courier || 'Courier', otp: acc.currentOtp, handoverCount: acc.handoverCount || 0, dateTime: acc.dateTime }]
-                        : []);
+              <div className="space-y-4">
+                {/* Quota Exceeded Alert Banner */}
+                {accounts.length > (profile.maxAccounts ?? 0) && (
+                  <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0 border border-rose-500/20">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-rose-950 flex items-center gap-2">
+                          Store Quota Exceeded ({accounts.length} / {profile.maxAccounts ?? 0} Allowed)
+                        </h4>
+                        <p className="text-xs text-rose-700 mt-1 leading-relaxed">
+                          Your account slot limit is currently <strong>{profile.maxAccounts ?? 0} store(s)</strong>, but you have <strong>{accounts.length}</strong> store(s) connected. You must remove the extra store(s) to comply with your plan.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                  return (
-                    <div 
-                      key={acc.id} 
-                      className={`bg-white border relative ${
-                        isOnHold 
-                          ? 'border-rose-300 bg-rose-50/30' 
-                          : isExpanded 
-                          ? 'border-[#083B82]/30 shadow-md ring-1 ring-[#083B82]/10' 
-                          : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'
-                      } rounded-2xl p-4.5 transition-all duration-200`}
-                    >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                  {accounts.map((acc, index) => {
+                    const isOverQuota = index >= (profile.maxAccounts ?? 0);
+                    const isLive = acc.status === 'live';
+                    const isOnHold = profile.status === 'on_hold';
+                    const isExpanded = Boolean(expandedStoreIds[acc.id]);
+                    const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
+                    const vaultCred = findCredentialsForAccount(acc, user?.uid);
+                    const isSessionExpired = false;
+                    const isAutoSync = true;
+                    const activeOtps = (Array.isArray(acc.otpList) && acc.otpList.length > 0)
+                      ? acc.otpList
+                      : (acc.currentOtp && acc.currentOtp !== '----'
+                          ? [{ courier: acc.courier || 'Courier', otp: acc.currentOtp, handoverCount: acc.handoverCount || 0, dateTime: acc.dateTime }]
+                          : []);
+
+                    return (
+                      <div 
+                        key={acc.id} 
+                        className={`bg-white border relative ${
+                          isOnHold || isOverQuota
+                            ? 'border-rose-300 bg-rose-50/20 shadow-xs' 
+                            : isExpanded 
+                            ? 'border-[#083B82]/30 shadow-md ring-1 ring-[#083B82]/10' 
+                            : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'
+                        } rounded-2xl p-4.5 transition-all duration-200`}
+                      >
+                        {/* Over Quota Badge & Direct Delete Button */}
+                        {isOverQuota && (
+                          <div className="mb-3 px-3 py-2 rounded-xl bg-rose-100/80 border border-rose-300 text-rose-900 text-xs font-bold flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-rose-800">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Over Quota (Limit: {profile.maxAccounts ?? 0})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAccount(acc.id, acc.storeName);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors shadow-xs cursor-pointer"
+                            >
+                              Delete Store
+                            </button>
+                          </div>
+                        )}
                       {/* Inner Card Content (Blurred when on hold) */}
                       <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-25 select-none pointer-events-none' : ''}`}>
                         {/* Clickable Header Bar (Tap Holder Name to Show/Hide OTP) */}
@@ -5047,6 +5100,7 @@ export default function App() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
 
@@ -5883,7 +5937,11 @@ export default function App() {
                   <span className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
                     {accounts.length} / {profile.maxAccounts ?? 0} Slots Used
                   </span>
-                  {accounts.length >= (profile.maxAccounts ?? 0) && (
+                  {accounts.length > (profile.maxAccounts ?? 0) ? (
+                    <span className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full font-bold">
+                      Quota Exceeded
+                    </span>
+                  ) : accounts.length >= (profile.maxAccounts ?? 0) && (
                     <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full font-semibold">
                       Limit
                     </span>
