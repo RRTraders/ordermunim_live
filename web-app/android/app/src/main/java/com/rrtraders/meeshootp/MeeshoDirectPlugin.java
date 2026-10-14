@@ -41,6 +41,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import android.util.Base64;
+
 
 @CapacitorPlugin(name = "MeeshoDirect")
 public class MeeshoDirectPlugin extends Plugin {
@@ -845,11 +852,31 @@ public class MeeshoDirectPlugin extends Plugin {
 
                 prefs.edit().putString("sessions", cleanSessions.toString()).apply();
 
+                // Persist AES-encrypted credentials to Firestore for all sessions (survives reinstalls)
+                final JSONObject finalCleanSessions = cleanSessions;
+                Executors.newSingleThreadExecutor().execute(() -> {
+                    try {
+                        for (java.util.Iterator<String> it = finalCleanSessions.keys(); it.hasNext(); ) {
+                            String sk = it.next();
+                            JSONObject sess = finalCleanSessions.optJSONObject(sk);
+                            if (sess == null) continue;
+                            String sessEmail = sess.optString("email", "");
+                            String sessPass = sess.optString("password", "");
+                            String sessDocId = sess.optString("docId", "");
+                            if (sessDocId.isEmpty()) sessDocId = sk;
+                            if (!sessEmail.isEmpty() && !sessPass.isEmpty() && sessDocId.startsWith("MSH-")) {
+                                saveEncryptedCredentialsToFirestore(getContext(), sessDocId, sessEmail, sessPass);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                });
+
                 // Ensure background service is running
                 try {
                     Intent serviceIntent = new Intent(getContext(), MeeshoBackgroundService.class);
                     ContextCompat.startForegroundService(getContext(), serviceIntent);
                 } catch (Exception ignored) {}
+
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
@@ -868,11 +895,15 @@ public class MeeshoDirectPlugin extends Plugin {
         try {
             SharedPreferences vault = context.getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
             SharedPreferences.Editor ed = vault.edit();
-            if (email != null && !email.trim().isEmpty() && password != null && !password.trim().isEmpty()) {
-                ed.putString("pwd_email_" + email.trim().toLowerCase(), password.trim());
+            // Encrypt password with AES-256 before persisting (Master Spec Feature 5)
+            String encryptedPassword = (password != null && !password.trim().isEmpty())
+                    ? aesEncrypt(context, password.trim())
+                    : "";
+            if (email != null && !email.trim().isEmpty() && !encryptedPassword.isEmpty()) {
+                ed.putString("pwd_email_" + email.trim().toLowerCase(), encryptedPassword);
             }
-            if (identifier != null && !identifier.trim().isEmpty() && password != null && !password.trim().isEmpty()) {
-                ed.putString("pwd_ident_" + identifier.trim(), password.trim());
+            if (identifier != null && !identifier.trim().isEmpty() && !encryptedPassword.isEmpty()) {
+                ed.putString("pwd_ident_" + identifier.trim(), encryptedPassword);
             }
             if (identifier != null && !identifier.trim().isEmpty() && email != null && !email.trim().isEmpty()) {
                 ed.putString("email_ident_" + identifier.trim(), email.trim().toLowerCase());
@@ -881,21 +912,23 @@ public class MeeshoDirectPlugin extends Plugin {
         } catch (Exception ignored) {}
     }
 
+
     public static String getPasswordFromPermanentVault(Context context, String email, String identifier) {
         if (context == null) return "";
         try {
             SharedPreferences vault = context.getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
             if (email != null && !email.trim().isEmpty()) {
-                String p = vault.getString("pwd_email_" + email.trim().toLowerCase(), "");
-                if (!p.isEmpty()) return p;
+                String enc = vault.getString("pwd_email_" + email.trim().toLowerCase(), "");
+                if (!enc.isEmpty()) return aesDecrypt(context, enc);
             }
             if (identifier != null && !identifier.trim().isEmpty()) {
-                String p = vault.getString("pwd_ident_" + identifier.trim(), "");
-                if (!p.isEmpty()) return p;
+                String enc = vault.getString("pwd_ident_" + identifier.trim(), "");
+                if (!enc.isEmpty()) return aesDecrypt(context, enc);
             }
         } catch (Exception ignored) {}
         return "";
     }
+
 
     public static String getEmailFromPermanentVault(Context context, String identifier) {
         if (context == null || identifier == null || identifier.trim().isEmpty()) return "";
@@ -906,10 +939,119 @@ public class MeeshoDirectPlugin extends Plugin {
         return "";
     }
 
+    // ============ AES-256 Credential Encryption Helpers (Master Spec Feature 5) ============
+
+    /**
+     * Derives a stable 256-bit AES key from a fixed app salt + package name.
+     * Key does NOT depend on user input so it survives APK updates and reinstalls.
+     */
+    private static SecretKey deriveAesKey(Context context) throws Exception {
+        String pkg = context != null ? context.getPackageName() : "com.rrtraders.meeshootp";
+        // Fixed 32-byte salt — never change this or all stored passwords become unreadable!
+        String rawKey = "OM_AES_SALT_2024_" + pkg + "_v1_meesho_otp";
+        // SHA-256 the salt to get a stable 32-byte key
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        byte[] keyBytes = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
+        return new SecretKeySpec(keyBytes, "AES");
+    }
+
+    /**
+     * Encrypts plaintext using AES-256/CBC/PKCS5Padding.
+     * Returns Base64-encoded "IV:CipherText" string.
+     */
+    public static String aesEncrypt(Context context, String plaintext) {
+        if (plaintext == null || plaintext.isEmpty()) return "";
+        try {
+            SecretKey key = deriveAesKey(context);
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, key);
+            byte[] iv = cipher.getIV();
+            byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+            String ivB64 = Base64.encodeToString(iv, Base64.NO_WRAP);
+            String encB64 = Base64.encodeToString(encrypted, Base64.NO_WRAP);
+            return ivB64 + ":" + encB64;
+        } catch (Exception e) {
+            android.util.Log.w("MeeshoDirectPlugin", "aesEncrypt failed: " + e.getMessage());
+            // Fallback: store as-is (never silently drop credentials)
+            return plaintext;
+        }
+    }
+
+    /**
+     * Decrypts an AES-256/CBC/PKCS5Padding encrypted string.
+     * Input must be "IV:CipherText" Base64 format from aesEncrypt.
+     */
+    public static String aesDecrypt(Context context, String encrypted) {
+        if (encrypted == null || encrypted.isEmpty()) return "";
+        // If not in IV:CipherText format, treat as legacy plaintext
+        if (!encrypted.contains(":")) return encrypted;
+        try {
+            String[] parts = encrypted.split(":", 2);
+            if (parts.length != 2) return encrypted;
+            byte[] iv = Base64.decode(parts[0], Base64.NO_WRAP);
+            byte[] cipherBytes = Base64.decode(parts[1], Base64.NO_WRAP);
+            SecretKey key = deriveAesKey(context);
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+            byte[] decrypted = cipher.doFinal(cipherBytes);
+            return new String(decrypted, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            android.util.Log.w("MeeshoDirectPlugin", "aesDecrypt failed: " + e.getMessage());
+            // Fallback: return as-is (legacy plaintext)
+            return encrypted;
+        }
+    }
+    // ============ End AES-256 Helpers ============
+
+    /**
+     * Saves AES-256 encrypted email+password to Firestore account document.
+     * This ensures credentials survive app reinstalls and device changes.
+     * Called when syncing sessions from JS side.
+     * @param docId The Firestore account document ID (e.g. "MSH-XXXX-YYYY")
+     */
+    private static void saveEncryptedCredentialsToFirestore(Context context, String docId, String email, String password) {
+        if (context == null || docId == null || docId.isEmpty() || !docId.startsWith("MSH-")) return;
+        if (email == null || email.isEmpty() || password == null || password.isEmpty()) return;
+        try {
+            String encryptedEmail = aesEncrypt(context, email.trim().toLowerCase());
+            String encryptedPassword = aesEncrypt(context, password.trim());
+            if (encryptedEmail.isEmpty() || encryptedPassword.isEmpty()) return;
+
+            String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
+            String queryParams = "?currentDocument.exists=true" +
+                    "&updateMask.fieldPaths=encryptedEmail" +
+                    "&updateMask.fieldPaths=encryptedPassword";
+            URL url = new URL(SecurityShield.getFirestoreAccountsUrl(encodedDocId, queryParams));
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setDoOutput(true);
+
+            JSONObject fields = new JSONObject();
+            JSONObject fEnc = new JSONObject(); fEnc.put("stringValue", encryptedEmail); fields.put("encryptedEmail", fEnc);
+            JSONObject fPass = new JSONObject(); fPass.put("stringValue", encryptedPassword); fields.put("encryptedPassword", fPass);
+            JSONObject body = new JSONObject(); body.put("fields", fields);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int rc = conn.getResponseCode();
+            android.util.Log.d("MeeshoDirectPlugin", "[EncCredentials] Saved encrypted creds to Firestore docId=" + docId + " rc=" + rc);
+            try { conn.disconnect(); } catch (Exception ignored) {}
+        } catch (Exception e) {
+            android.util.Log.w("MeeshoDirectPlugin", "[EncCredentials] Failed to save: " + e.getMessage());
+        }
+    }
+
+
     public static String getInitialPageCookies(String pageUrl) {
         StringBuilder sb = new StringBuilder();
         try {
             URL u = new URL(pageUrl);
+
             HttpURLConnection c = (HttpURLConnection) u.openConnection();
             c.setRequestMethod("GET");
             c.setConnectTimeout(8000);

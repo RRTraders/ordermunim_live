@@ -135,6 +135,25 @@ export const findCredentialsForAccount = (acc, expectedUserId = '') => {
   if (!acc) return null;
   const targetUserId = expectedUserId || acc.userId || '';
 
+  // Direct Firestore Encrypted Credentials Recovery (Master Spec Feature 5)
+  // If Firestore document holds encryptedPassword, decrypt it in memory immediately!
+  if (acc.encryptedPassword) {
+    try {
+      const decPass = decryptSecret(acc.encryptedPassword);
+      if (decPass) {
+        const decEmail = acc.encryptedEmail ? decryptSecret(acc.encryptedEmail) : (acc.email || '');
+        return {
+          userId: targetUserId,
+          email: decEmail,
+          password: decPass,
+          identifier: acc.identifier || '',
+          supplierId: acc.supplierId || 0,
+          storeName: acc.storeName || ''
+        };
+      }
+    } catch (e) {}
+  }
+
   const candidates = [
     acc.syncKey,
     acc.id,

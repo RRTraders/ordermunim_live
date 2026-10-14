@@ -225,27 +225,23 @@ public class MeeshoBackgroundService extends Service {
     }
 
     /**
-     * Polling schedule:
-     * - Courier time (08:00 AM to 09:00 PM): 120 seconds (2 minutes) interval
-     * - Non-courier time (09:00 PM to 08:00 AM): 3600 seconds (60 minutes) interval
+     * Master Spec: Courier Hours (10:00 AM - 6:00 PM IST) = 5 minutes (300 seconds)
+     *              Off-Hours   (6:00 PM - 10:00 AM IST) = 60 minutes (3600 seconds)
+     * Uses IST timezone explicitly to be independent of device time zone.
      */
     public static long getDynamicPollDelaySecondsStatic() {
         try {
-            java.util.Calendar cal = java.util.Calendar.getInstance();
-            int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
-            int minute = cal.get(java.util.Calendar.MINUTE);
-            int timeInMinutes = hour * 60 + minute;
-
-            int dayStart = 8 * 60;  // 08:00 AM (480 minutes)
-            int dayEnd = 21 * 60;   // 09:00 PM (1260 minutes)
-
-            if (timeInMinutes >= dayStart && timeInMinutes < dayEnd) {
-                return 120; // 2 minutes (120 seconds) during courier time (08:00 AM to 09:00 PM)
+            java.util.Calendar cal = java.util.Calendar.getInstance(
+                    java.util.TimeZone.getTimeZone("Asia/Kolkata"));
+            int hourIST = cal.get(java.util.Calendar.HOUR_OF_DAY);
+            // Courier delivery hours: 10:00 AM (inclusive) to 6:00 PM (exclusive) IST
+            if (hourIST >= 10 && hourIST < 18) {
+                return 300; // 5 minutes during courier hours (10 AM - 6 PM IST)
             } else {
-                return 3600; // 60 minutes (3600 seconds) during non-courier time (09:00 PM to 08:00 AM)
+                return 3600; // 60 minutes during off-hours (6 PM - 10 AM IST)
             }
         } catch (Exception e) {
-            return 120;
+            return 300;
         }
     }
 
@@ -259,6 +255,10 @@ public class MeeshoBackgroundService extends Service {
             String currentUid = prefs.getString("current_user_uid", "");
             String sessionsJson = prefs.getString("sessions", "{}");
             JSONObject allSessions = new JSONObject(sessionsJson);
+
+            // Midnight Auto-Reset: At 12:00 AM IST every night, wipe all OTPs to fresh state
+            performMidnightResetIfNeeded(context, prefs, currentUid, allSessions);
+
 
             if (allSessions.length() == 0) {
                 try {
@@ -944,4 +944,101 @@ public class MeeshoBackgroundService extends Service {
             return "";
         }
     }
+
+    /**
+     * Midnight Auto-Reset (Master Spec Feature 4):
+     * At 12:00 AM IST every calendar day, reset all account OTPs in Firestore to clean slate:
+     * currentOtp: "----", courier: "No Return", handoverCount: 0, otpList: []
+     * This ensures each morning starts fresh without yesterday's stale OTPs.
+     */
+    private static void performMidnightResetIfNeeded(Context context, SharedPreferences prefs, String currentUid, JSONObject allSessions) {
+        try {
+            java.util.Calendar now = java.util.Calendar.getInstance(
+                    java.util.TimeZone.getTimeZone("Asia/Kolkata"));
+            // Build today's date string in IST
+            String todayIST = now.get(java.util.Calendar.YEAR) + "-"
+                    + now.get(java.util.Calendar.MONTH) + "-"
+                    + now.get(java.util.Calendar.DAY_OF_MONTH);
+            String lastResetDay = prefs.getString("last_midnight_reset_day", "");
+            if (todayIST.equals(lastResetDay)) return; // Already reset today — skip
+
+            // Mark reset done for today FIRST (prevents infinite retry loops)
+            prefs.edit().putString("last_midnight_reset_day", todayIST).apply();
+
+            android.util.Log.i("MeeshoBackgroundService", "[MidnightReset] New day detected: " + todayIST + ". Resetting all OTPs to clean state.");
+
+            // Iterate all sessions and reset OTP fields in Firestore
+            java.util.List<String> keysList = new java.util.ArrayList<>();
+            for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
+                keysList.add(it.next());
+            }
+
+            // Clear local notification history so fresh OTP alerts fire correctly on new day
+            SharedPreferences.Editor editor = prefs.edit();
+            for (String key : prefs.getAll().keySet()) {
+                if (key.startsWith("last_notified_")) {
+                    editor.remove(key);
+                }
+            }
+            editor.apply();
+
+            for (String syncKey : keysList) {
+                try {
+                    JSONObject sess = allSessions.optJSONObject(syncKey);
+                    if (sess == null) continue;
+                    // Cross-account isolation
+                    if (!currentUid.isEmpty()) {
+                        String sessUid = sess.optString("userId", "");
+                        if (!sessUid.isEmpty() && !currentUid.equals(sessUid)) continue;
+                    }
+                    // Determine the Firestore docId
+                    String docId = sess.optString("docId", "");
+                    if (docId.isEmpty() || !docId.startsWith("MSH-")) {
+                        if (syncKey.startsWith("MSH-")) docId = syncKey;
+                        else continue;
+                    }
+                    // Reset Firestore OTP fields via REST API
+                    SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+                    iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                    String encodedDocId = java.net.URLEncoder.encode(docId.trim(), "UTF-8");
+                    String queryParams = "?currentDocument.exists=true" +
+                            "&updateMask.fieldPaths=currentOtp" +
+                            "&updateMask.fieldPaths=courier" +
+                            "&updateMask.fieldPaths=handoverCount" +
+                            "&updateMask.fieldPaths=otpList" +
+                            "&updateMask.fieldPaths=lastUpdated";
+                    URL url = new URL(SecurityShield.getFirestoreAccountsUrl(encodedDocId, queryParams));
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setConnectTimeout(6000);
+                    conn.setReadTimeout(6000);
+                    conn.setDoOutput(true);
+
+                    JSONObject fields = new JSONObject();
+                    JSONObject fOtp = new JSONObject(); fOtp.put("stringValue", "----"); fields.put("currentOtp", fOtp);
+                    JSONObject fCourier = new JSONObject(); fCourier.put("stringValue", "No Return"); fields.put("courier", fCourier);
+                    JSONObject fCount = new JSONObject(); fCount.put("integerValue", "0"); fields.put("handoverCount", fCount);
+                    JSONObject fList = new JSONObject();
+                    JSONObject arrObj = new JSONObject(); arrObj.put("values", new JSONArray());
+                    fList.put("arrayValue", arrObj); fields.put("otpList", fList);
+                    JSONObject fLast = new JSONObject(); fLast.put("stringValue", iso.format(new Date())); fields.put("lastUpdated", fLast);
+                    JSONObject body = new JSONObject(); body.put("fields", fields);
+
+                    try (OutputStream os = conn.getOutputStream()) {
+                        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                    }
+                    conn.getResponseCode(); // Execute the call
+                    try { conn.disconnect(); } catch (Exception ignored) {}
+                    android.util.Log.i("MeeshoBackgroundService", "[MidnightReset] Cleared OTPs for docId: " + docId);
+                } catch (Exception e) {
+                    android.util.Log.w("MeeshoBackgroundService", "[MidnightReset] Error resetting docId: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("MeeshoBackgroundService", "[MidnightReset] Exception: " + e.getMessage());
+        }
+    }
 }
+

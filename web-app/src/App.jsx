@@ -971,9 +971,47 @@ export default function App() {
       });
       setAccounts(accList);
       try { localStorage.setItem('cached_user_accounts', JSON.stringify(accList)); } catch {}
+
+      // Auto-restore encrypted credentials from Firestore on boot (Master Spec Feature 5)
+      // On native mobile: if any account has encryptedEmail/encryptedPassword but no local session,
+      // sync those credentials to the native background service via syncSessions.
+      // The Android side will AES-decrypt them via getPasswordFromPermanentVault.
+      // This fires after every accounts snapshot but is safe — syncBackgroundSessions is idempotent.
+      if (isNativeMobile() && accList.length > 0) {
+        try {
+          const rawSessions = localStorage.getItem('native_meesho_sessions');
+          const currentSessions = rawSessions ? JSON.parse(rawSessions) : {};
+          let needsSync = false;
+          for (const acc of accList) {
+            if (!acc.id) continue;
+            const key = acc.syncKey || acc.id;
+            const hasLocal = currentSessions[key] || currentSessions[acc.id] || currentSessions[acc.syncKey];
+            if (!hasLocal && (acc.email || acc.encryptedEmail)) {
+              // Restore session from Firestore account data (credentials will be fetched from native vault)
+              currentSessions[key] = {
+                docId: acc.id,
+                userId: uid,
+                email: acc.email || '',
+                password: '', // Will be restored from AES vault by Android side
+                identifier: acc.identifier || '',
+                supplierId: acc.supplierId || 0,
+                storeName: acc.storeName || '',
+                cookies: acc.cookies || '',
+                expired: false
+              };
+              needsSync = true;
+            }
+          }
+          if (needsSync) {
+            try { localStorage.setItem('native_meesho_sessions', JSON.stringify(currentSessions)); } catch {}
+            syncBackgroundSessions(currentSessions, false, uid);
+          }
+        } catch (e) { console.warn('[CredRestore] Error:', e); }
+      }
     }, (err) => {
       console.error('[Firestore] Accounts listener error:', err.code, err.message);
     });
+
 
     return () => {
       unsubUser();
@@ -2303,6 +2341,11 @@ export default function App() {
     e.preventDefault();
     setModalError('');
 
+    if (!isNativeMobile()) {
+      setModalError('Store connection is only available inside the OrderMunim Android Mobile App. Please download and install the app to connect stores.');
+      return;
+    }
+
     if (accounts.length >= (Number(profile.maxAccounts) || 1)) {
       setModalError(`Plan Limit Reached! Your plan allows ${profile.maxAccounts || 1} store(s). Contact admin to add slots.`);
       return;
@@ -2475,6 +2518,8 @@ export default function App() {
         identifier: data.identifier || '',
         supplierId: data.supplierId || 0,
         email: cleanEmail || '',
+        encryptedEmail: cleanEmail ? encryptSecret(cleanEmail) : '',
+        encryptedPassword: meeshoPass ? encryptSecret(meeshoPass) : '',
         syncKey: targetSyncKey,
         currentOtp: data.otp || '----',
         courier: data.courier || 'No Return',
@@ -5800,8 +5845,8 @@ export default function App() {
       </footer>
 
 
-      {/* ================= ADD STORE MODAL (CREDENTIALS) ================= */}
-      {showAddModal && (
+      {/* ================= ADD STORE MODAL (CREDENTIALS - MOBILE APP ONLY) ================= */}
+      {showAddModal && isNativeMobile() && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
 
