@@ -2959,6 +2959,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const recordedChunksRef = useRef([]);
   const recordingCanvasRef = useRef(null);
   const animFrameRef = useRef(null);
+  const renderIntervalRef = useRef(null);
+  const recordingStartTimeRef = useRef(0);
   const currentIstTimeRef = useRef('');
 
   // Keep ref synchronized with latest time string for canvas burner
@@ -3089,6 +3091,68 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     if (showToast) showToast('Reset to Live Real-Time Indian Standard Time (IST)', 'info');
   };
 
+  // Lightweight EBML duration patcher: fixes 0 kbps and missing length in Windows Explorer when WebM is recorded
+  const fixWebmDuration = async (blob, durationMs) => {
+    try {
+      if (!blob || blob.size < 100 || durationMs <= 0) return blob;
+      const buffer = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+
+      // Verify EBML WebM header: 0x1A 0x45 0xDF 0xA3
+      if (bytes[0] !== 0x1A || bytes[1] !== 0x45 || bytes[2] !== 0xDF || bytes[3] !== 0xA3) {
+        return blob;
+      }
+
+      // Locate Segment Info ID: 0x15 0x49 0xA9 0x66
+      let infoPos = -1;
+      const searchLimit = Math.min(bytes.length - 16, 8192);
+      for (let i = 0; i < searchLimit; i++) {
+        if (bytes[i] === 0x15 && bytes[i + 1] === 0x49 && bytes[i + 2] === 0xA9 && bytes[i + 3] === 0x66) {
+          infoPos = i;
+          break;
+        }
+      }
+      if (infoPos === -1) return blob;
+
+      const infoDataStart = infoPos + 4;
+      const infoDataEnd = Math.min(bytes.length - 8, infoDataStart + 1024);
+
+      // Scan for Duration element ID: 0x44 0x89 within Segment Info
+      for (let i = infoDataStart; i < infoDataEnd; i++) {
+        if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
+          const durLen = bytes[i + 2] & 0x0F;
+          const durValPos = i + 3;
+          const view = new DataView(buffer);
+          if (durLen === 4 && durValPos + 4 <= buffer.byteLength) {
+            view.setFloat32(durValPos, durationMs, false);
+            return new Blob([buffer], { type: blob.type });
+          } else if (durLen === 8 && durValPos + 8 <= buffer.byteLength) {
+            view.setFloat64(durValPos, durationMs, false);
+            return new Blob([buffer], { type: blob.type });
+          }
+        }
+      }
+
+      // If Duration element is absent, inject a 7-byte Duration tag: 0x44 0x89 0x84 + float32
+      const durTag = new Uint8Array(7);
+      durTag[0] = 0x44;
+      durTag[1] = 0x89;
+      durTag[2] = 0x84;
+      new DataView(durTag.buffer).setFloat32(3, durationMs, false);
+
+      const insertPos = infoDataStart + 4;
+      const patchedBuffer = new Uint8Array(bytes.length + 7);
+      patchedBuffer.set(bytes.subarray(0, insertPos), 0);
+      patchedBuffer.set(durTag, insertPos);
+      patchedBuffer.set(bytes.subarray(insertPos), insertPos + 7);
+
+      return new Blob([patchedBuffer.buffer], { type: blob.type });
+    } catch (err) {
+      console.warn('WebM duration fix skipped:', err);
+      return blob;
+    }
+  };
+
   const handleStartWebcam = async (cameraId = selectedCameraId, mode = facingMode) => {
     setWebcamError(null);
     try {
@@ -3100,29 +3164,42 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         throw new Error('Camera is not supported on this device/browser. Please open in Chrome or ensure HTTPS.');
       }
 
-      // Try multiple constraint variations:
-      // 1. With deviceId or mobile facingMode (ideal 1280x720) without audio (audio often causes Permission Denied on mobile if mic denied)
-      // 2. Simplest video: true
       let stream = null;
-      const videoConstraint = cameraId 
-        ? { deviceId: { exact: cameraId } } 
-        : { facingMode: { ideal: mode } };
+      // High-Definition constraints: 1280x720 (or 848x480 widescreen) at 30 fps for smooth video
+      const hdVideoConstraint = {
+        ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: mode } }),
+        width: { ideal: 1280, min: 848 },
+        height: { ideal: 720, min: 480 },
+        frameRate: { ideal: 30, min: 25 }
+      };
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraint,
+          video: hdVideoConstraint,
           audio: false
         });
       } catch (e1) {
-        console.warn('Attempt 1 failed, trying fallback video: true', e1);
+        console.warn('Attempt 1 (HD ideal) failed, trying flexible widescreen fallback', e1);
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (e2) {
-          console.warn('Attempt 2 failed, trying with user facing', e2);
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user' },
+            video: {
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              frameRate: { ideal: 30, min: 24 }
+            },
             audio: false
           });
+        } catch (e2) {
+          console.warn('Attempt 2 failed, trying user facing', e2);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: false
+            });
+          } catch (e3) {
+            console.warn('Attempt 3 failed, trying video: true fallback', e3);
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          }
         }
       }
 
@@ -3142,7 +3219,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         setAvailableCameras(videoDevs);
       } catch {}
 
-      if (showToast) showToast('Camera started! Timer is ticking live.', 'success');
+      if (showToast) showToast('Camera started in HD (30 FPS)! Timer is ticking live.', 'success');
     } catch (err) {
       console.error('Camera access error:', err);
       let errMsg = 'Camera permission denied or camera not found.';
@@ -3190,10 +3267,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     try {
       recordedChunksRef.current = [];
 
-      // Set up offscreen/hidden recording canvas that matches video resolution
+      // Set up offscreen/hidden recording canvas that matches video stream resolution
       const videoEl = webcamVideoRef.current;
-      const width = videoEl.videoWidth || 1280;
-      const height = videoEl.videoHeight || 720;
+      const width = (videoEl && videoEl.videoWidth > 0) ? videoEl.videoWidth : 1280;
+      const height = (videoEl && videoEl.videoHeight > 0) ? videoEl.videoHeight : 720;
 
       let canvas = recordingCanvasRef.current;
       if (!canvas) {
@@ -3202,12 +3279,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
-      // Continuous render loop that draws webcam frame + centered timestamp overlay
+      // High-performance continuous render loop that draws camera frame + centered timestamp overlay
       let isRunning = true;
-      const drawFrame = () => {
-        if (!isRunning) return;
+      let lastRenderTimestamp = performance.now();
+
+      const renderCanvasFrame = () => {
         try {
           if (videoEl && videoEl.readyState >= 2) {
             // 1. Draw raw camera video frame
@@ -3215,8 +3293,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
             // 2. Draw CCTV Timestamp Overlay in TOP-CENTER (Matching Image 2 font style without background)
             const timeText = currentIstTimeRef.current || '';
-            
-            // Adaptive font size based on video resolution
             const fontSize = Math.max(16, Math.round(width * 0.028));
             ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
             ctx.textBaseline = 'middle';
@@ -3238,14 +3314,32 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         } catch (e) {
           console.warn('Canvas draw error:', e);
         }
-        animFrameRef.current = requestAnimationFrame(drawFrame);
+        lastRenderTimestamp = performance.now();
       };
-      drawFrame();
 
-      // Capture stream from canvas with burned-in timestamp at 30 fps
+      const drawLoop = () => {
+        if (!isRunning) return;
+        renderCanvasFrame();
+        animFrameRef.current = requestAnimationFrame(drawLoop);
+      };
+      drawLoop();
+
+      // Steady 30 FPS interval backup to guarantee smooth 30 fps even if browser tab is backgrounded
+      if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
+      renderIntervalRef.current = setInterval(() => {
+        if (!isRunning) {
+          clearInterval(renderIntervalRef.current);
+          return;
+        }
+        if (performance.now() - lastRenderTimestamp > 35) {
+          renderCanvasFrame();
+        }
+      }, 33);
+
+      // Capture stream from canvas with burned-in timestamp at solid 30 fps
       let recordStream;
       try {
-        recordStream = canvas.captureStream(30);
+        recordStream = canvas.captureStream ? canvas.captureStream(30) : webcamStream;
       } catch (err) {
         console.warn('Canvas captureStream fallback to direct videoStream:', err);
         recordStream = webcamStream;
@@ -3256,21 +3350,28 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         webcamStream.getAudioTracks().forEach(track => recordStream.addTrack(track));
       }
 
+      // MP4 / H.264 prioritised first for hardware acceleration, 30fps and full duration/bitrate metadata in Windows
       let recorder;
       let usedMime = '';
       const candidateTypes = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm',
         'video/mp4;codecs=avc1,mp4a',
+        'video/mp4;codecs=avc1',
         'video/mp4',
+        'video/webm;codecs=h264',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
         ''
       ];
 
       for (const t of candidateTypes) {
         if (!t || (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t))) {
           try {
-            recorder = t ? new MediaRecorder(recordStream, { mimeType: t }) : new MediaRecorder(recordStream);
+            const options = {
+              videoBitsPerSecond: 2000000 // 2 Mbps target for crystal clear 720p/848p video matching Image 2
+            };
+            if (t) options.mimeType = t;
+            recorder = new MediaRecorder(recordStream, options);
             usedMime = t;
             break;
           } catch {}
@@ -3278,7 +3379,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
 
       if (!recorder) {
-        recorder = new MediaRecorder(recordStream);
+        recorder = new MediaRecorder(recordStream, { videoBitsPerSecond: 2000000 });
       }
 
       recorder.ondataavailable = (e) => {
@@ -3287,19 +3388,34 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         }
       };
 
-      recorder.onstop = () => {
+      const startTime = Date.now();
+      recordingStartTimeRef.current = startTime;
+
+      recorder.onstop = async () => {
         isRunning = false;
         if (animFrameRef.current) {
           cancelAnimationFrame(animFrameRef.current);
           animFrameRef.current = null;
         }
-        const blobType = usedMime || 'video/webm';
-        const blob = new Blob(recordedChunksRef.current, { type: blobType });
-        setRecordedVideoBlob(blob);
+        if (renderIntervalRef.current) {
+          clearInterval(renderIntervalRef.current);
+          renderIntervalRef.current = null;
+        }
+
+        const durationMs = Math.max(1000, Date.now() - (recordingStartTimeRef.current || startTime));
+        const blobType = usedMime || 'video/mp4';
+        let finalBlob = new Blob(recordedChunksRef.current, { type: blobType });
+
+        // If WebM was recorded, patch duration header so Windows Explorer displays duration & bitrate
+        if (blobType.includes('webm')) {
+          finalBlob = await fixWebmDuration(finalBlob, durationMs);
+        }
+
+        setRecordedVideoBlob(finalBlob);
         if (recordedVideoUrl) {
           try { URL.revokeObjectURL(recordedVideoUrl); } catch {}
         }
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(finalBlob);
         setRecordedVideoUrl(url);
         if (showToast) showToast('Recording completed! Preview video below and check playback before downloading.', 'success');
       };
@@ -3308,11 +3424,15 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingDurationSec(0);
-      if (showToast) showToast('Recording started with live timer burned into video!', 'info');
+      if (showToast) showToast('Recording started in HD (30 FPS) with live timer burned into video!', 'info');
     } catch (err) {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
+      }
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+        renderIntervalRef.current = null;
       }
       if (showToast) showToast(`Recording failed: ${err.message}`, 'error');
     }
@@ -3322,6 +3442,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
+    }
+    if (renderIntervalRef.current) {
+      clearInterval(renderIntervalRef.current);
+      renderIntervalRef.current = null;
     }
     if (mediaRecorderRef.current && isRecording) {
       try {
@@ -3338,7 +3462,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     }
     try {
       const dateTag = new Date().toISOString().slice(0, 10);
-      const isMp4 = recordedVideoBlob?.type?.includes('mp4');
+      const isMp4 = !recordedVideoBlob?.type?.includes('webm') || recordedVideoBlob?.type?.includes('mp4');
       const filename = `Return_Proof_Unboxing_${dateTag}.${isMp4 ? 'mp4' : 'webm'}`;
       
       const a = document.createElement('a');
