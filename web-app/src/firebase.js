@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXcH8anFAy8xWfQnfHcb1Pyf9J1aM0DDE",
@@ -15,5 +15,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 // Enforce permanent local persistence so login survives app restarts, updates & webview refreshes
 setPersistence(auth, browserLocalPersistence).catch(() => {});
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
 export default app;

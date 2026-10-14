@@ -249,8 +249,22 @@ export const clearPersistentAuth = () => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_auth_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_auth_user');
+      // If user session is already stored locally, unblock UI immediately (0ms wait)
+      if (cached) return false;
+    } catch {}
+    return true;
+  });
   const authRestoringRef = useRef(false);
 
   // Fancy Dialog & Toast Notifications state
@@ -510,7 +524,18 @@ export default function App() {
 
 
   // Admin Panel State
-  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(() => {
+    try {
+      const cachedProfile = localStorage.getItem('cached_user_profile');
+      if (cachedProfile) {
+        const parsed = JSON.parse(cachedProfile);
+        if (parsed?.role === 'super_admin' || parsed?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  });
   const [adminInputPass, setAdminInputPass] = useState('');
   const [allUsersList, setAllUsersList] = useState([]);
   const [allPlatformAccounts, setAllPlatformAccounts] = useState([]);
@@ -833,6 +858,7 @@ export default function App() {
           }
         }
 
+        try { localStorage.removeItem('cached_auth_user'); } catch {}
         setUser(null);
         setEmailNeedsVerification(false);
         setLoading(false);
@@ -850,6 +876,7 @@ export default function App() {
       const prevActiveUid = localStorage.getItem('om_active_user_uid');
       if (prevActiveUid && prevActiveUid !== currentUser.uid) {
         try {
+          localStorage.removeItem('cached_auth_user');
           localStorage.removeItem('native_meesho_sessions');
           localStorage.removeItem('cached_user_accounts');
           localStorage.removeItem('cached_user_profile');
@@ -872,7 +899,17 @@ export default function App() {
 
       if (isLocallyVerified) {
         // FAST PATH: User is already verified! Show dashboard instantly (<50ms)!
-        try { localStorage.setItem(`email_verified_${currentUser.uid}`, 'true'); } catch {}
+        try {
+          localStorage.setItem(`email_verified_${currentUser.uid}`, 'true');
+          const serializableUser = {
+            uid: currentUser.uid,
+            email: currentUser.email || '',
+            phoneNumber: currentUser.phoneNumber || '',
+            displayName: currentUser.displayName || '',
+            emailVerified: currentUser.emailVerified || false
+          };
+          localStorage.setItem('cached_auth_user', JSON.stringify(serializableUser));
+        } catch {}
         setUser(currentUser);
         setEmailNeedsVerification(false);
         setLoading(false); // <--- UNBLOCK UI IMMEDIATELY!
@@ -1955,6 +1992,7 @@ export default function App() {
       } catch {}
     }
     try {
+      localStorage.removeItem('cached_auth_user');
       localStorage.removeItem('om_active_user_uid');
       localStorage.removeItem('native_meesho_sessions');
       localStorage.removeItem('cached_user_profile');
