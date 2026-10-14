@@ -20,11 +20,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshoDirectPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // 1. Request Runtime Notification Permission (so user gets 24/7 return OTP alerts)
+        // 1. Request Runtime Notification & Camera Permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 102);
         }
 
         // 2. Request Battery Optimization Exemption so Android never kills the 24/7 OTP service

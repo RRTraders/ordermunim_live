@@ -3031,6 +3031,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     };
   }, [webcamStream]);
 
+  // Ensure video element receives the media stream as soon as it mounts or stream changes
+  useEffect(() => {
+    if (webcamVideoRef.current && webcamStream) {
+      if (webcamVideoRef.current.srcObject !== webcamStream) {
+        webcamVideoRef.current.srcObject = webcamStream;
+      }
+      webcamVideoRef.current.play().catch(e => console.warn('Webcam video play:', e));
+    }
+  }, [webcamStream, isWebcamActive]);
+
   const handleOpenClockModal = () => {
     try {
       const nowMs = Date.now();
@@ -7078,16 +7088,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
             {/* Video Viewport Container */}
             <div className="relative aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-black/90 border border-white/15 shadow-2xl flex items-center justify-center">
-              {isWebcamActive ? (
-                <>
-                  <video
-                    ref={webcamVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
+              <video
+                ref={webcamVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${isWebcamActive ? 'block' : 'hidden'}`}
+              />
 
+              {isWebcamActive && (
+                <>
                   {/* Superimposed Live Timestamp HUD Overlay */}
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                     <div className="bg-black/65 backdrop-blur-md border border-white/20 rounded-xl px-3.5 py-1.5 shadow-lg flex items-center justify-center">
@@ -7107,7 +7117,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     </div>
                   )}
                 </>
-              ) : (
+              )}
+
+              {!isWebcamActive && (
                 /* Webcam Offline State */
                 <div className="text-center p-4 sm:p-6 space-y-3.5 max-w-md w-full">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/10 text-orange-400 flex items-center justify-center mx-auto shadow-inner">
