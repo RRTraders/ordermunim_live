@@ -248,16 +248,16 @@ export async function getAppVersionInfo() {
       console.warn('[Native Meesho] getAppInfo error:', err);
     }
     return {
-      versionCode: 45,
-      versionName: '5.5',
+      versionCode: 46,
+      versionName: '5.6',
       packageName: 'com.rrtraders.meeshootp',
       isNative: true,
       platform: 'android'
     };
   }
   return {
-    versionCode: 45,
-    versionName: '5.5',
+    versionCode: 46,
+    versionName: '5.6',
     packageName: null,
     isNative: false,
     platform: 'web'
