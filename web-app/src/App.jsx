@@ -2894,9 +2894,10 @@ export default function App() {
 
   // Trigger In-App APK Download & Direct Android Install
   const handleInstallAppUpdate = async (url) => {
-    let targetUrl = url || `https://meesho-otp-app.web.app/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`;
+    const targetVer = String(appUpdateConfig?.versionName || '').trim().replace(/^v/i, '') || CURRENT_APP_VERSION_NAME;
+    let targetUrl = url || `https://meesho-otp-app.web.app/ordermunim_v${targetVer}.apk`;
     if (targetUrl.includes('raw.githubusercontent.com') || targetUrl.includes('ordermunim_live') || targetUrl.includes('meesho-otp')) {
-      targetUrl = `https://meesho-otp-app.web.app/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`;
+      targetUrl = `https://meesho-otp-app.web.app/ordermunim_v${targetVer}.apk`;
     }
     setUpdateDownloading(true);
     setDownloadProgress(0);
@@ -3250,7 +3251,7 @@ export default function App() {
             </button>
             <a
               href={updateStatus.downloadUrl}
-              download="ordermunim_v4.7.apk"
+              download={`ordermunim_v${updateStatus.versionName || CURRENT_APP_VERSION_NAME}.apk`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full mt-2.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-slate-700 transition-all cursor-pointer"

@@ -1474,6 +1474,11 @@ public class MeeshoDirectPlugin extends Plugin {
                     }
                 }
 
+                // Ensure file is world-readable for system package installer
+                try {
+                    apkFile.setReadable(true, false);
+                } catch (Exception ignored) {}
+
                 // Launch Android Package Installer via FileProvider
                 Uri apkUri = FileProvider.getUriForFile(
                     context,
@@ -1483,8 +1488,19 @@ public class MeeshoDirectPlugin extends Plugin {
 
                 Intent installIntent = new Intent(Intent.ACTION_VIEW);
                 installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                installIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+
+                // Explicitly grant URI permission to installer activities
+                try {
+                    List<android.content.pm.ResolveInfo> resolveList = context.getPackageManager().queryIntentActivities(installIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+                    for (android.content.pm.ResolveInfo rInfo : resolveList) {
+                        String pName = rInfo.activityInfo.packageName;
+                        context.grantUriPermission(pName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    }
+                } catch (Exception ignored) {}
+
                 try {
                     context.startActivity(installIntent);
                 } catch (Exception launchEx) {
