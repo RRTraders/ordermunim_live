@@ -718,7 +718,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
     // Helper: Extract SKU from a line using multiple pattern detectors
     const parseSkuFromLine = (line) => {
-      if (!line || !isValidSku(line)) return '';
+      if (!line || isSystemLine(line)) return '';
       const l = line.trim();
 
       // Pattern 1: ... (CODE),SKU_NAME (with support for _, -, spaces, dots, slashes)
@@ -788,7 +788,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         // Check candidate lines directly above this HSN row (working backwards)
         for (let back = 1; back <= 4 && (i - back) >= 0; back++) {
           const prevLine = lines[i - back]?.trim() || '';
-          if (!prevLine || !isValidSku(prevLine)) continue;
+          if (!prevLine || isSystemLine(prevLine)) continue;
           if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break; // Hit previous HSN row
 
           const parsed = parseSkuFromLine(prevLine);
@@ -802,7 +802,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         if (!detectedSku) {
           for (let back = 1; back <= 3 && (i - back) >= 0; back++) {
             const prevLine = lines[i - back]?.trim() || '';
-            if (!prevLine || !isValidSku(prevLine)) continue;
+            if (!prevLine || isSystemLine(prevLine)) continue;
             if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break;
 
             const clean = prevLine.replace(/[,;]+$/, '').trim();
@@ -826,7 +826,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     if (invoiceItems.length === 0) {
       for (let i = 0; i < lines.length; i++) {
         const l = lines[i]?.trim() || '';
-        if (!l || !isValidSku(l)) continue;
+        if (!l || isSystemLine(l)) continue;
         if (/(?:RATE\s*%\s*AMOUNT|Tax\s*(?:Breakup|Break-up|Details|Summary)|GST\s*(?:Breakup|Details)|Summary\s*of\s*Tax|Amount\s*in\s*Words|Authorized\s*Signatory)/i.test(l)) {
           break;
         }
