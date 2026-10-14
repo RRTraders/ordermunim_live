@@ -9,6 +9,7 @@ export default defineConfig({
     tailwindcss()
   ],
   build: {
+    modulePreload: false,
     sourcemap: false,
     minify: 'terser',
     terserOptions: {

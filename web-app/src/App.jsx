@@ -836,26 +836,24 @@ export default function App() {
       cleanupProfile();
 
       if (!currentUser) {
-        // Auto-login restoration check:
+        // If we have saved credentials, restore session in BACKGROUND without blocking or showing spinner
         const savedAuth = getPersistentAuth();
         if (savedAuth && savedAuth.email && savedAuth.password && !authRestoringRef.current) {
           authRestoringRef.current = true;
-          try {
-            console.log('[Persistent Auth] Silently restoring session for:', savedAuth.email);
-            setLoading(true);
-            const cred = await signInWithEmailAndPassword(auth, savedAuth.email, savedAuth.password);
-            if (cred && cred.user) {
+          signInWithEmailAndPassword(auth, savedAuth.email, savedAuth.password)
+            .then(() => {
               authRestoringRef.current = false;
-              // onAuthStateChanged will automatically fire with cred.user!
-              return;
-            }
-          } catch (autoErr) {
-            console.warn('[Persistent Auth] Auto-restore session error:', autoErr);
-            authRestoringRef.current = false;
-            if (autoErr.code === 'auth/wrong-password' || autoErr.code === 'auth/user-not-found') {
-              clearPersistentAuth();
-            }
-          }
+            })
+            .catch((autoErr) => {
+              authRestoringRef.current = false;
+              if (autoErr.code === 'auth/wrong-password' || autoErr.code === 'auth/user-not-found') {
+                clearPersistentAuth();
+                try { localStorage.removeItem('cached_auth_user'); } catch {}
+                setUser(null);
+                setLoading(false);
+              }
+            });
+          return;
         }
 
         try { localStorage.removeItem('cached_auth_user'); } catch {}
@@ -863,7 +861,6 @@ export default function App() {
         setEmailNeedsVerification(false);
         setLoading(false);
         setAccounts([]);
-        // Never wipe local sessions or native Android credentials on startup when auth is temporarily resolving
         if (isNativeMobile()) {
           try {
             stopBackgroundMonitoring();
@@ -871,6 +868,9 @@ export default function App() {
         }
         return;
       }
+
+      // We have active authenticated user
+      authRestoringRef.current = false;
 
       // Detect if user switched on this device:
       const prevActiveUid = localStorage.getItem('om_active_user_uid');
@@ -890,64 +890,23 @@ export default function App() {
       }
       try { localStorage.setItem('om_active_user_uid', currentUser.uid); } catch {}
 
-      const isSuper = (currentUser.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || currentUser.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
-      const isLocallyVerified = Boolean(
-        isSuper ||
-        currentUser.emailVerified ||
-        localStorage.getItem(`email_verified_${currentUser.uid}`) === 'true'
-      );
+      // Cache serializable user for instant 0ms startup
+      try {
+        const serializableUser = {
+          uid: currentUser.uid,
+          email: currentUser.email || '',
+          phoneNumber: currentUser.phoneNumber || '',
+          displayName: currentUser.displayName || '',
+          emailVerified: currentUser.emailVerified || false
+        };
+        localStorage.setItem('cached_auth_user', JSON.stringify(serializableUser));
+      } catch {}
 
-      if (isLocallyVerified) {
-        // FAST PATH: User is already verified! Show dashboard instantly (<50ms)!
-        try {
-          localStorage.setItem(`email_verified_${currentUser.uid}`, 'true');
-          const serializableUser = {
-            uid: currentUser.uid,
-            email: currentUser.email || '',
-            phoneNumber: currentUser.phoneNumber || '',
-            displayName: currentUser.displayName || '',
-            emailVerified: currentUser.emailVerified || false
-          };
-          localStorage.setItem('cached_auth_user', JSON.stringify(serializableUser));
-        } catch {}
-        setUser(currentUser);
-        setEmailNeedsVerification(false);
-        setLoading(false); // <--- UNBLOCK UI IMMEDIATELY!
-
-        // Stream profile and accounts in background
-        cleanupProfile = loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
-        return;
-      }
-
-      // SLOW PATH (Only for newly registered accounts awaiting activation):
+      // INSTANT ZERO DELAY: Unblock UI immediately, no network waterfalls!
       setUser(currentUser);
-      try {
-        await currentUser.reload();
-      } catch (e) {}
-
-      let isFirestoreVerified = false;
-      try {
-        const uDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (uDoc.exists() && uDoc.data().emailVerified === true) {
-          isFirestoreVerified = true;
-        }
-      } catch (e) {}
-
-      const isVerified = currentUser.emailVerified || isFirestoreVerified;
-
-      if (!isVerified) {
-        setEmailNeedsVerification(true);
-        setLoading(false);
-        return;
-      } else {
-        try { localStorage.setItem(`email_verified_${currentUser.uid}`, 'true'); } catch {}
-        await updateDoc(doc(db, 'users', currentUser.uid), {
-          emailVerified: true
-        }).catch(() => {});
-      }
-
-      setEmailNeedsVerification(false);
       setLoading(false);
+
+      // Stream user profile and accounts in background via Firestore onSnapshot
       cleanupProfile = loadUserProfile(currentUser.uid, currentUser.phoneNumber, currentUser.email);
     });
 
@@ -968,6 +927,11 @@ export default function App() {
         const profData = snap.data();
         setProfile(profData);
         try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
+        if (profData.emailVerified === false && !isSuper && profData.role !== 'super_admin') {
+          setEmailNeedsVerification(true);
+        } else {
+          setEmailNeedsVerification(false);
+        }
         if (isSuper || profData.role === 'super_admin') {
           setAdminAuthenticated(true);
           // Preserve user's current selected tab on refresh
