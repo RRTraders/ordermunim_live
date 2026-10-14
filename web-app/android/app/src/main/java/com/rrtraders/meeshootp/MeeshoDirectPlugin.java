@@ -1464,6 +1464,13 @@ public class MeeshoDirectPlugin extends Plugin {
                         manageIntent.setData(Uri.parse("package:" + context.getPackageName()));
                         manageIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         context.startActivity(manageIntent);
+
+                        JSObject ret = new JSObject();
+                        ret.put("success", true);
+                        ret.put("needsPermission", true);
+                        ret.put("filePath", apkFile.getAbsolutePath());
+                        call.resolve(ret);
+                        return;
                     }
                 }
 
@@ -1478,7 +1485,11 @@ public class MeeshoDirectPlugin extends Plugin {
                 installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
                 installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(installIntent);
+                try {
+                    context.startActivity(installIntent);
+                } catch (Exception launchEx) {
+                    android.util.Log.e("MeeshoDirectPlugin", "Install launch error: " + launchEx.getMessage());
+                }
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
