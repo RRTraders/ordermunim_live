@@ -691,31 +691,53 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       if (!str) return true;
       const s = str.trim();
       if (s.length < 2) return true;
-      return /^(?:TAX\s*INVOICE|ORIGINAL\s*FOR|SELLER|CONSIGNOR|CUSTOMER|GSTIN|BILL\s*TO|SHIP\s*TO|ORDER\s*NUMBER|CARRIER|PAYMENT\s*MODE|AWB\s*NUMBER|HSN\s*Code|Qty|MRP|Trade\s*Discount|Other\s*Discount|Net\s*Unit|Base\s*Price|Taxable\s*Value|Tax\s*Amt|Total\s*Amount|Convenience\s*Fee|Amount\s*in\s*Words|Authorized\s*Signatory|Terms|Page\s*\d+|This\s*is\s*a\s*computer|Customer\s*Support)/i.test(s);
+      if (/%/.test(s)) return true; // SKUs NEVER contain % signs
+      // Tax / GST / Table breakdown keywords
+      if (/\b(?:RATE|AMOUNT|TAXABLE|VALUE|SGST|CGST|IGST|UTGST|CESS|SUB\s*TOTAL|NET\s*TOTAL|TOTAL|DISCOUNT|INVOICE\s*VALUE|ROUND\s*OFF)\b/i.test(s) &&
+          /\b(?:RATE|AMOUNT|TAX|GST|VALUE|QTY|HSN|PERCENT|CGST|SGST|IGST)\b/i.test(s)) {
+        return true;
+      }
+      if (/\bRATE\b/i.test(s) && /\bAMOUNT\b/i.test(s)) return true;
+      if (/\b(?:CGST|SGST|IGST|UTGST|CESS)\b/i.test(s)) return true;
+      return /^(?:TAX\s*INVOICE|ORIGINAL\s*FOR|SELLER|CONSIGNOR|CUSTOMER|GSTIN|BILL\s*TO|SHIP\s*TO|ORDER\s*NUMBER|CARRIER|PAYMENT\s*MODE|AWB\s*NUMBER|HSN\s*Code|Qty|MRP|Trade\s*Discount|Other\s*Discount|Net\s*Unit|Base\s*Price|Taxable\s*Value|Tax\s*Amt|Total\s*Amount|Convenience\s*Fee|Amount\s*in\s*Words|Authorized\s*Signatory|Terms|Page\s*\d+|This\s*is\s*a\s*computer|Customer\s*Support|Tax\s*Breakup|Tax\s*Details|Tax\s*Summary|GST\s*Breakup|GST\s*Details|Summary|Description\s*of\s*Goods|Total\s*Tax|Tax\s*Type|HSN\/SAC)/i.test(s);
+    };
+
+    // Helper: Strictly validate if a string can legitimately be a product SKU
+    const isValidSku = (str) => {
+      if (!str) return false;
+      const s = str.trim();
+      if (s.length < 2 || s.length > 50) return false;
+      if (/%/.test(s)) return false;
+      if (/\b(?:RATE|AMOUNT|TAXABLE|VALUE|SGST|CGST|IGST|UTGST|CESS|TOTAL|DISCOUNT|ROUND\s*OFF|TAX\s*AMT|NET\s*PRICE|BASE\s*PRICE|MRP|RUPEES|RS\.)\b/i.test(s)) {
+        return false;
+      }
+      if (isSystemLine(s)) return false;
+      if (!/[A-Za-z0-9]/.test(s)) return false;
+      return true;
     };
 
     // Helper: Extract SKU from a line using multiple pattern detectors
     const parseSkuFromLine = (line) => {
-      if (!line || isSystemLine(line)) return '';
+      if (!line || !isValidSku(line)) return '';
       const l = line.trim();
 
       // Pattern 1: ... (CODE),SKU_NAME (with support for _, -, spaces, dots, slashes)
       const m1 = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\s\-\.\/\+]+?)\s*$/);
-      if (m1) return m1[1].trim();
+      if (m1 && isValidSku(m1[1])) return m1[1].trim();
 
       // Pattern 1b: If not strictly at end of line (e.g. trailing comma)
       const m1b = l.match(/\([^)]+\)\s*,\s*([A-Za-z0-9_\-\.\/]+(?:[ \t]+[A-Za-z0-9_\-\.\/]+)*)/);
-      if (m1b && !/^(?:HSN|Total|Tax|Amount|Trade|Discount|GST)/i.test(m1b[1])) {
+      if (m1b && isValidSku(m1b[1])) {
         return m1b[1].trim();
       }
 
       // Pattern 1c: Code in parentheses at end of line: ... 704105368013 (LE_SP_SNFLR_BLU_XXL)
       const m1c = l.match(/\b\d{8,14}\s*\(([A-Za-z0-9_\s\-\.\/\+]+)\)\s*$/);
-      if (m1c) return m1c[1].trim();
+      if (m1c && isValidSku(m1c[1])) return m1c[1].trim();
 
       // Pattern 2: Code with underscores (e.g. LE_SP_SNFLR_BLU_XXL or FR_WN_LLN_BLU_32)
       const m2 = l.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/);
-      if (m2 && !/^(?:TAX|GST|INVOICE|ORDER|SELLER|CONSIGNOR)/i.test(m2[1])) {
+      if (m2 && isValidSku(m2[1])) {
         return m2[1].trim();
       }
 
@@ -724,7 +746,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         const parts = l.split(',').map(p => p.trim()).filter(Boolean);
         if (parts.length >= 2) {
           const lastPart = parts[parts.length - 1];
-          if (/^[A-Za-z0-9_\-\s\.\/]{3,40}$/.test(lastPart) && !isSystemLine(lastPart) && /[A-Za-z]/.test(lastPart)) {
+          if (/^[A-Za-z0-9_\-\s\.\/]{3,40}$/.test(lastPart) && isValidSku(lastPart)) {
             return lastPart;
           }
         }
@@ -732,7 +754,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
       // Pattern 4: Standalone style code line (e.g. "BJ LILN WHITE-36", "O1 PANT DARK GREY-32", "DNM-REG-34", "SH-01-WHITE-L")
       const clean = l.replace(/[,;]+$/, '').trim();
-      if (clean.length >= 3 && clean.length <= 45 && !isSystemLine(clean)) {
+      if (clean.length >= 3 && clean.length <= 45 && isValidSku(clean)) {
         // Alphanumeric with spaces, hyphens, slashes, numbers (typical style code)
         if (/^[A-Za-z0-9][A-Za-z0-9_\-\s\.\/\+]{2,44}$/.test(clean)) {
           if (/[A-Za-z]/.test(clean) && (/[\d\-]/.test(clean) || /\b(?:XS|S|M|L|XL|XXL|XXXL|3XL|4XL|FREE|\d{2})\b/i.test(clean))) {
@@ -750,6 +772,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       const l = lines[i]?.trim() || '';
       if (!l) continue;
 
+      // Stop scanning once we leave the item table and hit Tax Summary / Total / Footer
+      if (/(?:RATE\s*%\s*AMOUNT|Tax\s*(?:Breakup|Break-up|Details|Summary)|GST\s*(?:Breakup|Details)|Summary\s*of\s*Tax|Amount\s*in\s*Words|Authorized\s*Signatory)/i.test(l)) {
+        break;
+      }
+
       // Detect HSN row: 6 to 8 digit number followed by quantity (e.g. 61034200 1.0)
       const hsnMatch = l.match(/\b([1-9]\d{5,7})\b\s+(\d+(?:\.\d+)?)/);
       if (hsnMatch && !isSystemLine(l)) {
@@ -761,11 +788,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         // Check candidate lines directly above this HSN row (working backwards)
         for (let back = 1; back <= 4 && (i - back) >= 0; back++) {
           const prevLine = lines[i - back]?.trim() || '';
-          if (!prevLine || isSystemLine(prevLine)) continue;
+          if (!prevLine || !isValidSku(prevLine)) continue;
           if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break; // Hit previous HSN row
 
           const parsed = parseSkuFromLine(prevLine);
-          if (parsed) {
+          if (parsed && isValidSku(parsed)) {
             detectedSku = parsed;
             break;
           }
@@ -775,11 +802,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         if (!detectedSku) {
           for (let back = 1; back <= 3 && (i - back) >= 0; back++) {
             const prevLine = lines[i - back]?.trim() || '';
-            if (!prevLine || isSystemLine(prevLine)) continue;
+            if (!prevLine || !isValidSku(prevLine)) continue;
             if (/\b[1-9]\d{5,7}\b\s+\d+(?:\.\d+)?/.test(prevLine)) break;
 
             const clean = prevLine.replace(/[,;]+$/, '').trim();
-            if (clean.length >= 2 && clean.length <= 60 && !isSystemLine(clean)) {
+            if (isValidSku(clean)) {
               detectedSku = clean;
               break;
             }
@@ -788,7 +815,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
         if (detectedSku) {
           detectedSku = detectedSku.replace(/[,;]+$/, '').trim();
-          if (detectedSku.length >= 2 && !isSystemLine(detectedSku)) {
+          if (isValidSku(detectedSku)) {
             invoiceItems.push({ sku: detectedSku, qty });
           }
         }
@@ -799,12 +826,15 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     if (invoiceItems.length === 0) {
       for (let i = 0; i < lines.length; i++) {
         const l = lines[i]?.trim() || '';
-        if (!l || isSystemLine(l)) continue;
+        if (!l || !isValidSku(l)) continue;
+        if (/(?:RATE\s*%\s*AMOUNT|Tax\s*(?:Breakup|Break-up|Details|Summary)|GST\s*(?:Breakup|Details)|Summary\s*of\s*Tax|Amount\s*in\s*Words|Authorized\s*Signatory)/i.test(l)) {
+          break;
+        }
 
         let sku = parseSkuFromLine(l);
         if (sku) {
           sku = sku.replace(/[,;]+$/, '').trim();
-          if (sku.length >= 2 && !isSystemLine(sku)) {
+          if (isValidSku(sku)) {
             let qty = 1;
             for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
               const lineJ = lines[j]?.trim() || '';
@@ -828,7 +858,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       const globalMatches = rawText.match(/\b([A-Za-z0-9]{2,10}_[A-Za-z0-9_]{3,30})\b/g);
       if (globalMatches) {
         for (const candidate of globalMatches) {
-          if (!isSystemLine(candidate)) {
+          if (isValidSku(candidate)) {
             invoiceItems.push({ sku: candidate.trim(), qty: 1 });
             break;
           }
@@ -836,10 +866,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
     }
 
-    // Consolidate identical items by summing quantities
+    // Consolidate identical items by summing quantities (strictly valid SKUs only)
     const consolidatedItems = [];
     const skuMap = new Map();
     for (const itm of invoiceItems) {
+      if (!isValidSku(itm.sku)) continue;
       const normKey = itm.sku.trim().toLowerCase();
       if (skuMap.has(normKey)) {
         skuMap.get(normKey).qty += itm.qty;
@@ -1517,7 +1548,15 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           // Stamp SKU name and Quantity in the bottom-right corner of the shipping label
           // Uses a solid white background rectangle so the vertical table line does not interfere/cut through the text,
           // and maintains a bold, clear, highly legible font size for warehouse picking and packing.
-          if (item.items && item.items.length > 0) {
+          const validItems = (item.items || []).filter(it => {
+            if (!it || !it.sku) return false;
+            const s = it.sku.trim();
+            if (/%/.test(s)) return false;
+            if (/\b(?:RATE|AMOUNT|TAXABLE|VALUE|SGST|CGST|IGST|UTGST|CESS|TOTAL|ROUND\s*OFF|TAX|DISCOUNT)\b/i.test(s)) return false;
+            return true;
+          });
+
+          if (validItems.length > 0) {
             const pageWidth = copiedPage.getWidth();
             const pageHeight = copiedPage.getHeight();
             // Proportional scaling for both standard 4x6 (288x432) and A4 (595x842) labels
@@ -1543,8 +1582,8 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             const textStartX = 175 * scaleX;
             const maxTextWidth = boxW - (6 * scaleX);
 
-            if (item.items.length === 1) {
-              const itm = item.items[0];
+            if (validItems.length === 1) {
+              const itm = validItems[0];
               const text = `${itm.sku} (${itm.qty || 1})`;
               let fSize = 7.5 * scale;
               while (fSize > (3.5 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
@@ -1558,9 +1597,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 font: helveticaBold,
                 color: rgb(0, 0, 0),
               });
-            } else if (item.items.length === 2) {
+            } else if (validItems.length === 2) {
               for (let k = 0; k < 2; k++) {
-                const itm = item.items[k];
+                const itm = validItems[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
                 let fSize = 6.2 * scale;
                 while (fSize > (3.5 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
@@ -1574,9 +1613,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   color: rgb(0, 0, 0),
                 });
               }
-            } else if (item.items.length === 3) {
+            } else if (validItems.length === 3) {
               for (let k = 0; k < 3; k++) {
-                const itm = item.items[k];
+                const itm = validItems[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
                 let fSize = 5.2 * scale;
                 while (fSize > (3.2 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
@@ -1591,9 +1630,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 });
               }
             } else {
-              const count = Math.min(item.items.length, 4);
+              const count = Math.min(validItems.length, 4);
               for (let k = 0; k < count; k++) {
-                const itm = item.items[k];
+                const itm = validItems[k];
                 const text = `${itm.sku} (${itm.qty || 1})`;
                 let fSize = 4.6 * scale;
                 while (fSize > (3.0 * scale) && helveticaBold.widthOfTextAtSize(text, fSize) > maxTextWidth) {
