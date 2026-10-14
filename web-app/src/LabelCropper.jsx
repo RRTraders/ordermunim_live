@@ -60,6 +60,7 @@ import {
 } from 'lucide-react';
 
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { requestCameraPermission } from './meeshoDirect';
 
 // Configure pdfjs worker locally
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -3290,6 +3291,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const handleStartWebcam = async (cameraId = selectedCameraId, mode = facingMode) => {
     setWebcamError(null);
     try {
+      if (typeof requestCameraPermission === 'function') {
+        try { await requestCameraPermission(); } catch {}
+      }
+
       if (webcamStream) {
         webcamStream.getTracks().forEach(t => t.stop());
       }

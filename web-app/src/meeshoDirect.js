@@ -277,5 +277,18 @@ export async function exitApp() {
   }
 }
 
+/**
+ * Request Camera & Audio runtime permissions only when webcam studio is started
+ */
+export async function requestCameraPermission() {
+  if (isNativeMobile()) {
+    try {
+      await NativeMeesho.requestCameraPermission();
+    } catch (err) {
+      console.warn('[Native Meesho] requestCameraPermission error:', err);
+    }
+  }
+}
+
 
 

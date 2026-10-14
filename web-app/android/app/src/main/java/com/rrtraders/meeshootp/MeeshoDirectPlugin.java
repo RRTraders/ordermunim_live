@@ -1,13 +1,16 @@
 package com.rrtraders.meeshootp;
 
+import android.Manifest;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
+import androidx.core.app.ActivityCompat;
 import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
@@ -1519,6 +1522,18 @@ public class MeeshoDirectPlugin extends Plugin {
         try {
             if (getActivity() != null) {
                 getActivity().finishAffinity();
+            }
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void requestCameraPermission(PluginCall call) {
+        try {
+            if (getActivity() != null) {
+                if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 102);
+                }
             }
         } catch (Exception ignored) {}
         call.resolve();
