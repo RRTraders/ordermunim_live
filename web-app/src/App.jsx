@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { directMeeshoLogin, directFetchDeliveryOTPs, isNativeMobile, syncBackgroundSessions, getNativeStoredSessions, startBackgroundMonitoring, stopBackgroundMonitoring, requestBatteryOptimization, checkExactAlarmPermission, requestExactAlarmPermission, openAppSettings, openNotificationSettings, downloadAndInstallApk, getAppVersionInfo, exitApp } from './meeshoDirect';
 import { 
@@ -93,8 +93,8 @@ import {
   FileText,
   Info
 } from 'lucide-react';
-import LabelCropper from './LabelCropper';
-import PdfToolsSuite from './PdfTools/PdfToolsSuite';
+const LabelCropper = lazy(() => import('./LabelCropper'));
+const PdfToolsSuite = lazy(() => import('./PdfTools/PdfToolsSuite'));
 
 class CropperErrorBoundary extends React.Component {
   constructor(props) {
@@ -4255,12 +4255,19 @@ export default function App() {
           </div>
         ) : activeTab === 'cropper' ? (
           <CropperErrorBoundary>
-            <LabelCropper
-              showToast={showToast}
-              followStores={profile?.followStores || []}
-              onNavigateTab={setActiveTab}
-              activeMarketplaceId={activeCropperMarketplace}
-            />
+            <Suspense fallback={
+              <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+                <p className="text-sm font-semibold">Loading Shipping Label Cropper...</p>
+              </div>
+            }>
+              <LabelCropper
+                showToast={showToast}
+                followStores={profile?.followStores || []}
+                onNavigateTab={setActiveTab}
+                activeMarketplaceId={activeCropperMarketplace}
+              />
+            </Suspense>
           </CropperErrorBoundary>
 
         ) : (
@@ -5275,7 +5282,14 @@ export default function App() {
           </>
         ) : activeTab === 'pdf-tools' ? (
           /* ================= PDF TOOLS SUITE (FULL PAGE WORKSPACE) ================= */
-          <PdfToolsSuite onNavigateTab={setActiveTab} />
+          <Suspense fallback={
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 space-y-3">
+              <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+              <p className="text-sm font-semibold">Loading PDF Tools Suite...</p>
+            </div>
+          }>
+            <PdfToolsSuite onNavigateTab={setActiveTab} />
+          </Suspense>
         ) : (
           /* ================= HOME DASHBOARD VIEW (ORDERMUNIM HUB) ================= */
           <div className="space-y-8 animate-in fade-in duration-200">
