@@ -2975,13 +2975,57 @@ export default function App() {
     }
   };
 
-  // Admin: Update user quota limit
-  const handleUpdateUserQuota = async (targetUid, newLimit) => {
+  // Admin: Update user quota limit with accidental click confirmation & excess store auto-deletion
+  const handleUpdateUserQuota = async (targetUid, newLimit, currentQuota = 0, userIdentifier = '') => {
+    const targetQuota = Math.max(0, parseInt(newLimit, 10) || 0);
+    const userStores = allPlatformAccounts.filter(a => a.userId === targetUid);
+
+    // If reducing quota: require confirmation to avoid accidental clicks & auto-delete excess stores
+    if (targetQuota < currentQuota) {
+      const willDeleteStores = targetQuota < userStores.length;
+      const storesToDeleteCount = willDeleteStores ? (userStores.length - targetQuota) : 0;
+      const storesToDelete = willDeleteStores ? userStores.slice(targetQuota) : [];
+      const storeNames = storesToDelete.map(s => s.storeName || s.syncKey).join(', ');
+
+      setConfirmDialog({
+        title: willDeleteStores ? '⚠️ Reduce Quota & Delete Store(s)?' : 'Reduce Store Quota?',
+        message: willDeleteStores
+          ? `Are you sure you want to reduce store slots from ${currentQuota} to ${targetQuota} for ${userIdentifier || 'this user'}? This user currently has ${userStores.length} active store(s). Reducing slots to ${targetQuota} will IMMEDIATELY and PERMANENTLY delete ${storesToDeleteCount} excess store(s): "${storeNames}".`
+          : `Are you sure you want to reduce store slots from ${currentQuota} to ${targetQuota} for ${userIdentifier || 'this user'}?`,
+        confirmText: willDeleteStores ? `Reduce & Delete ${storesToDeleteCount} Store(s)` : 'Yes, Reduce Quota',
+        icon: willDeleteStores ? 'delete' : 'exit',
+        onConfirm: async () => {
+          try {
+            // 1. Permanently delete excess stores from accounts collection
+            if (storesToDelete.length > 0) {
+              for (const store of storesToDelete) {
+                await deleteDoc(doc(db, 'accounts', store.id));
+              }
+            }
+            // 2. Update user's maxAccounts in users collection
+            await updateDoc(doc(db, 'users', targetUid), {
+              maxAccounts: targetQuota
+            });
+            showToast(
+              storesToDelete.length > 0
+                ? `Store quota set to ${targetQuota}. ${storesToDelete.length} excess store(s) deleted.`
+                : `Store quota updated to ${targetQuota}`,
+              'success'
+            );
+          } catch (err) {
+            showToast(`Error updating quota: ${err.message}`, 'error');
+          }
+        }
+      });
+      return;
+    }
+
+    // If increasing quota (e.g. clicking +)
     try {
       await updateDoc(doc(db, 'users', targetUid), {
-        maxAccounts: parseInt(newLimit, 10)
+        maxAccounts: targetQuota
       });
-      showToast(`Store quota updated to ${newLimit}`, 'success');
+      showToast(`Store quota increased to ${targetQuota}`, 'success');
     } catch (err) {
       showToast(`Error updating quota: ${err.message}`, 'error');
     }
@@ -4446,7 +4490,7 @@ export default function App() {
                                 {/* Plus / Minus Buttons for Store Quota */}
                                 <div className="flex items-center gap-2">
                                   <button
-                                    onClick={() => handleUpdateUserQuota(u.id, Math.max(0, quota - 1))}
+                                    onClick={() => handleUpdateUserQuota(u.id, Math.max(0, quota - 1), quota, u.mobile || u.email || u.name)}
                                     disabled={quota <= 0}
                                     className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white font-bold flex items-center justify-center text-sm transition-colors"
                                     title="Decrease slot limit"
@@ -4457,7 +4501,7 @@ export default function App() {
                                     {quota}
                                   </span>
                                   <button
-                                    onClick={() => handleUpdateUserQuota(u.id, quota + 1)}
+                                    onClick={() => handleUpdateUserQuota(u.id, quota + 1, quota, u.mobile || u.email || u.name)}
                                     className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-cyan-500/20"
                                     title="Add store slot (+1)"
                                   >
