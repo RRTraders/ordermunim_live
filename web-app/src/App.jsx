@@ -4321,7 +4321,7 @@ export default function App() {
                   Admin Management Console
                 </h2>
                 <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                  <span>Clients: <strong className="text-white">{allUsersList.filter(u => u.role !== 'super_admin').length}</strong></span>
+                  <span>Clients: <strong className="text-white">{allUsersList.filter(u => u.role !== 'super_admin' && u.emailVerified !== false).length}</strong></span>
                   <span>•</span>
                   <span>Total Stores: <strong className="text-cyan-400">{allPlatformAccounts.length}</strong></span>
                   <span>•</span>
