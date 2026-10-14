@@ -3304,13 +3304,12 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
       // Capture stream from canvas with burned-in timestamp at exactly 60 fps
       let recordStream;
-      let canvasTrack = null;
       try {
         recordStream = canvas.captureStream ? canvas.captureStream(60) : webcamStream;
         if (recordStream && recordStream.getVideoTracks().length > 0) {
-          canvasTrack = recordStream.getVideoTracks()[0];
-          if (canvasTrack && canvasTrack.applyConstraints) {
-            canvasTrack.applyConstraints({ frameRate: 60 }).catch(() => {});
+          const track = recordStream.getVideoTracks()[0];
+          if (track && track.applyConstraints) {
+            track.applyConstraints({ frameRate: 60 }).catch(() => {});
           }
         }
       } catch (err) {
@@ -3323,77 +3322,36 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         webcamStream.getAudioTracks().forEach(track => recordStream.addTrack(track));
       }
 
-      // High-performance continuous 60 FPS render loop that draws camera frame + centered timestamp overlay
+      // High-efficiency, unthrottled 60 FPS render loop
       let isRunning = true;
-      let frameIndex = 0;
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
 
       const renderCanvasFrame = () => {
+        if (!isRunning) return;
         try {
           if (videoEl && videoEl.readyState >= 2) {
             // 1. Draw raw camera video frame
             ctx.drawImage(videoEl, 0, 0, width, height);
 
-            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER — COMPLETELY CLEAN, NO SHADOW, NO STROKE, NO OUTLINE, NO GREY/BLACK BORDER
+            // 2. Draw CCTV Timestamp Overlay in TOP-CENTER — COMPLETELY CLEAN, ZERO SHADOW, ZERO STROKE, ZERO BACKGROUND
             const timeText = currentIstTimeRef.current || '';
             const fontSize = Math.max(16, Math.round(width * 0.028));
             ctx.font = `400 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
-
-            // ZERO SHADOW / ZERO STROKE: clean pure white text
-            ctx.save();
-            ctx.shadowColor = 'transparent';
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
             ctx.fillStyle = '#FFFFFF';
             const posY = Math.round(height * 0.05); // 5% from top edge
             ctx.fillText(timeText, width / 2, posY);
-            ctx.restore();
-
-            // 3. Mark frame buffer as newly rendered on every tick so encoder records full 60 unique frames per second
-            frameIndex = (frameIndex + 1) % 60;
-            ctx.fillStyle = (frameIndex % 2 === 0) ? 'rgba(255, 255, 255, 0.01)' : 'rgba(255, 255, 255, 0.02)';
-            ctx.fillRect(0, 0, 1, 1);
-
-            // 4. Force canvas track to capture and push frame at 60 fps
-            if (canvasTrack && typeof canvasTrack.requestFrame === 'function') {
-              try { canvasTrack.requestFrame(); } catch {}
-            }
           }
         } catch (e) {
           console.warn('Canvas draw error:', e);
         }
+        animFrameRef.current = requestAnimationFrame(renderCanvasFrame);
       };
-
-      // Accurate 60 FPS pump: 16.66ms per frame
-      let lastFrameTime = performance.now();
-      const targetFrameInterval = 1000 / 60; // 16.666 ms
-
-      const step = (now) => {
-        if (!isRunning) return;
-        const delta = now - lastFrameTime;
-        if (delta >= targetFrameInterval - 2) {
-          lastFrameTime = now - (delta % targetFrameInterval);
-          renderCanvasFrame();
-        }
-        animFrameRef.current = requestAnimationFrame(step);
-      };
-      animFrameRef.current = requestAnimationFrame(step);
-
-      // Steady 60 FPS hardware timer watchdog (16ms)
-      if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
-      renderIntervalRef.current = setInterval(() => {
-        if (!isRunning) {
-          clearInterval(renderIntervalRef.current);
-          return;
-        }
-        const now = performance.now();
-        if (now - lastFrameTime >= targetFrameInterval) {
-          lastFrameTime = now;
-          renderCanvasFrame();
-        }
-      }, 16);
+      animFrameRef.current = requestAnimationFrame(renderCanvasFrame);
 
       // MP4 / H.264 prioritised first for hardware acceleration, 60fps and full duration/bitrate metadata in Windows
       let recorder;
@@ -3413,7 +3371,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         if (!t || (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t))) {
           try {
             const options = {
-              videoBitsPerSecond: 3000000 // 3 Mbps target for ultra-smooth 60 FPS HD video
+              videoBitsPerSecond: 2500000 // 2.5 Mbps target for ultra-smooth 60 FPS HD video
             };
             if (t) options.mimeType = t;
             recorder = new MediaRecorder(recordStream, options);
