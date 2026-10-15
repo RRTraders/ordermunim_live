@@ -335,6 +335,83 @@ public class MeeshoDirectPlugin extends Plugin {
                 "  if (window._om_resolving_identity) return;" +
                 "  window._om_resolving_identity = true;" +
                 "  var attempts = 0;" +
+                "  function findNameInObj(obj) {" +
+                "    if (!obj || typeof obj !== 'object') return '';" +
+                "    var keys = ['store_name', 'storeName', 'supplier_name', 'supplierName', 'name', 'legal_name', 'company_name', 'display_name', 'registered_name', '$name'];" +
+                "    for (var i = 0; i < keys.length; i++) {" +
+                "      var v = obj[keys[i]];" +
+                "      if (v && typeof v === 'string') {" +
+                "        var t = v.trim();" +
+                "        if (t.length > 1 && !t.includes('@') && !/^(Direct|undefined|null|Home|Orders|Returns|Pricing|Catalog|Payments|Support|Settings|supplier-web)$/i.test(t)) {" +
+                "          return t;" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "    for (var k in obj) {" +
+                "      if (obj[k] && typeof obj[k] === 'object' && k !== 'window' && k !== 'document') {" +
+                "        var sub = findNameInObj(obj[k]);" +
+                "        if (sub) return sub;" +
+                "      }" +
+                "    }" +
+                "    return '';" +
+                "  }" +
+                "  function checkStorages() {" +
+                "    var storages = [window.localStorage, window.sessionStorage];" +
+                "    for (var s = 0; s < storages.length; s++) {" +
+                "      var st = storages[s];" +
+                "      if (!st) continue;" +
+                "      try {" +
+                "        for (var i = 0; i < st.length; i++) {" +
+                "          var k = st.key(i);" +
+                "          var v = st.getItem(k);" +
+                "          if (!v) continue;" +
+                "          if (/store.*name|supplier.*name/i.test(k) && v.length > 1 && !v.includes('{') && !v.includes('@')) {" +
+                "            return v.trim();" +
+                "          }" +
+                "          try {" +
+                "            var parsed = JSON.parse(v);" +
+                "            var res = findNameInObj(parsed);" +
+                "            if (res) return res;" +
+                "          } catch(e) {}" +
+                "        }" +
+                "      } catch(e) {}" +
+                "    }" +
+                "    return '';" +
+                "  }" +
+                "  function checkGlobals() {" +
+                "    var roots = [window.__SUPPLY_DATA__, window.__PRELOADED_STATE__, window.__INITIAL_STATE__, window.__NEXT_DATA__, window.supplierData];" +
+                "    for (var i = 0; i < roots.length; i++) {" +
+                "      if (roots[i]) {" +
+                "        var res = findNameInObj(roots[i]);" +
+                "        if (res) return res;" +
+                "      }" +
+                "    }" +
+                "    return '';" +
+                "  }" +
+                "  function checkDom() {" +
+                "    try {" +
+                "      var allText = document.body ? document.body.innerText || '' : '';" +
+                "      var m = allText.match(/Welcome\\s+(?:back,?\\s*)?([^\\n!.,]+)/i);" +
+                "      if (m && m[1]) {" +
+                "        var candidate = m[1].trim();" +
+                "        if (candidate.length > 1 && candidate.length < 50 && !candidate.includes('@') && !/^(to\\s+meesho|supplier|seller)$/i.test(candidate)) {" +
+                "          return candidate;" +
+                "        }" +
+                "      }" +
+                "      var profileNodes = Array.from(document.querySelectorAll('header *, nav *, aside *, [class*=\"profile\" i] *, [class*=\"account\" i] *, [class*=\"store\" i] *, [class*=\"supplier\" i] *, [class*=\"user\" i] *'));" +
+                "      for (var p = 0; p < profileNodes.length; p++) {" +
+                "        var el = profileNodes[p];" +
+                "        if (el.children.length === 0 && el.innerText) {" +
+                "          var t = el.innerText.trim();" +
+                "          if (t.length > 1 && t.length < 40 && !t.includes('\\n') && !t.includes('@') &&" +
+                "              !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business|Upload|Download|Search|Filter|All|View|Log out|Sign out|Profile)$/i.test(t)) {" +
+                "            return t;" +
+                "          }" +
+                "        }" +
+                "      }" +
+                "    } catch(e) {}" +
+                "    return '';" +
+                "  }" +
                 "  var resolveTimer = setInterval(async function() {" +
                 "    attempts++;" +
                 "    try {" +
@@ -344,55 +421,10 @@ public class MeeshoDirectPlugin extends Plugin {
                 "      var href = window.location.href || '';" +
                 "      var m = href.match(/\\/panel\\/v3\\/new\\/(?:growth|fulfillment|dashboard|orders|returns)\\/([a-zA-Z0-9]{4,8})/);" +
                 "      if (m && m[1]) identifier = m[1].trim();" +
-                "      if (window.__SUPPLY_DATA__ && window.__SUPPLY_DATA__.supplier) {" +
-                "        var s = window.__SUPPLY_DATA__.supplier;" +
-                "        var sn = s.store_name || s.name || s.display_name || s.legal_name || s.company_name || '';" +
-                "        if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
-                "        if (!identifier && s.identifier) identifier = s.identifier;" +
-                "        if (!supplierId && s.id) supplierId = s.id;" +
-                "      }" +
-                "      if (!storeName || !identifier) {" +
-                "        try {" +
-                "          for (var i = 0; i < localStorage.length; i++) {" +
-                "            var k = localStorage.key(i);" +
-                "            var val = localStorage.getItem(k);" +
-                "            if (val && (val.indexOf('$name') !== -1 || val.indexOf('Supplier_tag') !== -1 || val.indexOf('Supplier_id') !== -1)) {" +
-                "              var parsed = JSON.parse(val);" +
-                "              if (!storeName) {" +
-                "                var possible = parsed.$name || (parsed.payload && parsed.payload.$set && parsed.payload.$set.$name);" +
-                "                if (possible && typeof possible === 'string' && possible.trim().length > 1 && !possible.includes('@')) {" +
-                "                  storeName = possible.trim();" +
-                "                }" +
-                "              }" +
-                "              if (!identifier && parsed.Supplier_tag && parsed.Supplier_tag !== 'Direct') {" +
-                "                identifier = parsed.Supplier_tag;" +
-                "              }" +
-                "              if (!supplierId && parsed.Supplier_id) {" +
-                "                supplierId = parsed.Supplier_id;" +
-                "              }" +
-                "            }" +
-                "          }" +
-                "        } catch(e) {}" +
-                "      }" +
-                "      if (!storeName || !identifier) {" +
-                "        try {" +
-                "          var res = await window.fetch('/api/container/supplier/getSupplierDetails', {" +
-                "            method: 'POST'," +
-                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
-                "            body: JSON.stringify(supplierId ? { supplier_id: supplierId } : {})" +
-                "          });" +
-                "          if (res.ok) {" +
-                "            var data = await res.json();" +
-                "            if (data && data.supplier) {" +
-                "              var sn = data.supplier.store_name || data.supplier.name || data.supplier.legal_name || data.supplier.company_name || '';" +
-                "              if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
-                "              if (!identifier && data.supplier.identifier) identifier = data.supplier.identifier;" +
-                "              if (!supplierId && data.supplier.id) supplierId = data.supplier.id;" +
-                "            }" +
-                "          }" +
-                "        } catch(e) {}" +
-                "      }" +
-                "      if (!storeName || !identifier) {" +
+                "      if (!storeName) storeName = checkGlobals();" +
+                "      if (!storeName) storeName = checkStorages();" +
+                "      if (!storeName) storeName = checkDom();" +
+                "      if (!storeName || !supplierId) {" +
                 "        try {" +
                 "          var regRes = await window.fetch('/api/container/supplier/fetch-registration-status', {" +
                 "            method: 'POST'," +
@@ -401,12 +433,9 @@ public class MeeshoDirectPlugin extends Plugin {
                 "          });" +
                 "          if (regRes.ok) {" +
                 "            var regData = await regRes.json();" +
+                "            if (!storeName) storeName = findNameInObj(regData);" +
                 "            var dt = regData && regData.decodedToken;" +
                 "            if (dt) {" +
-                "              if (!storeName) {" +
-                "                var sn = dt.store_name || dt.name || dt.display_name || dt.legal_name || '';" +
-                "                if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
-                "              }" +
                 "              if (!identifier && dt.supplier_identifiers && dt.supplier_identifiers.length > 0) {" +
                 "                identifier = dt.supplier_identifiers[0];" +
                 "              }" +
@@ -417,24 +446,23 @@ public class MeeshoDirectPlugin extends Plugin {
                 "          }" +
                 "        } catch(e) {}" +
                 "      }" +
-                "      if (!storeName) {" +
-                "        var sidebar = document.querySelector('aside, nav, [class*=\"sidebar\" i], [class*=\"Sidebar\" i]');" +
-                "        if (sidebar) {" +
-                "          var leaves = Array.from(sidebar.querySelectorAll('*')).filter(function(el) {" +
-                "            return el.children.length === 0 && el.innerText && el.innerText.trim().length > 1;" +
+                "      if (!storeName && attempts > 3) {" +
+                "        try {" +
+                "          var detRes = await window.fetch('/api/container/supplier/getSupplierDetails', {" +
+                "            method: 'POST'," +
+                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
+                "            body: JSON.stringify(supplierId ? { supplier_id: supplierId } : {})" +
                 "          });" +
-                "          for (var l = 0; l < leaves.length; l++) {" +
-                "            var t = leaves[l].innerText.trim();" +
-                "            if (t.length > 1 && t.length < 50 && !t.includes('\\n') &&" +
-                "                !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business)/i.test(t) &&" +
-                "                !t.includes('@')) {" +
-                "              storeName = t;" +
-                "              break;" +
-                "            }" +
+                "          if (detRes.ok) {" +
+                "            var detData = await detRes.json();" +
+                "            if (!storeName) storeName = findNameInObj(detData);" +
                 "          }" +
-                "        }" +
+                "        } catch(e) {}" +
                 "      }" +
-                "      if ((storeName && storeName.length > 1) || (identifier && identifier.length >= 4) || attempts >= 15) {" +
+                "      if (!storeName && identifier && attempts === 6 && !href.includes('fulfillment')) {" +
+                "        window.location.href = 'https://supplier.meesho.com/panel/v3/new/fulfillment/' + identifier + '/returns/overview';" +
+                "      }" +
+                "      if (storeName && storeName.length > 1 && identifier && identifier.length >= 4) {" +
                 "        clearInterval(resolveTimer);" +
                 "        if (window.OrderMunimBridge && window.OrderMunimBridge.onResolvedIdentity) {" +
                 "          window.OrderMunimBridge.onResolvedIdentity(JSON.stringify({" +
@@ -445,13 +473,25 @@ public class MeeshoDirectPlugin extends Plugin {
                 "        } else if (window.OrderMunimBridge) {" +
                 "          window.OrderMunimBridge.onAuthSuccess(storeName);" +
                 "        }" +
+                "        return;" +
                 "      }" +
-                "    } catch(e) {" +
-                "      if (attempts >= 15) {" +
+                "      if (attempts >= 25) {" +
                 "        clearInterval(resolveTimer);" +
-                "        if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthSuccess('');" +
+                "        if (storeName && storeName.length > 1) {" +
+                "          if (window.OrderMunimBridge && window.OrderMunimBridge.onResolvedIdentity) {" +
+                "            window.OrderMunimBridge.onResolvedIdentity(JSON.stringify({" +
+                "              storeName: storeName," +
+                "              identifier: identifier || ''," +
+                "              supplierId: supplierId || 0" +
+                "            }));" +
+                "          }" +
+                "        } else {" +
+                "          if (window.OrderMunimBridge && window.OrderMunimBridge.onAuthError) {" +
+                "            window.OrderMunimBridge.onAuthError('Could not retrieve authentic Meesho store name. Please verify your seller account on supplier.meesho.com.');" +
+                "          }" +
+                "        }" +
                 "      }" +
-                "    }" +
+                "    } catch(e) {}" +
                 "  }, 400);" +
                 "})();";
 
@@ -743,25 +783,20 @@ public class MeeshoDirectPlugin extends Plugin {
                     accountHolderName = regStoreName.trim();
                 }
 
-                // If identifier is verified (valid active account), provide clean fallback if name wasn't populated
-                if (!identifier.isEmpty() && !identifier.contains("@") && !identifier.equalsIgnoreCase(emailPrefix)) {
-                    if (accountHolderName.isEmpty() || accountHolderName.equalsIgnoreCase(emailPrefix) || accountHolderName.equalsIgnoreCase(email)) {
-                        accountHolderName = "Meesho Store " + identifier.toUpperCase();
-                    }
-                }
-
-                // Strictly reject if no authentic verified store identifier
+                // Strictly reject if no authentic verified store name or identifier
                 if (identifier.isEmpty() || 
                     identifier.contains("@") || 
                     identifier.equalsIgnoreCase(emailPrefix) ||
-                    accountHolderName.isEmpty()) {
+                    accountHolderName.isEmpty() ||
+                    accountHolderName.equalsIgnoreCase(emailPrefix) ||
+                    accountHolderName.equalsIgnoreCase(email)) {
 
                     new Handler(Looper.getMainLooper()).post(() -> {
                         try { webView.destroy(); } catch (Exception ignored) {}
                     });
                     JSObject ret = new JSObject();
                     ret.put("success", false);
-                    ret.put("error", "Meesho store verification failed: authentic seller identity could not be verified. Please check your credentials and ensure your seller account is active on supplier.meesho.com.");
+                    ret.put("error", "Meesho store verification failed: authentic store name could not be verified from supplier.meesho.com. Please ensure your account is active.");
                     call.resolve(ret);
                     return;
                 }

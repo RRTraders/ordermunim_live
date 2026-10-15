@@ -58,7 +58,6 @@ import {
   Share2,
   Key,
   Crown,
-  Edit2,
   Mail,
   Lock,
   DollarSign,
@@ -139,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 48;
-const CURRENT_APP_VERSION_NAME = "5.8";
+const CURRENT_APP_VERSION_CODE = 49;
+const CURRENT_APP_VERSION_NAME = "5.9";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -2510,13 +2509,11 @@ export default function App() {
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
       const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || data.storeName.trim().toLowerCase() === cleanEmail.toLowerCase());
-      const finalStoreName = newStoreName.trim() || 
-        (data?.storeName && !isDataEmailFallback ? data.storeName : null) || 
-        (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName : null) ||
-        (data?.identifier ? `Meesho Store ${data.identifier.toUpperCase()}` : null);
+      const finalStoreName = (data?.storeName && !isDataEmailFallback ? data.storeName.trim() : null) || 
+        (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName.trim() : null);
       
       if (!finalStoreName || finalStoreName.toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || finalStoreName.toLowerCase() === cleanEmail.toLowerCase()) {
-        setModalError('Meesho store verification failed: authentic store name could not be verified. Please verify your seller account is active on supplier.meesho.com.');
+        setModalError('Meesho store verification failed: authentic store name could not be verified from supplier.meesho.com.');
         return;
       }
       const targetAccRef = doc(db, 'accounts', targetSyncKey);
@@ -2615,22 +2612,6 @@ export default function App() {
     setShowAddModal(true);
   };
 
-  // Edit / Rename Account Holder / Store Name directly
-  const handlePromptRenameStore = (acc) => {
-    const currentName = acc.storeName || '';
-    const newName = window.prompt('Enter Account Holder / Store Name:', currentName);
-    if (newName !== null && newName.trim() && newName.trim() !== currentName) {
-      const trimmed = newName.trim();
-      updateDoc(doc(db, 'accounts', acc.syncKey || acc.id), {
-        storeName: trimmed,
-        lastUpdated: new Date().toISOString()
-      }).then(() => {
-        showToast(`Store renamed to "${trimmed}"`, 'success');
-      }).catch(err => {
-        showToast(`Failed to update store name: ${err.message}`, 'error');
-      });
-    }
-  };
 
   // Delete an account with fancy confirmation dialog
   const handleDeleteAccount = (accId, storeName) => {
@@ -3337,20 +3318,9 @@ export default function App() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="font-bold text-base text-white truncate hover:text-sky-300 transition-colors">
+                                <span className="font-bold text-base text-white truncate">
                                   {acc.storeName}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePromptRenameStore(acc);
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-sky-300 hover:bg-white/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                                  title="Rename Account Holder / Store Name"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
                               </div>
                               {activeOtps.length > 0 ? (
                                 <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/30">
@@ -5189,20 +5159,9 @@ export default function App() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="font-bold text-base text-slate-900 truncate hover:text-[#083B82] transition-colors">
+                                  <span className="font-bold text-base text-slate-900 truncate">
                                     {acc.storeName}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePromptRenameStore(acc);
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-[#083B82] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
-                                    title="Rename Account Holder / Store Name"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
                                 </div>
                                 {activeOtps.length > 0 ? (
                                   <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
@@ -5919,19 +5878,6 @@ export default function App() {
                     placeholder="••••••••••••"
                     value={meeshoPass}
                     onChange={(e) => { setMeeshoPass(e.target.value); if (modalError) setModalError(''); }}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Account Holder / Store Name <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Kaanchan Export 1 (leave empty to auto-detect)"
-                    value={newStoreName}
-                    onChange={(e) => { setNewStoreName(e.target.value); if (modalError) setModalError(''); }}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors"
                   />
                 </div>
