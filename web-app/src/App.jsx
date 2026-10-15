@@ -138,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 49;
-const CURRENT_APP_VERSION_NAME = "5.9";
+const CURRENT_APP_VERSION_CODE = 50;
+const CURRENT_APP_VERSION_NAME = "6.0";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -1336,6 +1336,22 @@ export default function App() {
   useEffect(() => {
     if (!isNativeMobile()) return;
 
+    // Master Spec Polling Rules (IST timezone):
+    // 10:00 AM – 06:00 PM IST (Courier Hours): Checks Meesho every 5 minutes (300 seconds)
+    // 06:00 PM – 10:00 AM IST (Off-Hours): Checks Meesho every 60 minutes (3600 seconds)
+    const getPollIntervalMs = () => {
+      try {
+        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const hourIST = nowIST.getHours();
+        if (hourIST >= 10 && hourIST < 18) {
+          return 300 * 1000; // 5 minutes during courier hours (10 AM - 6 PM IST)
+        }
+        return 3600 * 1000; // 60 minutes during off-hours (6 PM - 10 AM IST)
+      } catch (e) {
+        return 300 * 1000;
+      }
+    };
+
     const pollAllNativeSessions = async (forceInstant = false) => {
       if (isPollingRef.current) {
         if (forceInstant) {
@@ -1520,10 +1536,11 @@ export default function App() {
             JSON.stringify(existingAcc.otpList || []) === newOtpListJson
           );
 
-          // Sync fresh timestamp to Firestore on every 120s poll (or immediately when user opens/resumes app!)
+          // Sync fresh timestamp to Firestore only on interval expiry (5m courier / 60m off-hours) or when OTP/data changes!
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
-          const isStaleTimestamp = forceInstant || !lastSyncedAt || timeSinceLastSyncMs >= 100 * 1000;
+          const pollInterval = getPollIntervalMs();
+          const isStaleTimestamp = forceInstant || !lastSyncedAt || timeSinceLastSyncMs >= (pollInterval - 10000);
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
@@ -1623,17 +1640,7 @@ export default function App() {
       pollAllNativeSessions(true);
     })();
 
-    // 2. Dynamic polling schedule:
-    // Courier time (08:00 AM to 09:00 PM): every 120 seconds (2 minutes)
-    // Non-courier time (09:00 PM to 08:00 AM): every 60 minutes (3600 seconds)
-    const getPollIntervalMs = () => {
-      const now = new Date();
-      const hour = now.getHours();
-      if (hour >= 8 && hour < 21) {
-        return 120 * 1000; // 120 seconds (2 minutes) during courier hours
-      }
-      return 60 * 60 * 1000; // 60 minutes (1 hour) during non-courier hours
-    };
+    // 2. Dynamic polling schedule (uses IST getPollIntervalMs defined above)
 
     let pollTimerId = null;
     const scheduleNextForegroundPoll = () => {

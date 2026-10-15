@@ -315,9 +315,13 @@ public class MeeshoDirectPlugin extends Plugin {
                     }
                 });
 
-                // Clear old cookies cleanly before loading login page
+                // Clear old cookies, WebStorage and cache cleanly before loading login page
                 cookieManager.removeAllCookies(cleared -> {
                     cookieManager.flush();
+                    try {
+                        android.webkit.WebStorage.getInstance().deleteAllData();
+                        webView.clearCache(true);
+                    } catch (Exception ignored) {}
                     webView.loadUrl(SecurityShield.getLoginRefererUrl());
                 });
 
@@ -337,44 +341,25 @@ public class MeeshoDirectPlugin extends Plugin {
                 "  var attempts = 0;" +
                 "  function findNameInObj(obj) {" +
                 "    if (!obj || typeof obj !== 'object') return '';" +
-                "    var keys = ['store_name', 'storeName', 'supplier_name', 'supplierName', 'name', 'legal_name', 'company_name', 'display_name', 'registered_name', '$name'];" +
+                "    var keys = ['account_holder_name', 'store_name', 'storeName', 'supplier_name', 'supplierName', 'registered_name', 'legal_name', 'company_name', 'display_name', 'delhivery_name', 'poc_name', 'name', '$name'];" +
                 "    for (var i = 0; i < keys.length; i++) {" +
                 "      var v = obj[keys[i]];" +
                 "      if (v && typeof v === 'string') {" +
                 "        var t = v.trim();" +
-                "        if (t.length > 1 && !t.includes('@') && !/^(Direct|undefined|null|Home|Orders|Returns|Pricing|Catalog|Payments|Support|Settings|supplier-web)$/i.test(t)) {" +
+                "        if (/^MEESHO\\s+(.+)\\s+[a-zA-Z0-9]{4,8}$/i.test(t)) {" +
+                "          var stripped = t.replace(/^MEESHO\\s+/i, '').replace(/\\s+[a-zA-Z0-9]{4,8}$/i, '').trim();" +
+                "          if (stripped.length > 1) return stripped;" +
+                "        }" +
+                "        if (t.length > 1 && !t.includes('@') && !/^(Direct|undefined|null|Home|Orders|Returns|Pricing|Catalog|Payments|Support|Settings|supplier-web|d-web|m-web)$/i.test(t)) {" +
                 "          return t;" +
                 "        }" +
                 "      }" +
                 "    }" +
                 "    for (var k in obj) {" +
-                "      if (obj[k] && typeof obj[k] === 'object' && k !== 'window' && k !== 'document') {" +
+                "      if (obj[k] && typeof obj[k] === 'object' && k !== 'window' && k !== 'document' && k !== 'localStorage' && k !== 'sessionStorage') {" +
                 "        var sub = findNameInObj(obj[k]);" +
                 "        if (sub) return sub;" +
                 "      }" +
-                "    }" +
-                "    return '';" +
-                "  }" +
-                "  function checkStorages() {" +
-                "    var storages = [window.localStorage, window.sessionStorage];" +
-                "    for (var s = 0; s < storages.length; s++) {" +
-                "      var st = storages[s];" +
-                "      if (!st) continue;" +
-                "      try {" +
-                "        for (var i = 0; i < st.length; i++) {" +
-                "          var k = st.key(i);" +
-                "          var v = st.getItem(k);" +
-                "          if (!v) continue;" +
-                "          if (/store.*name|supplier.*name/i.test(k) && v.length > 1 && !v.includes('{') && !v.includes('@')) {" +
-                "            return v.trim();" +
-                "          }" +
-                "          try {" +
-                "            var parsed = JSON.parse(v);" +
-                "            var res = findNameInObj(parsed);" +
-                "            if (res) return res;" +
-                "          } catch(e) {}" +
-                "        }" +
-                "      } catch(e) {}" +
                 "    }" +
                 "    return '';" +
                 "  }" +
@@ -421,19 +406,15 @@ public class MeeshoDirectPlugin extends Plugin {
                 "      var href = window.location.href || '';" +
                 "      var m = href.match(/\\/panel\\/v3\\/new\\/(?:growth|fulfillment|dashboard|orders|returns)\\/([a-zA-Z0-9]{4,8})/);" +
                 "      if (m && m[1]) identifier = m[1].trim();" +
-                "      if (!storeName) storeName = checkGlobals();" +
-                "      if (!storeName) storeName = checkStorages();" +
-                "      if (!storeName) storeName = checkDom();" +
-                "      if (!storeName || !supplierId) {" +
+                "      if (!identifier || !supplierId) {" +
                 "        try {" +
                 "          var regRes = await window.fetch('/api/container/supplier/fetch-registration-status', {" +
                 "            method: 'POST'," +
-                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
+                "            headers: { 'Content-Type': 'application/json', 'client-type': 'd-web' }," +
                 "            body: JSON.stringify({})" +
                 "          });" +
                 "          if (regRes.ok) {" +
                 "            var regData = await regRes.json();" +
-                "            if (!storeName) storeName = findNameInObj(regData);" +
                 "            var dt = regData && regData.decodedToken;" +
                 "            if (dt) {" +
                 "              if (!identifier && dt.supplier_identifiers && dt.supplier_identifiers.length > 0) {" +
@@ -442,16 +423,18 @@ public class MeeshoDirectPlugin extends Plugin {
                 "              if (!supplierId && dt.supplier_identifier_to_id_mapping && identifier) {" +
                 "                supplierId = dt.supplier_identifier_to_id_mapping[identifier] || 0;" +
                 "              }" +
+                "              if (!supplierId && dt.user_id) supplierId = dt.user_id;" +
                 "            }" +
+                "            if (!storeName) storeName = findNameInObj(regData);" +
                 "          }" +
                 "        } catch(e) {}" +
                 "      }" +
-                "      if (!storeName && attempts > 3) {" +
+                "      if (!storeName && identifier) {" +
                 "        try {" +
                 "          var detRes = await window.fetch('/api/container/supplier/getSupplierDetails', {" +
                 "            method: 'POST'," +
-                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
-                "            body: JSON.stringify(supplierId ? { supplier_id: supplierId } : {})" +
+                "            headers: { 'Content-Type': 'application/json', 'client-type': 'd-web', 'identifier': identifier }," +
+                "            body: JSON.stringify(supplierId ? { supplier_id: supplierId, identifier: identifier } : { identifier: identifier })" +
                 "          });" +
                 "          if (detRes.ok) {" +
                 "            var detData = await detRes.json();" +
@@ -459,6 +442,8 @@ public class MeeshoDirectPlugin extends Plugin {
                 "          }" +
                 "        } catch(e) {}" +
                 "      }" +
+                "      if (!storeName) storeName = checkGlobals();" +
+                "      if (!storeName) storeName = checkDom();" +
                 "      if (!storeName && identifier && attempts === 6 && !href.includes('fulfillment')) {" +
                 "        window.location.href = 'https://supplier.meesho.com/panel/v3/new/fulfillment/' + identifier + '/returns/overview';" +
                 "      }" +
