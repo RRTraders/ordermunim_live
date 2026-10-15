@@ -2512,7 +2512,8 @@ export default function App() {
       const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || data.storeName.trim().toLowerCase() === cleanEmail.toLowerCase());
       const finalStoreName = newStoreName.trim() || 
         (data?.storeName && !isDataEmailFallback ? data.storeName : null) || 
-        (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName : null);
+        (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName : null) ||
+        (data?.identifier ? `Meesho Store ${data.identifier.toUpperCase()}` : null);
       
       if (!finalStoreName || finalStoreName.toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || finalStoreName.toLowerCase() === cleanEmail.toLowerCase()) {
         setModalError('Meesho store verification failed: authentic store name could not be verified. Please verify your seller account is active on supplier.meesho.com.');

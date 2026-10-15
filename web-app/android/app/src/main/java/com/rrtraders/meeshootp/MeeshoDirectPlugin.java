@@ -115,7 +115,39 @@ public class MeeshoDirectPlugin extends Plugin {
                 String rawCookies = cm.getCookie("https://supplier.meesho.com");
                 String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
                 String urlIdent = MeeshoDirectPlugin.extractIdentifierFromUrl(currentUrl);
-                plugin.finishSuccessfulLogin(rawCookies != null ? rawCookies : "", urlIdent, email, password, storeNameFromDom, call, webView);
+                plugin.finishSuccessfulLogin(rawCookies != null ? rawCookies : "", urlIdent, email, password, storeNameFromDom, 0, call, webView);
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void onResolvedIdentity(String identityJsonStr) {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (isCompleted[0]) return;
+                isCompleted[0] = true;
+                timeoutHandler.removeCallbacks(timeoutRunnable);
+                CookieManager cm = CookieManager.getInstance();
+                cm.flush();
+                String rawCookies = cm.getCookie("https://supplier.meesho.com");
+                String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
+                String urlIdent = MeeshoDirectPlugin.extractIdentifierFromUrl(currentUrl);
+
+                String storeName = "";
+                String resolvedIdent = "";
+                long resolvedSupId = 0;
+                try {
+                    if (identityJsonStr != null && !identityJsonStr.isEmpty()) {
+                        JSONObject idObj = new JSONObject(identityJsonStr);
+                        storeName = idObj.optString("storeName", "").trim();
+                        resolvedIdent = idObj.optString("identifier", "").trim();
+                        resolvedSupId = idObj.optLong("supplierId", 0);
+                    }
+                } catch (Exception ignored) {}
+
+                if (!resolvedIdent.isEmpty() && (urlIdent.isEmpty() || urlIdent.length() > 8)) {
+                    urlIdent = resolvedIdent;
+                }
+
+                plugin.finishSuccessfulLogin(rawCookies != null ? rawCookies : "", urlIdent, email, password, storeName, resolvedSupId, call, webView);
             });
         }
     }
@@ -172,9 +204,13 @@ public class MeeshoDirectPlugin extends Plugin {
                         super.onPageFinished(view, url);
                         if (isCompleted[0]) return;
 
-                        if (url != null && !url.contains("login") && (url.contains("fulfillment") || url.contains("growth") || url.contains("dashboard") || url.contains("home") || url.contains("panel/v3/new/root"))) {
-                            extractDomStoreNameAndComplete(view, bridge);
-                            return;
+                        if (url != null && !url.contains("login")) {
+                            if (url.contains("fulfillment") || url.contains("growth") || url.contains("dashboard") || extractIdentifierFromUrl(url).length() >= 4) {
+                                startInPageIdentityResolution(view, bridge);
+                                return;
+                            } else if (url.contains("panel/v3/new/root") || url.contains("home")) {
+                                startInPageIdentityResolution(view, bridge);
+                            }
                         }
 
                         if (url != null && url.contains("login") && !started) {
@@ -294,61 +330,132 @@ public class MeeshoDirectPlugin extends Plugin {
         });
     }
 
-    private void extractDomStoreNameAndComplete(WebView view, AndroidLoginBridge bridge) {
-        String extractJs = "(function() {" +
-                "  try {" +
-                "    if (window.__SUPPLY_DATA__ && window.__SUPPLY_DATA__.supplier) {" +
-                "      var s = window.__SUPPLY_DATA__.supplier;" +
-                "      var n = s.store_name || s.name || s.display_name || s.legal_name || s.company_name || '';" +
-                "      if (n && n.trim().length > 1 && !n.includes('@')) return n.trim();" +
-                "    }" +
-                "  } catch(e) {}" +
-                "  try {" +
-                "    for (var i = 0; i < localStorage.length; i++) {" +
-                "      var key = localStorage.key(i);" +
-                "      var val = localStorage.getItem(key);" +
-                "      if (val && val.indexOf('$name') !== -1) {" +
-                "        var parsed = JSON.parse(val);" +
-                "        var possible = parsed.$name || (parsed.payload && parsed.payload.$set && parsed.payload.$set.$name);" +
-                "        if (possible && typeof possible === 'string' && possible.trim().length > 1 && !possible.includes('@')) {" +
-                "          return possible.trim();" +
+    private void startInPageIdentityResolution(WebView view, AndroidLoginBridge bridge) {
+        String resolveJs = "(function() {" +
+                "  if (window._om_resolving_identity) return;" +
+                "  window._om_resolving_identity = true;" +
+                "  var attempts = 0;" +
+                "  var resolveTimer = setInterval(async function() {" +
+                "    attempts++;" +
+                "    try {" +
+                "      var storeName = '';" +
+                "      var identifier = '';" +
+                "      var supplierId = 0;" +
+                "      var href = window.location.href || '';" +
+                "      var m = href.match(/\\/panel\\/v3\\/new\\/(?:growth|fulfillment|dashboard|orders|returns)\\/([a-zA-Z0-9]{4,8})/);" +
+                "      if (m && m[1]) identifier = m[1].trim();" +
+                "      if (window.__SUPPLY_DATA__ && window.__SUPPLY_DATA__.supplier) {" +
+                "        var s = window.__SUPPLY_DATA__.supplier;" +
+                "        var sn = s.store_name || s.name || s.display_name || s.legal_name || s.company_name || '';" +
+                "        if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
+                "        if (!identifier && s.identifier) identifier = s.identifier;" +
+                "        if (!supplierId && s.id) supplierId = s.id;" +
+                "      }" +
+                "      if (!storeName || !identifier) {" +
+                "        try {" +
+                "          for (var i = 0; i < localStorage.length; i++) {" +
+                "            var k = localStorage.key(i);" +
+                "            var val = localStorage.getItem(k);" +
+                "            if (val && (val.indexOf('$name') !== -1 || val.indexOf('Supplier_tag') !== -1 || val.indexOf('Supplier_id') !== -1)) {" +
+                "              var parsed = JSON.parse(val);" +
+                "              if (!storeName) {" +
+                "                var possible = parsed.$name || (parsed.payload && parsed.payload.$set && parsed.payload.$set.$name);" +
+                "                if (possible && typeof possible === 'string' && possible.trim().length > 1 && !possible.includes('@')) {" +
+                "                  storeName = possible.trim();" +
+                "                }" +
+                "              }" +
+                "              if (!identifier && parsed.Supplier_tag && parsed.Supplier_tag !== 'Direct') {" +
+                "                identifier = parsed.Supplier_tag;" +
+                "              }" +
+                "              if (!supplierId && parsed.Supplier_id) {" +
+                "                supplierId = parsed.Supplier_id;" +
+                "              }" +
+                "            }" +
+                "          }" +
+                "        } catch(e) {}" +
+                "      }" +
+                "      if (!storeName || !identifier) {" +
+                "        try {" +
+                "          var res = await window.fetch('/api/container/supplier/getSupplierDetails', {" +
+                "            method: 'POST'," +
+                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
+                "            body: JSON.stringify(supplierId ? { supplier_id: supplierId } : {})" +
+                "          });" +
+                "          if (res.ok) {" +
+                "            var data = await res.json();" +
+                "            if (data && data.supplier) {" +
+                "              var sn = data.supplier.store_name || data.supplier.name || data.supplier.legal_name || data.supplier.company_name || '';" +
+                "              if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
+                "              if (!identifier && data.supplier.identifier) identifier = data.supplier.identifier;" +
+                "              if (!supplierId && data.supplier.id) supplierId = data.supplier.id;" +
+                "            }" +
+                "          }" +
+                "        } catch(e) {}" +
+                "      }" +
+                "      if (!storeName || !identifier) {" +
+                "        try {" +
+                "          var regRes = await window.fetch('/api/container/supplier/fetch-registration-status', {" +
+                "            method: 'POST'," +
+                "            headers: { 'Content-Type': 'application/json', 'client-type': 'supplier-web', 'client-version': 'v1' }," +
+                "            body: JSON.stringify({})" +
+                "          });" +
+                "          if (regRes.ok) {" +
+                "            var regData = await regRes.json();" +
+                "            var dt = regData && regData.decodedToken;" +
+                "            if (dt) {" +
+                "              if (!storeName) {" +
+                "                var sn = dt.store_name || dt.name || dt.display_name || dt.legal_name || '';" +
+                "                if (sn && sn.trim().length > 1 && !sn.includes('@')) storeName = sn.trim();" +
+                "              }" +
+                "              if (!identifier && dt.supplier_identifiers && dt.supplier_identifiers.length > 0) {" +
+                "                identifier = dt.supplier_identifiers[0];" +
+                "              }" +
+                "              if (!supplierId && dt.supplier_identifier_to_id_mapping && identifier) {" +
+                "                supplierId = dt.supplier_identifier_to_id_mapping[identifier] || 0;" +
+                "              }" +
+                "            }" +
+                "          }" +
+                "        } catch(e) {}" +
+                "      }" +
+                "      if (!storeName) {" +
+                "        var sidebar = document.querySelector('aside, nav, [class*=\"sidebar\" i], [class*=\"Sidebar\" i]');" +
+                "        if (sidebar) {" +
+                "          var leaves = Array.from(sidebar.querySelectorAll('*')).filter(function(el) {" +
+                "            return el.children.length === 0 && el.innerText && el.innerText.trim().length > 1;" +
+                "          });" +
+                "          for (var l = 0; l < leaves.length; l++) {" +
+                "            var t = leaves[l].innerText.trim();" +
+                "            if (t.length > 1 && t.length < 50 && !t.includes('\\n') &&" +
+                "                !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business)/i.test(t) &&" +
+                "                !t.includes('@')) {" +
+                "              storeName = t;" +
+                "              break;" +
+                "            }" +
+                "          }" +
                 "        }" +
                 "      }" +
-                "    }" +
-                "  } catch(e) {}" +
-                "  try {" +
-                "    var sidebar = document.querySelector('aside, nav, [class*=\"sidebar\" i], [class*=\"Sidebar\" i]');" +
-                "    if (sidebar) {" +
-                "      var leaves = Array.from(sidebar.querySelectorAll('*')).filter(function(el) {" +
-                "        return el.children.length === 0 && el.innerText && el.innerText.trim().length > 1;" +
-                "      });" +
-                "      for (var l = 0; l < leaves.length; l++) {" +
-                "        var t = leaves[l].innerText.trim();" +
-                "        if (t.length > 1 && t.length < 50 && !t.includes('\\n') &&" +
-                "            !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business)/i.test(t) &&" +
-                "            !t.includes('@')) {" +
-                "          return t;" +
+                "      if ((storeName && storeName.length > 1) || (identifier && identifier.length >= 4) || attempts >= 15) {" +
+                "        clearInterval(resolveTimer);" +
+                "        if (window.OrderMunimBridge && window.OrderMunimBridge.onResolvedIdentity) {" +
+                "          window.OrderMunimBridge.onResolvedIdentity(JSON.stringify({" +
+                "            storeName: storeName," +
+                "            identifier: identifier," +
+                "            supplierId: supplierId || 0" +
+                "          }));" +
+                "        } else if (window.OrderMunimBridge) {" +
+                "          window.OrderMunimBridge.onAuthSuccess(storeName);" +
                 "        }" +
                 "      }" +
-                "    }" +
-                "  } catch(e) {}" +
-                "  try {" +
-                "    var headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, span, p'));" +
-                "    for (var h = 0; h < headings.length; h++) {" +
-                "      var hText = headings[h].innerText || '';" +
-                "      if (/Welcome\\s+back,?\\s*([^\\n!.,]+)/i.test(hText)) {" +
-                "        var m = hText.match(/Welcome\\s+back,?\\s*([^\\n!.,]+)/i);" +
-                "        if (m && m[1].trim().length > 1 && !m[1].includes('@')) return m[1].trim();" +
+                "    } catch(e) {" +
+                "      if (attempts >= 15) {" +
+                "        clearInterval(resolveTimer);" +
+                "        if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthSuccess('');" +
                 "      }" +
                 "    }" +
-                "  } catch(e) {}" +
-                "  return '';" +
+                "  }, 400);" +
                 "})();";
 
-        view.evaluateJavascript(extractJs, val -> {
-            String domStore = (val != null && !val.equals("null") && !val.equals("\"\"")) ? val.replace("\"", "").trim() : "";
-            bridge.onAuthSuccess(domStore);
-        });
+        view.evaluateJavascript(resolveJs, null);
     }
 
     private void pollForCompletion(WebView webView, Handler timeoutHandler, Runnable timeoutRunnable,
@@ -368,11 +475,11 @@ public class MeeshoDirectPlugin extends Plugin {
 
                 String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
                 boolean isStillOnLogin = currentUrl.contains("/login");
-                boolean hasNavigatedAway = !isStillOnLogin && (currentUrl.contains("fulfillment") || currentUrl.contains("growth") || currentUrl.contains("dashboard") || currentUrl.contains("home") || currentUrl.contains("panel/v3/new/root"));
-                boolean hasAuthCookies = rawCookies.contains("connect.sid=") && rawCookies.contains("s_id=");
+                boolean hasNavigatedAway = !isStillOnLogin && (currentUrl.contains("fulfillment") || currentUrl.contains("growth") || currentUrl.contains("dashboard") || extractIdentifierFromUrl(currentUrl).length() >= 4);
+                boolean hasAuthCookies = rawCookies.contains("connect.sid=") && (rawCookies.contains("current_az_identifier=") || (rawCookies.contains("s_id=") && rawCookies.contains("mixpanel=")));
 
-                if (hasNavigatedAway || (hasAuthCookies && !isStillOnLogin)) {
-                    extractDomStoreNameAndComplete(webView, bridge);
+                if (hasNavigatedAway || (hasAuthCookies && !isStillOnLogin) || (currentUrl.contains("panel/v3/new/root") && attempts > 4)) {
+                    startInPageIdentityResolution(webView, bridge);
                     return;
                 }
 
@@ -508,13 +615,13 @@ public class MeeshoDirectPlugin extends Plugin {
         long supplierId = extractSupplierIdFromCookies(cookies, currentSupId);
         String storeName = extractStoreNameFromCookies(cookies);
 
-        if (cookies != null && !cookies.isEmpty()) {
+        if ((identifier.isEmpty() || supplierId <= 0 || storeName.isEmpty()) && cookies != null && !cookies.isEmpty()) {
             try {
                 URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
                 HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
                 regConn.setRequestMethod("POST");
-                regConn.setConnectTimeout(8000);
-                regConn.setReadTimeout(8000);
+                regConn.setConnectTimeout(4000);
+                regConn.setReadTimeout(4000);
                 regConn.setDoOutput(true);
                 regConn.setRequestProperty("Content-Type", "application/json");
                 regConn.setRequestProperty("Accept", "application/json, text/plain, */*");
@@ -567,58 +674,60 @@ public class MeeshoDirectPlugin extends Plugin {
         return res;
     }
 
-    public void finishSuccessfulLogin(String cookies, String urlIdent, String email, String password, String storeNameFromDom, PluginCall call, WebView webView) {
+    public void finishSuccessfulLogin(String cookies, String urlIdent, String email, String password, String storeNameFromDom, long resolvedSupId, PluginCall call, WebView webView) {
         getBridge().execute(() -> {
             try {
-                JSONObject resolved = resolveSupplierIdentityStatic(cookies, urlIdent, 0);
-                String identifier = resolved.optString("identifier", "");
-                long supplierId = resolved.optLong("supplierId", 0);
+                JSONObject resolved = resolveSupplierIdentityStatic(cookies, urlIdent, resolvedSupId);
+                String identifier = resolved.optString("identifier", urlIdent);
+                long supplierId = resolved.optLong("supplierId", resolvedSupId);
 
-                // 2. Fetch Supplier Details to get real Account Holder Name
+                // 2. Fetch Supplier Details to get real Account Holder Name ONLY if storeNameFromDom is empty
                 String apiSupplierStoreName = "";
-                try {
-                    URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
-                    HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
-                    detConn.setRequestMethod("POST");
-                    detConn.setConnectTimeout(8000);
-                    detConn.setReadTimeout(8000);
-                    detConn.setDoOutput(true);
-                    detConn.setRequestProperty("Content-Type", "application/json");
-                    detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
-                    detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
-                    detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                    if (!identifier.isEmpty() && !identifier.contains("@")) {
-                        detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
-                    }
-                    detConn.setRequestProperty("Cookie", cookies);
-                    detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                    if (!identifier.isEmpty()) {
-                        detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
-                    }
-                    detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
-
-                    JSONObject detBody = new JSONObject();
-                    if (supplierId > 0) detBody.put("supplier_id", supplierId);
-                    if (!identifier.isEmpty() && !identifier.contains("@")) {
-                        detBody.put("identifier", identifier);
-                    }
-                    try (OutputStream os = detConn.getOutputStream()) {
-                        os.write(detBody.toString().getBytes(StandardCharsets.UTF_8));
-                    }
-
-                    if (detConn.getResponseCode() == 200) {
-                        String resp = readStream(detConn.getInputStream());
-                        JSONObject respJson = new JSONObject(resp.isEmpty() ? "{}" : resp);
-                        JSONObject supObj = respJson.optJSONObject("supplier");
-                        if (supObj != null) {
-                            String n = supObj.optString("store_name", "");
-                            if (n.trim().isEmpty()) n = supObj.optString("name", "");
-                            if (n.trim().isEmpty()) n = supObj.optString("legal_name", "");
-                            if (n.trim().isEmpty()) n = supObj.optString("company_name", "");
-                            if (!n.trim().isEmpty()) apiSupplierStoreName = n.trim();
+                if ((storeNameFromDom == null || storeNameFromDom.trim().isEmpty()) && (!identifier.isEmpty() || supplierId > 0)) {
+                    try {
+                        URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
+                        HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
+                        detConn.setRequestMethod("POST");
+                        detConn.setConnectTimeout(5000);
+                        detConn.setReadTimeout(5000);
+                        detConn.setDoOutput(true);
+                        detConn.setRequestProperty("Content-Type", "application/json");
+                        detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                        detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
+                        detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
+                        if (!identifier.isEmpty() && !identifier.contains("@")) {
+                            detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
                         }
-                    }
-                } catch (Exception ignored) {}
+                        detConn.setRequestProperty("Cookie", cookies);
+                        detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
+                        if (!identifier.isEmpty()) {
+                            detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                        }
+                        detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
+
+                        JSONObject detBody = new JSONObject();
+                        if (supplierId > 0) detBody.put("supplier_id", supplierId);
+                        if (!identifier.isEmpty() && !identifier.contains("@")) {
+                            detBody.put("identifier", identifier);
+                        }
+                        try (OutputStream os = detConn.getOutputStream()) {
+                            os.write(detBody.toString().getBytes(StandardCharsets.UTF_8));
+                        }
+
+                        if (detConn.getResponseCode() == 200) {
+                            String resp = readStream(detConn.getInputStream());
+                            JSONObject respJson = new JSONObject(resp.isEmpty() ? "{}" : resp);
+                            JSONObject supObj = respJson.optJSONObject("supplier");
+                            if (supObj != null) {
+                                String n = supObj.optString("store_name", "");
+                                if (n.trim().isEmpty()) n = supObj.optString("name", "");
+                                if (n.trim().isEmpty()) n = supObj.optString("legal_name", "");
+                                if (n.trim().isEmpty()) n = supObj.optString("company_name", "");
+                                if (!n.trim().isEmpty()) apiSupplierStoreName = n.trim();
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
 
                 String emailPrefix = email != null && email.contains("@") ? email.split("@")[0].trim().toLowerCase() : "";
                 String accountHolderName = "";
@@ -634,20 +743,25 @@ public class MeeshoDirectPlugin extends Plugin {
                     accountHolderName = regStoreName.trim();
                 }
 
-                // Master Spec Feature 2: Strictly reject if no authentic verified store name or identifier
-                if (accountHolderName.isEmpty() || 
-                    accountHolderName.equalsIgnoreCase(emailPrefix) || 
-                    accountHolderName.equalsIgnoreCase(email) || 
-                    identifier.isEmpty() || 
+                // If identifier is verified (valid active account), provide clean fallback if name wasn't populated
+                if (!identifier.isEmpty() && !identifier.contains("@") && !identifier.equalsIgnoreCase(emailPrefix)) {
+                    if (accountHolderName.isEmpty() || accountHolderName.equalsIgnoreCase(emailPrefix) || accountHolderName.equalsIgnoreCase(email)) {
+                        accountHolderName = "Meesho Store " + identifier.toUpperCase();
+                    }
+                }
+
+                // Strictly reject if no authentic verified store identifier
+                if (identifier.isEmpty() || 
                     identifier.contains("@") || 
-                    identifier.equalsIgnoreCase(emailPrefix)) {
+                    identifier.equalsIgnoreCase(emailPrefix) ||
+                    accountHolderName.isEmpty()) {
 
                     new Handler(Looper.getMainLooper()).post(() -> {
                         try { webView.destroy(); } catch (Exception ignored) {}
                     });
                     JSObject ret = new JSObject();
                     ret.put("success", false);
-                    ret.put("error", "Meesho store verification failed: authentic store name could not be verified. Please check your credentials and ensure your seller account is active on supplier.meesho.com.");
+                    ret.put("error", "Meesho store verification failed: authentic seller identity could not be verified. Please check your credentials and ensure your seller account is active on supplier.meesho.com.");
                     call.resolve(ret);
                     return;
                 }
