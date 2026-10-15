@@ -41,10 +41,12 @@ function extractReturnDetails() {
   const fulfillmentId = urlMatch ? urlMatch[1] : "";
 
   if (otp) {
+    const checkTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return {
       otp,
       courier,
-      dateTime: dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      dateTime: checkTime,
+      otpExpiry: dateTime || "",
       handoverCount,
       fulfillmentId
     };
@@ -94,7 +96,19 @@ async function syncToFirebase(details) {
 
       console.log(`[OrdersMunim] New Return OTP: ${details.otp} (${details.courier}). Updating Firebase for account: ${syncKey}...`);
 
-      const updateUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=lastUpdated&updateMask.fieldPaths=status&updateMask.fieldPaths=fulfillmentId`;
+      const updateUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/accounts/${encodeURIComponent(syncKey)}?updateMask.fieldPaths=currentOtp&updateMask.fieldPaths=courier&updateMask.fieldPaths=handoverCount&updateMask.fieldPaths=dateTime&updateMask.fieldPaths=lastUpdated&updateMask.fieldPaths=status&updateMask.fieldPaths=fulfillmentId&updateMask.fieldPaths=otpList`;
+
+      const otpObj = {
+        mapValue: {
+          fields: {
+            otp: { stringValue: details.otp },
+            courier: { stringValue: details.courier },
+            handoverCount: { integerValue: details.handoverCount.toString() },
+            dateTime: { stringValue: details.dateTime },
+            otpExpiry: { stringValue: details.otpExpiry || '' }
+          }
+        }
+      };
 
       const payload = {
         fields: {
@@ -104,7 +118,8 @@ async function syncToFirebase(details) {
           dateTime: { stringValue: details.dateTime },
           lastUpdated: { stringValue: new Date().toISOString() },
           status: { stringValue: "live" },
-          fulfillmentId: { stringValue: details.fulfillmentId }
+          fulfillmentId: { stringValue: details.fulfillmentId },
+          otpList: { arrayValue: { values: [otpObj] } }
         }
       };
 

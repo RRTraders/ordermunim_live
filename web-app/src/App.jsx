@@ -155,7 +155,6 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
       isStaleDay = true;
     }
   }
-  const hasEmptyOtpListWithStaleOtp = Array.isArray(acc.otpList) && acc.otpList.length === 0 && acc.currentOtp && acc.currentOtp !== '----';
   const hasFalseExpiredStatus = acc.status === 'session_expired' || acc.courier === 'Session Expired';
 
   if (hasFalseExpiredStatus && persistFirestore && acc.id) {
@@ -165,7 +164,8 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
     }).catch(() => {});
   }
 
-  if (isStaleDay || hasEmptyOtpListWithStaleOtp) {
+  // Only reset if it is actually from a previous day (midnight clean slate)
+  if (isStaleDay) {
     if (persistFirestore && acc.id && ((acc.currentOtp && acc.currentOtp !== '----') || (Array.isArray(acc.otpList) && acc.otpList.length > 0))) {
       updateDoc(doc(db, 'accounts', acc.id), {
         currentOtp: '----',
@@ -177,11 +177,44 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
     return { ...acc, rawFirestoreOtp, rawFirestoreCourier, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [], status: 'live' };
   }
 
-  if (hasFalseExpiredStatus) {
-    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, courier: acc.courier === 'Session Expired' ? 'No Return' : acc.courier, status: 'live' };
+  // Synthesize otpList if missing so cards always render active OTPs with courier & count
+  let effectiveOtpList = Array.isArray(acc.otpList) ? [...acc.otpList] : [];
+  if (effectiveOtpList.length === 0 && acc.currentOtp && acc.currentOtp !== '----') {
+    effectiveOtpList = [{
+      otp: acc.currentOtp,
+      courier: acc.courier || 'Courier',
+      handoverCount: acc.handoverCount || 0,
+      dateTime: acc.dateTime || ''
+    }];
   }
 
-  return { ...acc, rawFirestoreOtp, rawFirestoreCourier };
+  if (hasFalseExpiredStatus) {
+    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, courier: acc.courier === 'Session Expired' ? 'No Return' : acc.courier, status: 'live', otpList: effectiveOtpList };
+  }
+
+  return { ...acc, rawFirestoreOtp, rawFirestoreCourier, otpList: effectiveOtpList };
+};
+
+export const getCheckedDisplayTime = (acc, liveCheckedTimes) => {
+  if (!acc) return 'Just now';
+  const key = acc.syncKey || acc.id;
+  if (liveCheckedTimes && liveCheckedTimes[key]) return liveCheckedTimes[key];
+  if (acc.lastChecked) {
+    try {
+      const d = new Date(acc.lastChecked);
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch {}
+  }
+  if (acc.lastUpdated) {
+    try {
+      const d = new Date(acc.lastUpdated);
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch {}
+  }
+  if (acc.dateTime && /(?:am|pm)/i.test(acc.dateTime) && !/\d{1,2}\s+[a-zA-Z]{3,}/i.test(acc.dateTime)) {
+    return acc.dateTime;
+  }
+  return 'Just now';
 };
 
 const SUPER_ADMIN_EMAIL = "rrtradersofficials@gmail.com";
@@ -3418,7 +3451,7 @@ export default function App() {
 
                           {/* Footer Details */}
                           <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-                            <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
+                            <span>Checked: {getCheckedDisplayTime(acc, liveCheckedTimes)}</span>
                             <span className="flex items-center gap-1 text-emerald-400 font-medium">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                               Live Sync • {acc.handoverCount || 0} parcels
@@ -5271,7 +5304,7 @@ export default function App() {
 
                             {/* Footer Details */}
                             <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
-                              <span>Checked: {liveCheckedTimes[acc.syncKey] || liveCheckedTimes[acc.id] || acc.dateTime || 'Just now'}</span>
+                              <span>Checked: {getCheckedDisplayTime(acc, liveCheckedTimes)}</span>
                               <span className="flex items-center gap-1 text-emerald-600 font-medium">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 Auto-Sync Active
