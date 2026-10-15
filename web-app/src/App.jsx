@@ -2380,7 +2380,7 @@ export default function App() {
 
     const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
     const syncKey = `MSH-${user.uid.slice(0, 4).toUpperCase()}-${randomSuffix}`;
-    const autoStoreName = newStoreName.trim() || (meeshoEmail ? meeshoEmail.split('@')[0] : 'My Meesho Store');
+    const autoStoreName = newStoreName.trim();
 
     setSyncingAccount(true);
     try {
@@ -2391,6 +2391,12 @@ export default function App() {
         const directRes = await directMeeshoLogin(meeshoEmail, meeshoPass);
         if (!directRes.success) {
           setModalError(directRes.error || 'Meesho login failed. Please check your credentials.');
+          return;
+        }
+        const cleanEmailPrefix = meeshoEmail.split('@')[0].trim().toLowerCase();
+        const resStoreName = (directRes.storeName || '').trim();
+        if (!resStoreName || resStoreName.toLowerCase() === cleanEmailPrefix || resStoreName.toLowerCase() === meeshoEmail.trim().toLowerCase() || !directRes.identifier || directRes.identifier.includes('@') || directRes.identifier.trim().toLowerCase() === cleanEmailPrefix) {
+          setModalError('Meesho store verification failed: authentic store name could not be verified. Please check your credentials and ensure your seller account is active on supplier.meesho.com.');
           return;
         }
         data = {
@@ -2503,13 +2509,15 @@ export default function App() {
       );
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
-      const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase());
+      const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || data.storeName.trim().toLowerCase() === cleanEmail.toLowerCase());
       const finalStoreName = newStoreName.trim() || 
-        (existingStore?.storeName && isDataEmailFallback ? existingStore.storeName : null) || 
         (data?.storeName && !isDataEmailFallback ? data.storeName : null) || 
-        existingStore?.storeName || 
-        data?.storeName || 
-        autoStoreName;
+        (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName : null);
+      
+      if (!finalStoreName || finalStoreName.toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || finalStoreName.toLowerCase() === cleanEmail.toLowerCase()) {
+        setModalError('Meesho store verification failed: authentic store name could not be verified. Please verify your seller account is active on supplier.meesho.com.');
+        return;
+      }
       const targetAccRef = doc(db, 'accounts', targetSyncKey);
 
       await setDoc(targetAccRef, {

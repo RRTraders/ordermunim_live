@@ -63,6 +63,63 @@ public class MeeshoDirectPlugin extends Plugin {
         return "google/Pixel_7/panther:13/TQ3A.230705.001/10161073:user/release-keys";
     }
 
+    public static class AndroidLoginBridge {
+        private final PluginCall call;
+        private final WebView webView;
+        private final boolean[] isCompleted;
+        private final Handler timeoutHandler;
+        private final Runnable timeoutRunnable;
+        private final String email;
+        private final String password;
+        private final MeeshoDirectPlugin plugin;
+
+        public AndroidLoginBridge(PluginCall call, WebView webView, boolean[] isCompleted,
+                                  Handler timeoutHandler, Runnable timeoutRunnable,
+                                  String email, String password, MeeshoDirectPlugin plugin) {
+            this.call = call;
+            this.webView = webView;
+            this.isCompleted = isCompleted;
+            this.timeoutHandler = timeoutHandler;
+            this.timeoutRunnable = timeoutRunnable;
+            this.email = email;
+            this.password = password;
+            this.plugin = plugin;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void onAuthError(String errorMsg) {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (isCompleted[0]) return;
+                isCompleted[0] = true;
+                timeoutHandler.removeCallbacks(timeoutRunnable);
+                try { webView.destroy(); } catch (Exception ignored) {}
+
+                String finalErr = (errorMsg != null && !errorMsg.trim().isEmpty())
+                        ? errorMsg.trim()
+                        : "Invalid credentials. Please check your email and password.";
+                JSObject ret = new JSObject();
+                ret.put("success", false);
+                ret.put("error", finalErr);
+                call.resolve(ret);
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void onAuthSuccess(String storeNameFromDom) {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (isCompleted[0]) return;
+                isCompleted[0] = true;
+                timeoutHandler.removeCallbacks(timeoutRunnable);
+                CookieManager cm = CookieManager.getInstance();
+                cm.flush();
+                String rawCookies = cm.getCookie("https://supplier.meesho.com");
+                String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
+                String urlIdent = MeeshoDirectPlugin.extractIdentifierFromUrl(currentUrl);
+                plugin.finishSuccessfulLogin(rawCookies != null ? rawCookies : "", urlIdent, email, password, storeNameFromDom, call, webView);
+            });
+        }
+    }
+
     @PluginMethod
     public void login(PluginCall call) {
         String email = call.getString("email", "").trim();
@@ -88,48 +145,91 @@ public class MeeshoDirectPlugin extends Plugin {
                 CookieManager cookieManager = CookieManager.getInstance();
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(webView, true);
-                // Clear old cookies so authentication starts with a 100% fresh session
-                cookieManager.removeAllCookies(null);
-                cookieManager.flush();
 
                 final boolean[] isCompleted = {false};
                 final Handler timeoutHandler = new Handler(Looper.getMainLooper());
+                // Master Spec: 15-second strict timeout
                 final Runnable timeoutRunnable = () -> {
                     if (!isCompleted[0]) {
                         isCompleted[0] = true;
                         try { webView.destroy(); } catch (Exception ignored) {}
                         JSObject ret = new JSObject();
                         ret.put("success", false);
-                        ret.put("error", "Connection timed out. Please check your credentials and internet connection.");
+                        ret.put("error", "Connection timed out after 15 seconds. Please check your credentials and internet connection.");
                         call.resolve(ret);
                     }
                 };
-                timeoutHandler.postDelayed(timeoutRunnable, 35000);
+                timeoutHandler.postDelayed(timeoutRunnable, 15000);
+
+                AndroidLoginBridge bridge = new AndroidLoginBridge(call, webView, isCompleted, timeoutHandler, timeoutRunnable, email, password, this);
+                webView.addJavascriptInterface(bridge, "OrderMunimBridge");
 
                 webView.setWebViewClient(new WebViewClient() {
-                    private boolean injected = false;
+                    private boolean started = false;
 
                     @Override
                     public void onPageFinished(WebView view, String url) {
                         super.onPageFinished(view, url);
                         if (isCompleted[0]) return;
 
-                        if (url != null && url.contains("login") && !injected) {
-                            injected = true;
-                            // Inject credentials into login form with resilient element selectors and event bubbling
+                        if (url != null && !url.contains("login") && (url.contains("fulfillment") || url.contains("growth") || url.contains("dashboard") || url.contains("home") || url.contains("panel/v3/new/root"))) {
+                            extractDomStoreNameAndComplete(view, bridge);
+                            return;
+                        }
+
+                        if (url != null && url.contains("login") && !started) {
+                            started = true;
+                            // Fast interceptor + in-page direct input injection & submit
                             String jsInject = "(function() {" +
+                                    "  if (window._om_injected) return;" +
+                                    "  window._om_injected = true;" +
+                                    "  var origFetch = window.fetch;" +
+                                    "  window.fetch = async function() {" +
+                                    "    var response = await origFetch.apply(this, arguments);" +
+                                    "    try {" +
+                                    "      var u = arguments[0];" +
+                                    "      if (typeof u === 'string' && u.indexOf('v2-login') !== -1) {" +
+                                    "        var clone = response.clone();" +
+                                    "        clone.json().then(function(data) {" +
+                                    "          if (response.status === 400 || response.status === 401) {" +
+                                    "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
+                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
+                                    "          }" +
+                                    "        }).catch(function() {});" +
+                                    "      }" +
+                                    "    } catch(e) {}" +
+                                    "    return response;" +
+                                    "  };" +
+                                    "  var origOpen = XMLHttpRequest.prototype.open;" +
+                                    "  XMLHttpRequest.prototype.open = function(method, u) {" +
+                                    "    this._url = u;" +
+                                    "    return origOpen.apply(this, arguments);" +
+                                    "  };" +
+                                    "  var origSend = XMLHttpRequest.prototype.send;" +
+                                    "  XMLHttpRequest.prototype.send = function() {" +
+                                    "    this.addEventListener('load', function() {" +
+                                    "      try {" +
+                                    "        if (typeof this._url === 'string' && this._url.indexOf('v2-login') !== -1) {" +
+                                    "          if (this.status === 400 || this.status === 401) {" +
+                                    "            var data = JSON.parse(this.responseText);" +
+                                    "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
+                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
+                                    "          }" +
+                                    "        }" +
+                                    "      } catch(e) {}" +
+                                    "    });" +
+                                    "    return origSend.apply(this, arguments);" +
+                                    "  };" +
                                     "  var retryCount = 0;" +
                                     "  var timer = setInterval(function() {" +
                                     "    retryCount++;" +
                                     "    try {" +
                                     "      var em = document.querySelector('input[name=\"emailOrPhone\"]') || " +
                                     "               document.querySelector('input[name=\"email\"]') || " +
-                                    "               document.querySelector('input[type=\"email\"]') || " +
-                                    "               document.querySelector('input:not([type=\"password\"]):not([type=\"hidden\"])');" +
+                                    "               document.querySelector('input[type=\"email\"]');" +
                                     "      var pw = document.querySelector('input[name=\"password\"]') || " +
                                     "               document.querySelector('input[type=\"password\"]');" +
                                     "      var btn = document.querySelector('button[type=\"submit\"]') || " +
-                                    "                document.querySelector('form button') || " +
                                     "                Array.from(document.querySelectorAll('button')).find(function(b) { return /log\\s*in|sign\\s*in|submit/i.test(b.innerText || ''); });" +
                                     "      if (em && pw && btn) {" +
                                     "        clearInterval(timer);" +
@@ -146,24 +246,44 @@ public class MeeshoDirectPlugin extends Plugin {
                                     "        setTimeout(function() {" +
                                     "          try {" +
                                     "            btn.click();" +
-                                    "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }" +
+                                    "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true })); }" +
                                     "          } catch(e) {}" +
-                                    "        }, 400);" +
+                                    "        }, 200);" +
                                     "      }" +
                                     "    } catch(e) {}" +
-                                    "    if (retryCount > 60) { clearInterval(timer); }" +
-                                    "  }, 350);" +
+                                    "    if (retryCount > 35) clearInterval(timer);" +
+                                    "  }, 250);" +
+                                    "  var obs = new MutationObserver(function() {" +
+                                    "    try {" +
+                                    "      var nodes = Array.from(document.querySelectorAll('[class*=\"error\" i], [class*=\"alert\" i], [role=\"alert\"], [data-error=\"true\"], div'));" +
+                                    "      for (var i = 0; i < nodes.length; i++) {" +
+                                    "        var el = nodes[i];" +
+                                    "        if (el.children.length === 0 && el.innerText) {" +
+                                    "          var t = el.innerText.trim();" +
+                                    "          if (!t || t === 'Show' || t === 'Hide' || t.includes('Email Id') || t.includes('mobile number')) continue;" +
+                                    "          if (/invalid|incorrect|wrong|does not exist|failed|blocked/i.test(t)) {" +
+                                    "            obs.disconnect();" +
+                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(t);" +
+                                    "            return;" +
+                                    "          }" +
+                                    "        }" +
+                                    "      }" +
+                                    "    } catch(e) {}" +
+                                    "  });" +
+                                    "  obs.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });" +
                                     "})();";
 
                             view.evaluateJavascript(jsInject, null);
-
-                            // Poll for login success, cookie acquisition, or error message
-                            pollForCompletion(view, timeoutHandler, timeoutRunnable, isCompleted, email, password, call);
+                            pollForCompletion(view, timeoutHandler, timeoutRunnable, isCompleted, bridge);
                         }
                     }
                 });
 
-                webView.loadUrl(SecurityShield.getLoginRefererUrl());
+                // Clear old cookies cleanly before loading login page
+                cookieManager.removeAllCookies(cleared -> {
+                    cookieManager.flush();
+                    webView.loadUrl(SecurityShield.getLoginRefererUrl());
+                });
 
             } catch (Exception e) {
                 JSObject ret = new JSObject();
@@ -174,8 +294,65 @@ public class MeeshoDirectPlugin extends Plugin {
         });
     }
 
+    private void extractDomStoreNameAndComplete(WebView view, AndroidLoginBridge bridge) {
+        String extractJs = "(function() {" +
+                "  try {" +
+                "    if (window.__SUPPLY_DATA__ && window.__SUPPLY_DATA__.supplier) {" +
+                "      var s = window.__SUPPLY_DATA__.supplier;" +
+                "      var n = s.store_name || s.name || s.display_name || s.legal_name || s.company_name || '';" +
+                "      if (n && n.trim().length > 1 && !n.includes('@')) return n.trim();" +
+                "    }" +
+                "  } catch(e) {}" +
+                "  try {" +
+                "    for (var i = 0; i < localStorage.length; i++) {" +
+                "      var key = localStorage.key(i);" +
+                "      var val = localStorage.getItem(key);" +
+                "      if (val && val.indexOf('$name') !== -1) {" +
+                "        var parsed = JSON.parse(val);" +
+                "        var possible = parsed.$name || (parsed.payload && parsed.payload.$set && parsed.payload.$set.$name);" +
+                "        if (possible && typeof possible === 'string' && possible.trim().length > 1 && !possible.includes('@')) {" +
+                "          return possible.trim();" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  } catch(e) {}" +
+                "  try {" +
+                "    var sidebar = document.querySelector('aside, nav, [class*=\"sidebar\" i], [class*=\"Sidebar\" i]');" +
+                "    if (sidebar) {" +
+                "      var leaves = Array.from(sidebar.querySelectorAll('*')).filter(function(el) {" +
+                "        return el.children.length === 0 && el.innerText && el.innerText.trim().length > 1;" +
+                "      });" +
+                "      for (var l = 0; l < leaves.length; l++) {" +
+                "        var t = leaves[l].innerText.trim();" +
+                "        if (t.length > 1 && t.length < 50 && !t.includes('\\n') &&" +
+                "            !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business)/i.test(t) &&" +
+                "            !t.includes('@')) {" +
+                "          return t;" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  } catch(e) {}" +
+                "  try {" +
+                "    var headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, span, p'));" +
+                "    for (var h = 0; h < headings.length; h++) {" +
+                "      var hText = headings[h].innerText || '';" +
+                "      if (/Welcome\\s+back,?\\s*([^\\n!.,]+)/i.test(hText)) {" +
+                "        var m = hText.match(/Welcome\\s+back,?\\s*([^\\n!.,]+)/i);" +
+                "        if (m && m[1].trim().length > 1 && !m[1].includes('@')) return m[1].trim();" +
+                "      }" +
+                "    }" +
+                "  } catch(e) {}" +
+                "  return '';" +
+                "})();";
+
+        view.evaluateJavascript(extractJs, val -> {
+            String domStore = (val != null && !val.equals("null") && !val.equals("\"\"")) ? val.replace("\"", "").trim() : "";
+            bridge.onAuthSuccess(domStore);
+        });
+    }
+
     private void pollForCompletion(WebView webView, Handler timeoutHandler, Runnable timeoutRunnable,
-                                   boolean[] isCompleted, String email, String password, PluginCall call) {
+                                   boolean[] isCompleted, AndroidLoginBridge bridge) {
         Handler poller = new Handler(Looper.getMainLooper());
         Runnable checkTask = new Runnable() {
             private int attempts = 0;
@@ -189,42 +366,34 @@ public class MeeshoDirectPlugin extends Plugin {
                 String rawCookies = cm.getCookie("https://supplier.meesho.com");
                 if (rawCookies == null) rawCookies = "";
 
-                boolean hasConnectSid = rawCookies.contains("connect.sid=");
-                boolean hasIdentifier = rawCookies.contains("current_az_identifier=");
                 String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
+                boolean isStillOnLogin = currentUrl.contains("/login");
+                boolean hasNavigatedAway = !isStillOnLogin && (currentUrl.contains("fulfillment") || currentUrl.contains("growth") || currentUrl.contains("dashboard") || currentUrl.contains("home") || currentUrl.contains("panel/v3/new/root"));
+                boolean hasAuthCookies = rawCookies.contains("connect.sid=") && rawCookies.contains("s_id=");
 
-                if ((hasConnectSid && hasIdentifier) || currentUrl.contains("fulfillment") || currentUrl.contains("growth") || currentUrl.contains("dashboard")) {
-                    // Success!
-                    isCompleted[0] = true;
-                    timeoutHandler.removeCallbacks(timeoutRunnable);
-                    String urlIdent = extractIdentifierFromUrl(currentUrl);
-                    finishSuccessfulLogin(rawCookies, urlIdent, email, password, call, webView);
+                if (hasNavigatedAway || (hasAuthCookies && !isStillOnLogin)) {
+                    extractDomStoreNameAndComplete(webView, bridge);
                     return;
                 }
 
                 // Check for real login error text on screen (ignoring form field labels / fieldsets)
                 String checkErrJs = "(function() {" +
                         "  try {" +
-                        "    var errEls = Array.from(document.querySelectorAll('[data-error=\"true\"], [role=\"alert\"], [class*=\"toast\" i], [class*=\"banner\" i]'));" +
-                        "    for (var i = 0; i < errEls.length; i++) {" +
-                        "      var t = (errEls[i].innerText || '').trim();" +
-                        "      if (!t) continue;" +
-                        "      if (t.includes('Email Id') || t.includes('mobile number') || t === 'Show' || t === 'Hide') continue;" +
-                        "      if (/invalid|incorrect|wrong|blocked|suspended|disabled|failed|not found|exist|locked/i.test(t)) {" +
-                        "        var lines = t.split('\\n');" +
-                        "        for (var j = 0; j < lines.length; j++) {" +
-                        "          var line = lines[j].trim();" +
-                        "          if (/invalid|incorrect|wrong|blocked|suspended|disabled|failed|not found|exist|locked/i.test(line) && line.length > 3) {" +
-                        "            return line;" +
-                        "          }" +
-                        "        }" +
+                        "    var alerts = Array.from(document.querySelectorAll('[role=\"alert\"], [data-error=\"true\"], [class*=\"error\" i], [class*=\"alert\" i], [class*=\"toast\" i], [class*=\"banner\" i], div'));" +
+                        "    for (var i = 0; i < alerts.length; i++) {" +
+                        "      if (alerts[i].children.length > 0) continue;" +
+                        "      var t = (alerts[i].innerText || '').trim();" +
+                        "      if (!t || t === 'Show' || t === 'Hide') continue;" +
+                        "      if (t.includes('Email Id') || t.includes('mobile number')) continue;" +
+                        "      if (/invalid|incorrect|wrong|blocked|suspended|disabled|failed|not found|exist|locked|required/i.test(t)) {" +
                         "        return t;" +
                         "      }" +
                         "    }" +
                         "    var bodyTxt = document.body ? document.body.innerText || '' : '';" +
-                        "    if (bodyTxt.includes('Invalid credentials')) return 'Invalid credentials';" +
-                        "    if (bodyTxt.includes('Incorrect password')) return 'Incorrect password';" +
-                        "    if (bodyTxt.includes('User does not exist')) return 'User does not exist';" +
+                        "    if (/invalid\\s*credentials/i.test(bodyTxt)) return 'Invalid credentials';" +
+                        "    if (/incorrect\\s*password/i.test(bodyTxt)) return 'Incorrect password';" +
+                        "    if (/user\\s*(does\\s*not|doesn't)\\s*exist/i.test(bodyTxt)) return 'User does not exist';" +
+                        "    if (/please\\s*enter\\s*a\\s*valid/i.test(bodyTxt)) return 'Please enter a valid email or password';" +
                         "  } catch(e) {}" +
                         "  return '';" +
                         "})();";
@@ -232,27 +401,19 @@ public class MeeshoDirectPlugin extends Plugin {
                 webView.evaluateJavascript(checkErrJs, val -> {
                     if (isCompleted[0]) return;
                     String cleanVal = (val != null && !val.equals("null") && !val.equals("\"\"")) ? val.replace("\"", "").trim() : "";
-                    // Only evaluate explicit errors after attempt 6 (giving 3+ seconds for form submission)
-                    if (!cleanVal.isEmpty() && attempts > 6) {
-                        isCompleted[0] = true;
-                        timeoutHandler.removeCallbacks(timeoutRunnable);
-                        try { webView.destroy(); } catch (Exception ignored) {}
-
-                        JSObject ret = new JSObject();
-                        ret.put("success", false);
-                        ret.put("error", cleanVal);
-                        call.resolve(ret);
+                    if (!cleanVal.isEmpty() && attempts > 1) {
+                        bridge.onAuthError(cleanVal);
                         return;
                     }
 
-                    if (attempts < 65) {
-                        poller.postDelayed(this, 500);
+                    if (attempts < 30) {
+                        poller.postDelayed(this, 400);
                     }
                 });
             }
         };
 
-        poller.postDelayed(checkTask, 800);
+        poller.postDelayed(checkTask, 400);
     }
 
     public static String extractIdentifierFromUrl(String url) {
@@ -322,10 +483,32 @@ public class MeeshoDirectPlugin extends Plugin {
         return currentSupId;
     }
 
+    public static String extractStoreNameFromCookies(String cookies) {
+        if (cookies != null && !cookies.isEmpty()) {
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && kv[0].contains("mixpanel")) {
+                    try {
+                        String decoded = java.net.URLDecoder.decode(kv[1].trim(), "UTF-8");
+                        JSONObject mp = new JSONObject(decoded);
+                        String n = mp.optString("$name", "").trim();
+                        if (n.isEmpty()) n = mp.optString("store_name", "").trim();
+                        if (n.isEmpty()) n = mp.optString("name", "").trim();
+                        if (!n.isEmpty() && !n.equalsIgnoreCase("Direct") && !n.contains("@")) return n;
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return "";
+    }
+
     public static JSONObject resolveSupplierIdentityStatic(String cookies, String currentIdent, long currentSupId) {
+        JSONObject res = new JSONObject();
         String identifier = extractIdentifierFromCookies(cookies, currentIdent);
         long supplierId = extractSupplierIdFromCookies(cookies, currentSupId);
-        if (cookies != null && !cookies.isEmpty() && (supplierId <= 0 || identifier.isEmpty() || identifier.length() > 8)) {
+        String storeName = extractStoreNameFromCookies(cookies);
+
+        if (cookies != null && !cookies.isEmpty()) {
             try {
                 URL regUrl = new URL(SecurityShield.getRegistrationStatusUrl());
                 HttpURLConnection regConn = (HttpURLConnection) regUrl.openConnection();
@@ -367,51 +550,58 @@ public class MeeshoDirectPlugin extends Plugin {
                                 supplierId = idMap.optLong(firstKey, supplierId);
                             }
                         }
+                        String sName = decToken.optString("store_name", "");
+                        if (sName.isEmpty()) sName = decToken.optString("name", "");
+                        if (sName.isEmpty()) sName = decToken.optString("display_name", "");
+                        if (sName.isEmpty()) sName = decToken.optString("legal_name", "");
+                        if (!sName.isEmpty()) storeName = sName.trim();
                     }
                 }
             } catch (Exception ignored) {}
         }
-        JSONObject res = new JSONObject();
         try {
             res.put("identifier", identifier);
             res.put("supplierId", supplierId);
+            if (!storeName.isEmpty()) res.put("storeName", storeName);
         } catch (Exception ignored) {}
         return res;
     }
 
-    private void finishSuccessfulLogin(String cookies, String urlIdent, String email, String password, PluginCall call, WebView webView) {
+    public void finishSuccessfulLogin(String cookies, String urlIdent, String email, String password, String storeNameFromDom, PluginCall call, WebView webView) {
         getBridge().execute(() -> {
             try {
                 JSONObject resolved = resolveSupplierIdentityStatic(cookies, urlIdent, 0);
                 String identifier = resolved.optString("identifier", "");
                 long supplierId = resolved.optLong("supplierId", 0);
 
-                if (identifier.isEmpty()) {
-                    identifier = email.split("@")[0];
-                }
-
                 // 2. Fetch Supplier Details to get real Account Holder Name
-                String accountHolderName = "";
+                String apiSupplierStoreName = "";
                 try {
                     URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
                     HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
                     detConn.setRequestMethod("POST");
-                    detConn.setConnectTimeout(10000);
-                    detConn.setReadTimeout(10000);
+                    detConn.setConnectTimeout(8000);
+                    detConn.setReadTimeout(8000);
                     detConn.setDoOutput(true);
                     detConn.setRequestProperty("Content-Type", "application/json");
                     detConn.setRequestProperty("Accept", "application/json, text/plain, */*");
                     detConn.setRequestProperty(SecurityShield.getHeaderClientType(), SecurityShield.getHeaderClientTypeVal());
                     detConn.setRequestProperty(SecurityShield.getHeaderClientVer(), SecurityShield.getHeaderClientVerVal());
-                    detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                    if (!identifier.isEmpty() && !identifier.contains("@")) {
+                        detConn.setRequestProperty(SecurityShield.getHeaderIdentifier(), identifier);
+                    }
                     detConn.setRequestProperty("Cookie", cookies);
                     detConn.setRequestProperty("Origin", SecurityShield.getOriginUrl());
-                    detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                    if (!identifier.isEmpty()) {
+                        detConn.setRequestProperty("Referer", SecurityShield.getReturnsRefererUrl(identifier));
+                    }
                     detConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
 
                     JSONObject detBody = new JSONObject();
                     if (supplierId > 0) detBody.put("supplier_id", supplierId);
-                    detBody.put("identifier", identifier);
+                    if (!identifier.isEmpty() && !identifier.contains("@")) {
+                        detBody.put("identifier", identifier);
+                    }
                     try (OutputStream os = detConn.getOutputStream()) {
                         os.write(detBody.toString().getBytes(StandardCharsets.UTF_8));
                     }
@@ -421,17 +611,45 @@ public class MeeshoDirectPlugin extends Plugin {
                         JSONObject respJson = new JSONObject(resp.isEmpty() ? "{}" : resp);
                         JSONObject supObj = respJson.optJSONObject("supplier");
                         if (supObj != null) {
-                            String n = supObj.optString("name", "");
-                            if (!n.trim().isEmpty()) accountHolderName = n.trim();
-                            if (accountHolderName.isEmpty()) {
-                                accountHolderName = supObj.optString("store_name", supObj.optString("legal_name", ""));
-                            }
+                            String n = supObj.optString("store_name", "");
+                            if (n.trim().isEmpty()) n = supObj.optString("name", "");
+                            if (n.trim().isEmpty()) n = supObj.optString("legal_name", "");
+                            if (n.trim().isEmpty()) n = supObj.optString("company_name", "");
+                            if (!n.trim().isEmpty()) apiSupplierStoreName = n.trim();
                         }
                     }
                 } catch (Exception ignored) {}
 
-                if (accountHolderName.isEmpty()) {
-                    accountHolderName = email.split("@")[0];
+                String emailPrefix = email != null && email.contains("@") ? email.split("@")[0].trim().toLowerCase() : "";
+                String accountHolderName = "";
+
+                if (storeNameFromDom != null && !storeNameFromDom.trim().isEmpty() && !storeNameFromDom.trim().equalsIgnoreCase(emailPrefix) && !storeNameFromDom.trim().equalsIgnoreCase(email)) {
+                    accountHolderName = storeNameFromDom.trim();
+                }
+                if (accountHolderName.isEmpty() && !apiSupplierStoreName.isEmpty() && !apiSupplierStoreName.equalsIgnoreCase(emailPrefix) && !apiSupplierStoreName.equalsIgnoreCase(email)) {
+                    accountHolderName = apiSupplierStoreName.trim();
+                }
+                String regStoreName = resolved.optString("storeName", "");
+                if (accountHolderName.isEmpty() && !regStoreName.isEmpty() && !regStoreName.equalsIgnoreCase(emailPrefix) && !regStoreName.equalsIgnoreCase(email)) {
+                    accountHolderName = regStoreName.trim();
+                }
+
+                // Master Spec Feature 2: Strictly reject if no authentic verified store name or identifier
+                if (accountHolderName.isEmpty() || 
+                    accountHolderName.equalsIgnoreCase(emailPrefix) || 
+                    accountHolderName.equalsIgnoreCase(email) || 
+                    identifier.isEmpty() || 
+                    identifier.contains("@") || 
+                    identifier.equalsIgnoreCase(emailPrefix)) {
+
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        try { webView.destroy(); } catch (Exception ignored) {}
+                    });
+                    JSObject ret = new JSObject();
+                    ret.put("success", false);
+                    ret.put("error", "Meesho store verification failed: authentic store name could not be verified. Please check your credentials and ensure your seller account is active on supplier.meesho.com.");
+                    call.resolve(ret);
+                    return;
                 }
 
                 // 3. Initial OTP Fetch with supplier_id and identifier
