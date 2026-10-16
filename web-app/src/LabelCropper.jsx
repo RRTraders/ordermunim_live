@@ -4778,11 +4778,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               });
             }
 
-            // 1. Date / Time (Solid black bold, centered)
+            // 1. Date / Time (Solid black bold, left side)
             if (printDateTime) {
-              const textW = helveticaBold.widthOfTextAtSize(batchDateTimeStr, 8.5);
               targetPage.drawText(batchDateTimeStr, {
-                x: (pW - textW) / 2,
+                x: 24,
                 y: metaY,
                 size: 8.5,
                 font: helveticaBold,
@@ -4795,7 +4794,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const pageStr = `${i + 1}`;
               const textW = helveticaBold.widthOfTextAtSize(pageStr, 8.5);
               targetPage.drawText(pageStr, {
-                x: pW - textW - 20,
+                x: pW - textW - 24,
                 y: metaY,
                 size: 8.5,
                 font: helveticaBold,
