@@ -4068,48 +4068,48 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       }
 
       // 5. Detect exact bottom boundary of the shipping label (Product Details bottom border)
-      // Dynamically detects "invoice" / "original for recipient" and preserves the horizontal line above it
+      // Exactly terminates on the solid horizontal line above TAX INVOICE while protecting full SKU line
       let meeshoLabelHeight = 345.6;
       const viewport = page.getViewport({ scale: 1.0 });
       const pageH = viewport.height;
 
-      let minInvoiceTop = null;
-      let maxSkuBottom = 0;
+      let invoiceBaseline = null;
+      let lastSkuBaseline = null;
+      let inProductDetails = false;
 
       for (const it of content.items) {
         if (!it.str || !it.str.trim() || !it.transform) continue;
         const distFromTop = pageH - it.transform[5];
-        const h = it.height || 10;
+        const s = it.str.trim();
 
-        // Detect "invoice" keyword or "original for recipient" anywhere below top header
-        if (/\binvoice\b/i.test(it.str) || /original\s*for\s*recipient/i.test(it.str)) {
-          if (distFromTop > 180) {
-            const topOfText = distFromTop - h;
-            if (minInvoiceTop === null || topOfText < minInvoiceTop) {
-              minInvoiceTop = topOfText;
-            }
+        if (/Product\s*Details/i.test(s)) {
+          inProductDetails = true;
+        }
+
+        if (/TAX\s*INVOICE|Original\s*For\s*Recipient|\binvoice\b/i.test(s)) {
+          if (distFromTop > 200 && (invoiceBaseline === null || distFromTop < invoiceBaseline)) {
+            invoiceBaseline = distFromTop;
           }
         }
 
-        // Track bottom of SKU / Product Details text to ensure zero SKU clipping
-        if (distFromTop > 180) {
-          if (!/\b(?:tax|invoice|original|recipient|thank|sold\s*by|bill\s*to)\b/i.test(it.str)) {
-            const itemBottom = distFromTop + 2.0;
-            if (itemBottom > maxSkuBottom && (minInvoiceTop === null || distFromTop < minInvoiceTop)) {
-              maxSkuBottom = itemBottom;
+        if (inProductDetails && distFromTop > 280) {
+          if (!/Product\s*Details|SKU|Size|Qty|Color|Order\s*No|TAX|INVOICE|Original|Recipient|Thank|Sold|BILL/i.test(s)) {
+            if (invoiceBaseline === null || distFromTop < invoiceBaseline) {
+              if (lastSkuBaseline === null || distFromTop > lastSkuBaseline) {
+                lastSkuBaseline = distFromTop;
+              }
             }
           }
         }
       }
 
-      if (minInvoiceTop !== null) {
-        // Horizontal line of Product Details box is situated ~2.2pt above the top of invoice letters.
-        // Cutting at minInvoiceTop - 2.2 keeps the horizontal line cleanly visible while eliminating all invoice text.
-        const lineAboveInvoice = minInvoiceTop - 2.2;
-        meeshoLabelHeight = maxSkuBottom > 0 ? Math.max(maxSkuBottom + 3.0, lineAboveInvoice) : lineAboveInvoice;
-      } else if (maxSkuBottom > 0) {
-        // Fallback if no invoice keyword was found: keep line 6pt below the SKU text
-        meeshoLabelHeight = maxSkuBottom + 6.0;
+      if (invoiceBaseline !== null) {
+        // The solid horizontal line enclosing the shipping label box is situated exactly 13pt above invoiceBaseline
+        const lineAboveInvoice = invoiceBaseline - 13.0;
+        meeshoLabelHeight = lastSkuBaseline !== null ? Math.max(lastSkuBaseline + 5.5, lineAboveInvoice) : lineAboveInvoice;
+      } else if (lastSkuBaseline !== null) {
+        // Fallback: horizontal border is 5.5pt below the last SKU item
+        meeshoLabelHeight = lastSkuBaseline + 5.5;
       } else {
         meeshoLabelHeight = 345.6;
       }
