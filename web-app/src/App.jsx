@@ -138,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 50;
-const CURRENT_APP_VERSION_NAME = "6.0";
+const CURRENT_APP_VERSION_CODE = 51;
+const CURRENT_APP_VERSION_NAME = "6.1";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -199,18 +199,43 @@ export const getCheckedDisplayTime = (acc, liveCheckedTimes) => {
   if (!acc) return 'Just now';
   const key = acc.syncKey || acc.id;
   if (liveCheckedTimes && liveCheckedTimes[key]) return liveCheckedTimes[key];
+
+  let rawDate = null;
   if (acc.lastChecked) {
+    const d = new Date(acc.lastChecked);
+    if (!isNaN(d.getTime())) rawDate = d;
+  }
+  if (!rawDate && acc.lastUpdated) {
+    const d = new Date(acc.lastUpdated);
+    if (!isNaN(d.getTime())) rawDate = d;
+  }
+
+  if (rawDate) {
     try {
-      const d = new Date(acc.lastChecked);
-      if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const now = new Date();
+      const timeStr = rawDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      const isToday = now.getFullYear() === rawDate.getFullYear() &&
+                      now.getMonth() === rawDate.getMonth() &&
+                      now.getDate() === rawDate.getDate();
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = yesterday.getFullYear() === rawDate.getFullYear() &&
+                          yesterday.getMonth() === rawDate.getMonth() &&
+                          yesterday.getDate() === rawDate.getDate();
+
+      if (isToday) {
+        return `Today, ${timeStr}`;
+      } else if (isYesterday) {
+        return `Yesterday, ${timeStr}`;
+      } else {
+        const dateStr = rawDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `${dateStr}, ${timeStr}`;
+      }
     } catch {}
   }
-  if (acc.lastUpdated) {
-    try {
-      const d = new Date(acc.lastUpdated);
-      if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch {}
-  }
+
   if (acc.dateTime && /(?:am|pm)/i.test(acc.dateTime) && !/\d{1,2}\s+[a-zA-Z]{3,}/i.test(acc.dateTime)) {
     return acc.dateTime;
   }
@@ -244,6 +269,10 @@ export const savePersistentAuth = (email, password, role = 'customer') => {
     if (typeof document !== 'undefined') {
       document.cookie = `om_persistent_auth_token=${encoded}; max-age=31536000; path=/; SameSite=Lax`;
     }
+    // Also backup into native Android OS AES-256 vault so swipe-out NEVER logs out the user!
+    if (isNativeMobile() && window.Capacitor?.Plugins?.MeeshoDirect?.saveAppAuth) {
+      window.Capacitor.Plugins.MeeshoDirect.saveAppAuth({ email: email.trim(), password, role }).catch(() => {});
+    }
   } catch (err) {
     console.warn('[Persistent Auth] Save error:', err);
   }
@@ -276,6 +305,9 @@ export const clearPersistentAuth = () => {
     localStorage.removeItem('om_persistent_auth_token');
     if (typeof document !== 'undefined') {
       document.cookie = 'om_persistent_auth_token=; max-age=0; path=/; SameSite=Lax';
+    }
+    if (isNativeMobile() && window.Capacitor?.Plugins?.MeeshoDirect?.saveAppAuth) {
+      window.Capacitor.Plugins.MeeshoDirect.saveAppAuth({ email: '', password: '', role: '' }).catch(() => {});
     }
   } catch {}
 };
@@ -869,7 +901,17 @@ export default function App() {
 
       if (!currentUser) {
         // If we have saved credentials, restore session in BACKGROUND without blocking or showing spinner
-        const savedAuth = getPersistentAuth();
+        let savedAuth = getPersistentAuth();
+        if (!savedAuth && isNativeMobile() && window.Capacitor?.Plugins?.MeeshoDirect?.getAppAuth) {
+          try {
+            const nativeCred = await window.Capacitor.Plugins.MeeshoDirect.getAppAuth();
+            if (nativeCred && nativeCred.email && nativeCred.password) {
+              savedAuth = nativeCred;
+              savePersistentAuth(nativeCred.email, nativeCred.password, nativeCred.role || 'customer');
+            }
+          } catch (e) {}
+        }
+
         if (savedAuth && savedAuth.email && savedAuth.password && !authRestoringRef.current) {
           authRestoringRef.current = true;
           signInWithEmailAndPassword(auth, savedAuth.email, savedAuth.password)

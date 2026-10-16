@@ -315,15 +315,20 @@ public class MeeshoDirectPlugin extends Plugin {
                     }
                 });
 
-                // Clear old cookies, WebStorage and cache cleanly before loading login page
-                cookieManager.removeAllCookies(cleared -> {
-                    cookieManager.flush();
-                    try {
-                        android.webkit.WebStorage.getInstance().deleteAllData();
-                        webView.clearCache(true);
-                    } catch (Exception ignored) {}
-                    webView.loadUrl(SecurityShield.getLoginRefererUrl());
-                });
+                // Selectively expire ONLY meesho.com cookies without touching OrderMunim's localStorage, cookies, or Firebase Auth session!
+                try {
+                    String meeshoCookies = cookieManager.getCookie("https://supplier.meesho.com");
+                    if (meeshoCookies != null) {
+                        String[] parts = meeshoCookies.split(";");
+                        for (String part : parts) {
+                            String name = part.split("=")[0].trim();
+                            cookieManager.setCookie("https://supplier.meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+                            cookieManager.setCookie(".meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+                        }
+                        cookieManager.flush();
+                    }
+                } catch (Exception ignored) {}
+                webView.loadUrl(SecurityShield.getLoginRefererUrl());
 
             } catch (Exception e) {
                 JSObject ret = new JSObject();
@@ -1916,6 +1921,48 @@ public class MeeshoDirectPlugin extends Plugin {
             }
         } catch (Exception ignored) {}
         call.resolve();
+    }
+
+    @PluginMethod
+    public void saveAppAuth(PluginCall call) {
+        String email = call.getString("email", "");
+        String password = call.getString("password", "");
+        String role = call.getString("role", "customer");
+        if (email.isEmpty() || password.isEmpty()) {
+            call.resolve();
+            return;
+        }
+        try {
+            SharedPreferences vault = getContext().getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
+            vault.edit()
+                    .putString("app_auth_email", email.trim().toLowerCase())
+                    .putString("app_auth_pwd", aesEncrypt(getContext(), password.trim()))
+                    .putString("app_auth_role", role)
+                    .apply();
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getAppAuth(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            SharedPreferences vault = getContext().getSharedPreferences("meesho_permanent_vault", Context.MODE_PRIVATE);
+            String email = vault.getString("app_auth_email", "");
+            String encPwd = vault.getString("app_auth_pwd", "");
+            String role = vault.getString("app_auth_role", "customer");
+            if (!email.isEmpty() && !encPwd.isEmpty()) {
+                String pwd = aesDecrypt(getContext(), encPwd);
+                if (!pwd.isEmpty()) {
+                    ret.put("email", email);
+                    ret.put("password", pwd);
+                    ret.put("role", role);
+                    call.resolve(ret);
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+        call.resolve(ret);
     }
 
     private String getStableBrowserId() {
