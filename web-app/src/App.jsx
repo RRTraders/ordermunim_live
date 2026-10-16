@@ -4101,7 +4101,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 pb-28 space-y-6">
+      <main className={`flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 ${activeTab === 'cropper' ? 'pb-6' : 'pb-28'} space-y-6`}>
         {activeTab === 'profile' ? (
           <div className="max-w-md mx-auto bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 animate-in fade-in duration-200 text-slate-900">
             {/* 1. Round Profile Picture */}

@@ -5373,7 +5373,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   };
 
   return (
-    <div className="bg-white text-slate-900 p-3 md:p-5 font-sans -m-2 md:-m-4 rounded-3xl border border-slate-200/90 shadow-xs min-h-screen">
+    <div className="bg-white text-slate-900 p-3 md:p-5 font-sans -m-2 md:-m-4 rounded-3xl border border-slate-200/90 shadow-xs">
       {/* ================= MARKETPLACE WORKSPACE CONTENT ================= */}
 
       {(selectedMarketplace === 'meesho' || selectedMarketplace === 'flipcart' || selectedMarketplace === 'snapdeal') ? (
