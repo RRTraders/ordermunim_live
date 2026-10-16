@@ -6077,66 +6077,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                       </div>
                     </div>
                   </div>
-
-                  {/* 6. Output File Type */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                      Output File Type
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOutputType('single')}
-                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          outputType === 'single'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Single PDF
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setOutputType('courier')}
-                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          outputType === 'courier'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Truck className="w-3.5 h-3.5" />
-                        By Courier
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setOutputType('quantity')}
-                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          outputType === 'quantity'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Boxes className="w-3.5 h-3.5" />
-                        By Quantity
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setOutputType('store')}
-                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          outputType === 'store'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Store className="w-3.5 h-3.5" />
-                        By Store
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
               </div>
