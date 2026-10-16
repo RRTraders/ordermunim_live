@@ -254,7 +254,7 @@ function drawBadgeShopSketch(ctx, x, y, size) {
   ctx.restore();
 }
 
-async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = false) {
+async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = false, qrShape = 'square') {
   const canvas = document.createElement('canvas');
   const w = isLarge ? 470 : 340;
   const h = isLarge ? 88 : 52;
@@ -285,12 +285,6 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.roundRect(pad + 3.5, pad + 3.5, w - (pad + 3.5) * 2, h - (pad + 3.5) * 2, r - 3);
     ctx.stroke();
 
-    // Decorative corner hearts
-    drawBadgeHeart(ctx, 16, 11, 5, true);
-    drawBadgeHeart(ctx, w - 16, 11, 5, true);
-    drawBadgeHeart(ctx, 16, h - 17, 5, true);
-    drawBadgeHeart(ctx, w - 16, h - 17, 5, true);
-
     // LEFT: SHOP SKETCH + STORE NAME
     const shopX = 20;
     const shopY = 12;
@@ -310,7 +304,7 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.font = 'bold 9.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('OFFICIAL STORE PROFILE', nameX, 52);
 
-    // CENTER: Vertical Divider
+    // CENTER: Clean Vertical Divider
     const divX = 226;
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = '#cbd5e1';
@@ -319,12 +313,7 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.lineTo(divX, h - 12);
     ctx.stroke();
 
-    // Center Heart on Divider
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(divX - 8, h / 2 - 8, 16, 16);
-    drawBadgeHeart(ctx, divX, h / 2 - 5, 7, true);
-
-    // RIGHT: QR CODE WITH HEART SHAPE AROUND
+    // RIGHT: QR CODE WITH SELECTED SHAPE
     const qrImg = new Image();
     await new Promise((resolve) => {
       qrImg.onload = resolve;
@@ -332,43 +321,109 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    const qrSize = 58;
-    const qrX = divX + 22;
+    const qrSize = qrShape === 'heart' ? 48 : (qrShape === 'trolley' ? 50 : 54);
+    const qrX = divX + (qrShape === 'trolley' ? 24 : 18);
     const qrY = (h - qrSize) / 2;
 
-    // Heart-shaped/rounded container around QR
-    const qrPad = 4;
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, 8);
-    ctx.fill();
-    ctx.stroke();
+    if (qrShape === 'heart') {
+      const hW = qrSize + 18;
+      const hX = qrX + qrSize / 2;
+      const hTop = 6;
+      const hBot = h - 6;
+
+      ctx.save();
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = '#000000';
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(hX, hTop + 13);
+      ctx.bezierCurveTo(hX - 7, hTop, hX - hW / 2, hTop, hX - hW / 2, hTop + 19);
+      ctx.bezierCurveTo(hX - hW / 2, hTop + 33, hX - 12, hBot - 8, hX, hBot);
+      ctx.bezierCurveTo(hX + 12, hBot - 8, hX + hW / 2, hTop + 33, hX + hW / 2, hTop + 19);
+      ctx.bezierCurveTo(hX + hW / 2, hTop, hX + 7, hTop, hX, hTop + 13);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    } else if (qrShape === 'trolley') {
+      const padT = 3;
+      const bLeft = qrX - padT;
+      const bTop = qrY - padT;
+      const bW = qrSize + padT * 2;
+      const bH = qrSize + padT * 2 - 4;
+      const bBottom = bTop + bH;
+
+      ctx.save();
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = '#000000';
+      ctx.fillStyle = '#ffffff';
+
+      // Basket
+      ctx.beginPath();
+      ctx.roundRect(bLeft, bTop, bW, bH, [4, 4, 6, 6]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Handle
+      ctx.beginPath();
+      ctx.moveTo(bLeft, bTop + 5);
+      ctx.lineTo(bLeft - 7, bTop - 2);
+      ctx.lineTo(bLeft - 11, bTop - 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft - 11, bTop - 2, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      // Wheels
+      const wheelY = bBottom + 4.5;
+      const wheelR = 3.5;
+      ctx.beginPath();
+      ctx.arc(bLeft + 9, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft + 9, wheelY, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(bLeft + bW - 9, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft + bW - 9, wheelY, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // Default clean Square
+      const qrPad = 4;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.roundRect(qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, 6);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     // Draw QR code
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-    // Cute decorative hearts around the QR container
-    drawBadgeHeart(ctx, qrX - qrPad - 1, qrY - qrPad - 1, 5, true);
-    drawBadgeHeart(ctx, qrX + qrSize + qrPad + 1, qrY - qrPad - 1, 5, true);
-    drawBadgeHeart(ctx, qrX - qrPad - 1, qrY + qrSize + qrPad - 4, 5, true);
-    drawBadgeHeart(ctx, qrX + qrSize + qrPad + 1, qrY + qrSize + qrPad - 4, 5, true);
-
-    // CALL TO ACTION TEXT
-    const textX = qrX + qrSize + qrPad + 16;
+    // CALL TO ACTION TEXT (Clean, no tiny hearts)
+    const textX = qrX + qrSize + 18;
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-    ctx.fillText('Follow', textX, 21);
+    ctx.fillText('Follow', textX, 23);
+    ctx.fillText('our page', textX, 45);
 
-    ctx.fillText('our page', textX, 43);
-    const tw = ctx.measureText('our page').width;
-    drawBadgeHeart(ctx, textX + tw + 10, 39, 9, true);
-
-    // Subtitle: Scan with camera
+    // Subtitle: Scan with phone camera
     ctx.fillStyle = '#64748b';
     ctx.font = 'bold 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-    ctx.fillText('Scan with phone camera', textX, 64);
+    ctx.fillText('Scan with phone camera', textX, 66);
   } else {
     // Compact version for crop mode (w=340, h=52)
     const r = 9;
@@ -378,39 +433,34 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.roundRect(1.5, 1.5, w - 3, h - 3, r);
     ctx.stroke();
 
-    // Shop Sketch (scaled up from 28 to 38)
-    const shopSize = 38;
+    // Shop Sketch
+    const shopSize = 36;
     drawBadgeShopSketch(ctx, 10, (h - shopSize) / 2, shopSize);
 
     // Store Name
     const cleanName = (storeName || 'SHRINANT').toUpperCase().trim().slice(0, 18);
-    const divX = 146;
+    const divX = 142;
     let nameFontSize = 13;
     ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
     let nameW = ctx.measureText(cleanName).width;
-    const maxNameW = divX - 58;
+    const maxNameW = divX - 56;
     if (nameW > maxNameW && maxNameW > 30) {
       nameFontSize = Math.max(9, Math.floor(nameFontSize * maxNameW / nameW));
       ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
     }
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cleanName, 54, h / 2);
+    ctx.fillText(cleanName, 52, h / 2);
 
-    // Divider with heart
+    // Clean Divider (no heart)
     ctx.lineWidth = 1;
-    ctx.strokeStyle = '#000000';
+    ctx.strokeStyle = '#cbd5e1';
     ctx.beginPath();
     ctx.moveTo(divX, 6);
     ctx.lineTo(divX, h - 6);
     ctx.stroke();
 
-    // Center Heart on Divider
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(divX - 6, h / 2 - 6, 12, 12);
-    drawBadgeHeart(ctx, divX, h / 2 - 3, 5, true);
-
-    // QR Code (scaled up from 30 to 42)
+    // QR Code with selected shape
     const qrImg = new Image();
     await new Promise((resolve) => {
       qrImg.onload = resolve;
@@ -418,26 +468,121 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    const qrSize = 42;
-    const qrX = divX + 14;
-    const qrY = (h - qrSize) / 2;
+    let qrSize = 38;
+    let qrX = divX + 16;
+    let qrY = (h - qrSize) / 2;
+    let textX = qrX + qrSize + 14;
+
+    if (qrShape === 'heart') {
+      qrSize = 33;
+      qrX = divX + 18;
+      qrY = (h - qrSize) / 2 + 1;
+      const hW = qrSize + 16;
+      const hX = qrX + qrSize / 2;
+      const hTop = 3.5;
+      const hBot = h - 4.5;
+
+      ctx.save();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = '#000000';
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(hX, hTop + 9);
+      ctx.bezierCurveTo(hX - 5, hTop, hX - hW / 2, hTop, hX - hW / 2, hTop + 14);
+      ctx.bezierCurveTo(hX - hW / 2, hTop + 24, hX - 9, hBot - 6, hX, hBot);
+      ctx.bezierCurveTo(hX + 9, hBot - 6, hX + hW / 2, hTop + 24, hX + hW / 2, hTop + 14);
+      ctx.bezierCurveTo(hX + hW / 2, hTop, hX + 5, hTop, hX, hTop + 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      textX = qrX + qrSize + 16;
+    } else if (qrShape === 'trolley') {
+      qrSize = 34;
+      qrX = divX + 22;
+      qrY = 6;
+      const pad = 2;
+      const bLeft = qrX - pad;
+      const bTop = qrY - pad;
+      const bW = qrSize + pad * 2;
+      const bH = qrSize + pad * 2 - 3;
+      const bBottom = bTop + bH;
+
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#000000';
+      ctx.fillStyle = '#ffffff';
+
+      // Trolley basket
+      ctx.beginPath();
+      ctx.roundRect(bLeft, bTop, bW, bH, [2, 2, 4, 4]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Handle on left
+      ctx.beginPath();
+      ctx.moveTo(bLeft, bTop + 4);
+      ctx.lineTo(bLeft - 5, bTop - 1);
+      ctx.lineTo(bLeft - 8, bTop - 1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft - 8, bTop - 1, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      // Two wheels below basket
+      const wheelY = bBottom + 3.5;
+      const wheelR = 2.4;
+      ctx.beginPath();
+      ctx.arc(bLeft + 6, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft + 6, wheelY, 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(bLeft + bW - 6, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bLeft + bW - 6, wheelY, 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+      ctx.restore();
+
+      textX = qrX + qrSize + 16;
+    } else {
+      // Default clean Square
+      qrSize = 38;
+      qrX = divX + 16;
+      qrY = (h - qrSize) / 2;
+      const pad = 2.5;
+
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#000000';
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(qrX - pad, qrY - pad, qrSize + pad * 2, qrSize + pad * 2, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      textX = qrX + qrSize + 14;
+    }
+
+    // Draw QR code inside container
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-    // Cute hearts around QR
-    drawBadgeHeart(ctx, qrX - 2, qrY - 1, 4, true);
-    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY - 1, 4, true);
-    drawBadgeHeart(ctx, qrX - 2, qrY + qrSize - 2, 4, true);
-    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY + qrSize - 2, 4, true);
-
-    // Follow our page text
-    const textX = qrX + qrSize + 12;
+    // Follow our page text (Clean, no tiny hearts)
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textBaseline = 'top';
-    ctx.fillText('Follow', textX, 10);
-    ctx.fillText('our page', textX, 26);
-    const tw = ctx.measureText('our page').width;
-    drawBadgeHeart(ctx, textX + tw + 6, 23, 6, true);
+    ctx.fillText('Follow', textX, 11);
+    ctx.fillText('our page', textX, 27);
   }
 
   return canvas.toDataURL('image/png');
@@ -3023,6 +3168,20 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       return '';
     }
   });
+  const [followUsQrShape, setFollowUsQrShape] = useState(() => {
+    try {
+      return localStorage.getItem('label_follow_us_qr_shape') || 'square';
+    } catch {
+      return 'square';
+    }
+  });
+
+  const handleSelectQrShape = (shape) => {
+    setFollowUsQrShape(shape);
+    try {
+      localStorage.setItem('label_follow_us_qr_shape', shape);
+    } catch {}
+  };
 
   const handleSelectFollowStore = (storeName) => {
     setSelectedFollowStoreName(storeName);
@@ -4321,12 +4480,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
         const getBadgeImage = async (storeName, isLarge) => {
           if (!qrDataUrl) return null;
-          const cacheKey = `${storeName || 'default'}_${isLarge ? 'L' : 'S'}`;
+          const currentShape = followUsQrShape || 'square';
+          const cacheKey = `${storeName || 'default'}_${isLarge ? 'L' : 'S'}_${currentShape}`;
           if (badgeImageCache.has(cacheKey)) {
             return badgeImageCache.get(cacheKey);
           }
           try {
-            const badgeDataUrl = await generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge);
+            const badgeDataUrl = await generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge, currentShape);
             const badgeBase64 = badgeDataUrl.replace(/^data:image\/png;base64,/, '');
             const badgeBytes = Uint8Array.from(atob(badgeBase64), c => c.charCodeAt(0));
             const embedded = await outDoc.embedPng(badgeBytes);
@@ -5704,6 +5864,54 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                       ? `Selected store: "${selectedFollowStoreName}" — QR & name will print on labels.`
                       : 'Select a store from dropdown to print its QR badge on label footer.'}
                   </p>
+
+                  {/* QR Shape Selector */}
+                  {printFollowUs && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-600 shrink-0">QR Shape:</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectQrShape('square')}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                            followUsQrShape === 'square'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title="Square Shape"
+                        >
+                          <span>▢</span>
+                          <span>Square</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectQrShape('heart')}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                            followUsQrShape === 'heart'
+                              ? 'bg-pink-600 text-white border-pink-600 shadow-xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title="Heart Shape"
+                        >
+                          <span>♥</span>
+                          <span>Heart</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectQrShape('trolley')}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                            followUsQrShape === 'trolley'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title="E-commerce Trolley Shape"
+                        >
+                          <span>🛒</span>
+                          <span>Trolley</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 4. Print Options */}
