@@ -3101,6 +3101,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showSkuModal, setShowSkuModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [crossMarketplaceAlert, setCrossMarketplaceAlert] = useState(null); // { detectedMp: 'meesho' | 'flipcart' | ..., detectedName: string, currentMp: string, currentName: string, files: File[], onProceedAnyway: fn }
 
   // Settings State: Global Branding / Preferences (persisted in localStorage)
   const [printDateTime, setPrintDateTime] = useState(() => {
@@ -3833,25 +3834,128 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
     return `${String(mins).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
   };
 
-  // Handle uploaded files strictly for current marketplace
-  const handleFiles = (selectedFiles) => {
-    const valid = Array.from(selectedFiles).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-    if (valid.length === 0) {
-      if (showToast) showToast('Please select valid PDF files', 'error');
-      return;
+  // Inspect first page text of a PDF to identify its marketplace origin
+  const detectPdfMarketplace = async (file) => {
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const pdfJsDoc = await pdfjsLib.getDocument({ data: arrayBuf.slice(0) }).promise;
+      if (pdfJsDoc.numPages < 1) return null;
+      const page = await pdfJsDoc.getPage(1);
+      const textContent = await page.getTextContent();
+      const rawText = textContent.items.map(it => it.str).join(' ');
+      const lower = rawText.toLowerCase();
+
+      // 1. Check Meesho signatures:
+      // - "Product Details" + "SKU"
+      // - "If undelivered, return to:" + "Tax Invoice" / "Original For Recipient"
+      // - "Fashnear Technologies" / "meesho"
+      const hasMeeshoProductDetails = /product\s*details/i.test(rawText) && /sku\s+size\s+qty/i.test(rawText);
+      const hasMeeshoReturn = /if\s+undelivered,?\s+return\s+to:?/i.test(rawText);
+      const hasMeeshoBrand = /\bmeesho\b/i.test(lower) || /fashnear\s*technologies/i.test(lower);
+      if (hasMeeshoProductDetails || (hasMeeshoReturn && (hasMeeshoBrand || /tax\s*invoice/i.test(rawText)))) {
+        return 'meesho';
+      }
+
+      // 2. Check Flipkart signatures:
+      // - OD order number OD\d{16,22}
+      // - FMPC / FMPP tracking numbers
+      // - "Ordered through Flipkart" / "Ekart Logistics" / "Transparent Packaging"
+      const hasFlipkartOD = /\bOD\d{16,22}\b/i.test(rawText);
+      const hasFlipkartFmpc = /\bFMP[CP]\d{10,14}\b/i.test(rawText);
+      const hasFlipkartBrand = /flipkart/i.test(lower) || /ordered\s*through/i.test(lower) || /ekart/i.test(lower);
+      if (hasFlipkartOD || hasFlipkartFmpc || (hasFlipkartBrand && /sku\s*id/i.test(rawText))) {
+        return 'flipcart';
+      }
+
+      // 3. Check Amazon signatures:
+      // - Order ID 40X-XXXXXXX-XXXXXXX
+      // - Tracking TBA\d{12}
+      // - Amazon Transportation Services / Easy Ship
+      const hasAmazonOrder = /\b[0-9]{3}-[0-9]{7}-[0-9]{7}\b/.test(rawText);
+      const hasAmazonTba = /\bTBA[0-9]{12}\b/i.test(rawText);
+      const hasAmazonBrand = /amazon\s*transportation|easy\s*ship|\bamazon\.in\b/i.test(lower);
+      if (hasAmazonOrder || hasAmazonTba || hasAmazonBrand) {
+        return 'amazon';
+      }
+
+      // 4. Check Snapdeal signatures:
+      // - SUBORDER CODE or SUBORDER NO
+      // - SLP tracking SLP\d{9,14}
+      // - snapdeal.com / Jasper Infotech
+      const hasSnapdealSuborder = /suborder\s*(?:code|no\.?)/i.test(rawText);
+      const hasSnapdealBrand = /snapdeal/i.test(lower) || /jasper\s*infotech/i.test(lower) || /\bSLP\d{9,14}\b/i.test(rawText);
+      if (hasSnapdealSuborder || hasSnapdealBrand) {
+        return 'snapdeal';
+      }
+
+      // 5. Check Ajio signatures:
+      // - Reliance Retail Limited
+      // - ajio.com / AJIO
+      if (/\bajio\b/i.test(lower) || /reliance\s*retail\s*limited/i.test(lower)) {
+        return 'ajio';
+      }
+
+      return null;
+    } catch (err) {
+      console.warn('detectPdfMarketplace warning:', err);
+      return null;
     }
-    updateMarketplaceState(selectedMarketplace, prev => {
+  };
+
+  const mpNameMap = {
+    meesho: 'Meesho',
+    flipcart: 'Flipkart',
+    amazon: 'Amazon',
+    snapdeal: 'Snapdeal',
+    ajio: 'Ajio',
+    myntra: 'Myntra'
+  };
+
+  // Directly commit files to target marketplace state
+  const appendFilesToMarketplace = (mpId, validFiles) => {
+    updateMarketplaceState(mpId, prev => {
       if (prev.downloadReady?.url) {
         try { URL.revokeObjectURL(prev.downloadReady.url); } catch (e) {}
       }
       return {
-        files: [...prev.files, ...valid],
+        files: [...prev.files, ...validFiles],
         downloadReady: null,
       };
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Handle uploaded files strictly for current marketplace with cross-marketplace alert
+  const handleFiles = async (selectedFiles) => {
+    const valid = Array.from(selectedFiles).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (valid.length === 0) {
+      if (showToast) showToast('Please select valid PDF files', 'error');
+      return;
+    }
+
+    // Inspect first file for cross-marketplace mismatch
+    const detected = await detectPdfMarketplace(valid[0]);
+    if (detected && detected !== selectedMarketplace) {
+      const detectedName = mpNameMap[detected] || detected;
+      const currentName = mpNameMap[selectedMarketplace] || selectedMarketplace;
+
+      setCrossMarketplaceAlert({
+        detectedMp: detected,
+        detectedName,
+        currentMp: selectedMarketplace,
+        currentName,
+        files: valid,
+        onProceedAnyway: () => {
+          appendFilesToMarketplace(selectedMarketplace, valid);
+          setCrossMarketplaceAlert(null);
+        }
+      });
+      return;
+    }
+
+    appendFilesToMarketplace(selectedMarketplace, valid);
   };
 
   const removeFile = (idx) => {
@@ -8240,6 +8344,79 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CROSS-MARKETPLACE DETECTION ALERT MODAL ================= */}
+      {crossMarketplaceAlert && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
+            {/* Header Icon & Title */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  Wrong Marketplace File
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                  {crossMarketplaceAlert.detectedName} Label Detected!
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCrossMarketplaceAlert(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Warning Description Box */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-2 text-xs text-slate-600">
+              <p>
+                You uploaded a <strong className="text-slate-900 font-bold">{crossMarketplaceAlert.detectedName}</strong> shipping label, but you are currently in the <strong className="text-slate-900 font-bold">{crossMarketplaceAlert.currentName}</strong> cropper tab.
+              </p>
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] font-medium text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Cropping with the wrong dimensions may cut through barcodes and text!</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetMp = crossMarketplaceAlert.detectedMp;
+                  const filesToMove = crossMarketplaceAlert.files;
+                  setCrossMarketplaceAlert(null);
+                  handleSelectMarketplace(targetMp);
+                  appendFilesToMarketplace(targetMp, filesToMove);
+                  showToast?.(`Switched to ${crossMarketplaceAlert.detectedName} Cropper and loaded files!`, 'success');
+                }}
+                className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Scissors className="w-4 h-4" />
+                <span>Switch to {crossMarketplaceAlert.detectedName} &amp; Load</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (crossMarketplaceAlert.onProceedAnyway) {
+                    crossMarketplaceAlert.onProceedAnyway();
+                  } else {
+                    setCrossMarketplaceAlert(null);
+                  }
+                }}
+                className="w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer text-center"
+              >
+                Continue Anyway
+              </button>
+            </div>
           </div>
         </div>
       )}
