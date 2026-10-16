@@ -256,8 +256,8 @@ function drawBadgeShopSketch(ctx, x, y, size) {
 
 async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = false) {
   const canvas = document.createElement('canvas');
-  const w = isLarge ? 470 : 320;
-  const h = isLarge ? 88 : 38;
+  const w = isLarge ? 470 : 340;
+  const h = isLarge ? 88 : 52;
   const scale = 4; // High-DPI 300+
   canvas.width = w * scale;
   canvas.height = h * scale;
@@ -370,27 +370,34 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.font = 'bold 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('Scan with phone camera', textX, 64);
   } else {
-    // Compact version for crop mode (w=320, h=38)
-    const r = 8;
-    ctx.lineWidth = 1.5;
+    // Compact version for crop mode (w=340, h=52)
+    const r = 9;
+    ctx.lineWidth = 1.6;
     ctx.strokeStyle = '#000000';
     ctx.beginPath();
-    ctx.roundRect(1, 1, w - 2, h - 2, r);
+    ctx.roundRect(1.5, 1.5, w - 3, h - 3, r);
     ctx.stroke();
 
-    // Shop Sketch
-    const shopSize = 28;
-    drawBadgeShopSketch(ctx, 8, (h - shopSize) / 2, shopSize);
+    // Shop Sketch (scaled up from 28 to 38)
+    const shopSize = 38;
+    drawBadgeShopSketch(ctx, 10, (h - shopSize) / 2, shopSize);
 
     // Store Name
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-    ctx.textBaseline = 'middle';
     const cleanName = (storeName || 'SHRINANT').toUpperCase().trim().slice(0, 18);
-    ctx.fillText(cleanName, 42, h / 2);
+    const divX = 146;
+    let nameFontSize = 13;
+    ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+    let nameW = ctx.measureText(cleanName).width;
+    const maxNameW = divX - 58;
+    if (nameW > maxNameW && maxNameW > 30) {
+      nameFontSize = Math.max(9, Math.floor(nameFontSize * maxNameW / nameW));
+      ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+    }
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cleanName, 54, h / 2);
 
     // Divider with heart
-    const divX = 135;
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#000000';
     ctx.beginPath();
@@ -398,7 +405,12 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.lineTo(divX, h - 6);
     ctx.stroke();
 
-    // QR Code
+    // Center Heart on Divider
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(divX - 6, h / 2 - 6, 12, 12);
+    drawBadgeHeart(ctx, divX, h / 2 - 3, 5, true);
+
+    // QR Code (scaled up from 30 to 42)
     const qrImg = new Image();
     await new Promise((resolve) => {
       qrImg.onload = resolve;
@@ -406,26 +418,26 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    const qrSize = 30;
+    const qrSize = 42;
     const qrX = divX + 14;
     const qrY = (h - qrSize) / 2;
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
     // Cute hearts around QR
-    drawBadgeHeart(ctx, qrX - 2, qrY - 1, 3.5, true);
-    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY - 1, 3.5, true);
-    drawBadgeHeart(ctx, qrX - 2, qrY + qrSize - 2, 3.5, true);
-    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY + qrSize - 2, 3.5, true);
+    drawBadgeHeart(ctx, qrX - 2, qrY - 1, 4, true);
+    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY - 1, 4, true);
+    drawBadgeHeart(ctx, qrX - 2, qrY + qrSize - 2, 4, true);
+    drawBadgeHeart(ctx, qrX + qrSize + 2, qrY + qrSize - 2, 4, true);
 
     // Follow our page text
-    const textX = qrX + qrSize + 10;
+    const textX = qrX + qrSize + 12;
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textBaseline = 'top';
-    ctx.fillText('Follow', textX, 7);
-    ctx.fillText('our page', textX, 20);
+    ctx.fillText('Follow', textX, 10);
+    ctx.fillText('our page', textX, 26);
     const tw = ctx.measureText('our page').width;
-    drawBadgeHeart(ctx, textX + tw + 6, 17, 5, true);
+    drawBadgeHeart(ctx, textX + tw + 6, 23, 6, true);
   }
 
   return canvas.toDataURL('image/png');
@@ -4364,10 +4376,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFollowUs = Boolean(printFollowUs && followUsLink.trim() && qrDataUrl);
               const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
               const hasDateOrPage = Boolean(printDateTime || printPageNumber);
-              const followUsH = hasFollowUs ? 44 : 0;
-              const thanksH = hasThanks ? 20 : 0;
-              const metaH = hasDateOrPage ? 18 : 0;
-              const footerH = followUsH + thanksH + metaH + (hasFollowUs ? 6 : 0);
+              const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
+
+              const cardH = 50;
+              const cardW = Math.min(320, srcW);
+              const footerH = hasFollowUs
+                ? (hasFooterRow ? (cardH + 22) : (cardH + 6))
+                : (hasFooterRow ? 18 : 0);
               const padding = 4;
               const targetW = srcW + (padding * 2);
               const targetH = srcH + (padding * 2) + footerH;
@@ -4381,10 +4396,10 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 height: srcH,
               });
 
-              // Bottom margin for Date & Page number: 7.5 pt from bottom edge
-              const metaY = 7.5;
+              // Bottom margin for single footer row: 6.5 pt from bottom edge
+              const metaY = padding + 2.5;
 
-              // Date/Time footer
+              // 1. Date/Time footer (Left side)
               if (printDateTime) {
                 targetPage.drawText(batchDateTimeStr, {
                   x: padding + 2,
@@ -4395,7 +4410,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 });
               }
 
-              // Page Number
+              // 2. Page Number (Right side)
               if (printPageNumber) {
                 const pageStr = `${i + 1}`;
                 const textW = helveticaBold.widthOfTextAtSize(pageStr, 7.5);
@@ -4408,12 +4423,31 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 });
               }
 
-              // 1. Follow Us Panel (Positioned BETWEEN Label and Thanks Line)
+              // 3. Thanks Line (Shifted to single row as CENTER)
+              if (hasThanks) {
+                const thankStr = thanksLineText.trim();
+                let drawFontSize = 8.5;
+                let textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
+                const leftReserved = printDateTime ? 120 : 15;
+                const rightReserved = printPageNumber ? 40 : 15;
+                const maxCenterW = targetW - (Math.max(leftReserved, rightReserved) * 2);
+                if (textW > maxCenterW && maxCenterW > 50) {
+                  drawFontSize = Math.max(6, Math.floor(drawFontSize * maxCenterW / textW));
+                  textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
+                }
+                targetPage.drawText(thankStr, {
+                  x: (targetW - textW) / 2,
+                  y: metaY,
+                  size: drawFontSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // 4. Follow Us Panel (Enlarged with few pixels gap above Thanks line)
               if (hasFollowUs) {
-                const cardW = Math.min(300, targetW - 16);
-                const cardH = 36;
                 const cardX = (targetW - cardW) / 2;
-                const cardY = padding + footerH - cardH - 2;
+                const cardY = padding + (hasFooterRow ? 18 : 2);
 
                 const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, false);
                 if (badgeImg) {
@@ -4425,26 +4459,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   });
                 }
               }
-
-              // 2. Thanks Line (below Follow Us panel, above date)
-              if (hasThanks) {
-                const thankStr = thanksLineText.trim();
-                const fontSize = hasDateOrPage ? 9.5 : 10.5;
-                let drawFontSize = fontSize;
-                let textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
-                if (textW > targetW - 12) {
-                  drawFontSize = Math.max(6, Math.floor(fontSize * (targetW - 12) / textW));
-                  textW = helveticaBold.widthOfTextAtSize(thankStr, drawFontSize);
-                }
-                const thanksY = hasDateOrPage ? 21 : (hasFollowUs ? (footerH - followUsH - 18) : 10);
-                targetPage.drawText(thankStr, {
-                  x: (targetW - textW) / 2,
-                  y: thanksY,
-                  size: drawFontSize,
-                  font: helveticaBold,
-                  color: rgb(0, 0, 0),
-                });
-              }
             } else {
               // ================= MEESHO ORIGINAL CROPPING =================
               // Dynamic Meesho label height: cleanly terminates on the bottom horizontal border line above TAX INVOICE while protecting full SKU line
@@ -4453,10 +4467,13 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFollowUs = Boolean(printFollowUs && followUsLink.trim() && qrDataUrl);
               const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
               const hasDateOrPage = Boolean(printDateTime || printPageNumber);
-              const followUsH = hasFollowUs ? 46 : 0;
-              const thanksH = hasThanks ? 20 : 0;
-              const metaH = hasDateOrPage ? 18 : 0;
-              const extraH = followUsH + thanksH + metaH + (hasFollowUs ? 6 : 0);
+              const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
+
+              const cardH = 52;
+              const cardW = Math.min(340, pageSize.width - 24);
+              const extraH = hasFollowUs
+                ? (hasFooterRow ? (cardH + 24) : (cardH + 8))
+                : (hasFooterRow ? 20 : 0);
               const targetH = labelH + extraH;
 
               const embeddedPage = await outDoc.embedPage(srcPage, {
@@ -4477,9 +4494,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 height: labelH,
               });
 
-              const metaY = 8;
+              const metaY = 7.5;
 
-              // Date/Time footer (bold font, solid black, with seconds)
+              // 1. Date/Time footer (Left side, solid black bold)
               if (printDateTime) {
                 targetPage.drawText(batchDateTimeStr, {
                   x: 12,
@@ -4490,7 +4507,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 });
               }
 
-              // Page Number (bold font, solid black)
+              // 2. Page Number (Right side, solid black bold)
               if (printPageNumber) {
                 const pageStr = `${i + 1}`;
                 const textW = helveticaBold.widthOfTextAtSize(pageStr, 8.5);
@@ -4503,12 +4520,31 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 });
               }
 
-              // 1. Follow Us Panel (Positioned BETWEEN Label and Thanks Line)
+              // 3. Thanks Line (Shifted to single row as CENTER: Date/Time on left, Thanks in center, Page# on right)
+              if (hasThanks) {
+                const thankText = thanksLineText.trim();
+                let drawFontSize = 9.5;
+                let textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
+                const leftReserved = printDateTime ? 140 : 20;
+                const rightReserved = printPageNumber ? 50 : 20;
+                const maxCenterW = pW - (Math.max(leftReserved, rightReserved) * 2);
+                if (textW > maxCenterW && maxCenterW > 60) {
+                  drawFontSize = Math.max(7, Math.floor(drawFontSize * maxCenterW / textW));
+                  textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
+                }
+                targetPage.drawText(thankText, {
+                  x: (pW - textW) / 2,
+                  y: metaY,
+                  size: drawFontSize,
+                  font: helveticaBold,
+                  color: rgb(0, 0, 0),
+                });
+              }
+
+              // 4. Follow Us Panel (Enlarged with few pixels gap above Thanks line)
               if (hasFollowUs) {
-                const cardW = Math.min(320, pW - 24);
-                const cardH = 38;
                 const cardX = (pW - cardW) / 2;
-                const cardY = extraH - cardH - 4;
+                const cardY = hasFooterRow ? 20 : 4;
 
                 const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, false);
                 if (badgeImg) {
@@ -4519,26 +4555,6 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                     height: cardH,
                   });
                 }
-              }
-
-              // 2. Thanks Line (Placed Below Follow Us Panel, Above Date)
-              if (hasThanks) {
-                const thankText = thanksLineText.trim();
-                const fontSize = hasDateOrPage ? 10 : 11;
-                let drawFontSize = fontSize;
-                let textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
-                if (textW > pW - 16) {
-                  drawFontSize = Math.max(7, Math.floor(fontSize * (pW - 16) / textW));
-                  textW = helveticaBold.widthOfTextAtSize(thankText, drawFontSize);
-                }
-                const thanksY = hasDateOrPage ? 22 : (hasFollowUs ? (extraH - followUsH - 20) : 10);
-                targetPage.drawText(thankText, {
-                  x: (pW - textW) / 2,
-                  y: thanksY,
-                  size: drawFontSize,
-                  font: helveticaBold,
-                  color: rgb(0, 0, 0),
-                });
               }
             }
           } else {
