@@ -325,44 +325,41 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
 
     if (qrShape === 'heart') {
       const heartW = 68;
-      const heartH = 68;
+      const heartH = 66;
       const heartCx = divX + 22 + heartW / 2;
-      const heartCy = h / 2;
-      const heartTop = (h - heartH) / 2;
-      const heartBot = heartTop + heartH;
-      const notchY = heartTop + heartH * 0.28;
-      const lobeR = heartW * 0.26;
+      const heartBot = (h + heartH) / 2 - 3;
+      const heartTop = heartBot - heartH;
+      const notchY = heartTop + heartH * 0.26;
 
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(heartCx, notchY);
-      ctx.bezierCurveTo(heartCx - lobeR * 0.6, heartTop, heartCx - heartW * 0.5, heartTop, heartCx - heartW * 0.5, heartTop + heartH * 0.35);
-      ctx.bezierCurveTo(heartCx - heartW * 0.5, heartTop + heartH * 0.65, heartCx - heartW * 0.12, heartBot - 2, heartCx, heartBot);
-      ctx.bezierCurveTo(heartCx + heartW * 0.12, heartBot - 2, heartCx + heartW * 0.5, heartTop + heartH * 0.65, heartCx + heartW * 0.5, heartTop + heartH * 0.35);
-      ctx.bezierCurveTo(heartCx + heartW * 0.5, heartTop, heartCx + lobeR * 0.6, heartTop, heartCx, notchY);
+      ctx.moveTo(heartCx, heartBot);
+      ctx.lineTo(heartCx - heartW * 0.5, heartTop + heartH * 0.42);
+      ctx.bezierCurveTo(heartCx - heartW * 0.5, heartTop, heartCx - heartW * 0.05, heartTop, heartCx, notchY);
+      ctx.bezierCurveTo(heartCx + heartW * 0.05, heartTop, heartCx + heartW * 0.5, heartTop, heartCx + heartW * 0.5, heartTop + heartH * 0.42);
+      ctx.lineTo(heartCx, heartBot);
       ctx.closePath();
 
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.clip();
 
-      const qrDrawSize = heartW * 0.78;
-      ctx.translate(heartCx, heartCy - 0.5);
+      const qrDrawSize = 54;
+      ctx.translate(heartCx, heartTop + heartH * 0.46);
       ctx.rotate(225 * Math.PI / 180);
       ctx.drawImage(qrImg, -qrDrawSize / 2, -qrDrawSize / 2, qrDrawSize, qrDrawSize);
       ctx.restore();
 
       textX = divX + 22 + heartW + 18;
     } else if (qrShape === 'trolley') {
-      const qrSize = 50;
-      const qrX = divX + 24;
-      const qrY = (h - qrSize) / 2;
-      const padT = 3;
-      const bLeft = qrX - padT;
-      const bTop = qrY - padT;
-      const bW = qrSize + padT * 2;
-      const bH = qrSize + padT * 2 - 4;
+      const bW = 56;
+      const bH = 48;
+      const bLeft = divX + 30;
+      const bTop = 15;
       const bBottom = bTop + bH;
+      const qrSize = 46;
+      const qrX = bLeft + 5;
+      const qrY = bTop + 1;
 
       ctx.save();
       ctx.lineWidth = 1.8;
@@ -371,60 +368,66 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
 
       // Basket
       ctx.beginPath();
-      ctx.roundRect(bLeft, bTop, bW, bH, [4, 4, 6, 6]);
+      ctx.moveTo(bLeft, bTop);
+      ctx.lineTo(bLeft, bBottom);
+      ctx.lineTo(bLeft + bW - 4, bBottom);
+      ctx.lineTo(bLeft + bW, bTop);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Handle
+      // Handle (angles safely down and left)
       ctx.beginPath();
-      ctx.moveTo(bLeft, bTop + 5);
-      ctx.lineTo(bLeft - 7, bTop - 2);
-      ctx.lineTo(bLeft - 11, bTop - 2);
+      ctx.moveTo(bLeft, bTop + 4);
+      ctx.lineTo(bLeft - 8, bTop + 10);
+      ctx.lineTo(bLeft - 13, bTop + 10);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft - 11, bTop - 2, 2, 0, Math.PI * 2);
+      ctx.arc(bLeft - 13, bTop + 10, 2, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
 
       // Wheels
-      const wheelY = bBottom + 4.5;
-      const wheelR = 3.5;
+      const wheelY = bBottom + 8;
+      const wheelR = 4.5;
+      const w1X = bLeft + 11;
+      const w2X = bLeft + bW - 11;
+
       ctx.beginPath();
-      ctx.arc(bLeft + 9, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.moveTo(bLeft + 8, bBottom);
+      ctx.lineTo(w1X, wheelY - wheelR);
+      ctx.lineTo(w2X, wheelY - wheelR);
+      ctx.lineTo(bLeft + bW - 8, bBottom);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(w1X, wheelY, wheelR, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft + 9, wheelY, 1.5, 0, Math.PI * 2);
+      ctx.arc(w1X, wheelY, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(bLeft + bW - 9, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.arc(w2X, wheelY, wheelR, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft + bW - 9, wheelY, 1.5, 0, Math.PI * 2);
+      ctx.arc(w2X, wheelY, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
       ctx.restore();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = qrX + qrSize + 18;
+      textX = bLeft + bW + 20;
     } else {
-      // Default clean Square
-      const qrSize = 54;
-      const qrX = divX + 18;
+      // Clean borderless Square
+      const qrSize = 56;
+      const qrX = divX + 20;
       const qrY = (h - qrSize) / 2;
-      const qrPad = 4;
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.roundRect(qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, 6);
-      ctx.fill();
-      ctx.stroke();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
       textX = qrX + qrSize + 18;
@@ -487,29 +490,23 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     let qrSize = 38;
     let qrX = divX + 16;
     let qrY = (h - qrSize) / 2;
-    let textX = qrX + qrSize + 14;
+    let textX = divX + 16 + 38 + 14;
 
     if (qrShape === 'heart') {
-      const heartW = 42;
-      const heartH = 42;
+      const heartW = 44;
+      const heartH = 43;
       const heartCx = divX + 16 + heartW / 2;
-      const heartCy = h / 2;
-      const heartTop = (h - heartH) / 2;
-      const heartBot = heartTop + heartH;
-      const notchY = heartTop + heartH * 0.28;
-      const lobeR = heartW * 0.26;
+      const heartBot = (h + heartH) / 2 - 2;
+      const heartTop = heartBot - heartH;
+      const notchY = heartTop + heartH * 0.26;
 
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(heartCx, notchY);
-      // Left lobe curve
-      ctx.bezierCurveTo(heartCx - lobeR * 0.6, heartTop, heartCx - heartW * 0.5, heartTop, heartCx - heartW * 0.5, heartTop + heartH * 0.35);
-      // Down to bottom tip
-      ctx.bezierCurveTo(heartCx - heartW * 0.5, heartTop + heartH * 0.65, heartCx - heartW * 0.12, heartBot - 2, heartCx, heartBot);
-      // Up to right lobe
-      ctx.bezierCurveTo(heartCx + heartW * 0.12, heartBot - 2, heartCx + heartW * 0.5, heartTop + heartH * 0.65, heartCx + heartW * 0.5, heartTop + heartH * 0.35);
-      // Right lobe curve to notch
-      ctx.bezierCurveTo(heartCx + heartW * 0.5, heartTop, heartCx + lobeR * 0.6, heartTop, heartCx, notchY);
+      ctx.moveTo(heartCx, heartBot);
+      ctx.lineTo(heartCx - heartW * 0.5, heartTop + heartH * 0.42);
+      ctx.bezierCurveTo(heartCx - heartW * 0.5, heartTop, heartCx - heartW * 0.05, heartTop, heartCx, notchY);
+      ctx.bezierCurveTo(heartCx + heartW * 0.05, heartTop, heartCx + heartW * 0.5, heartTop, heartCx + heartW * 0.5, heartTop + heartH * 0.42);
+      ctx.lineTo(heartCx, heartBot);
       ctx.closePath();
 
       // Fill heart white
@@ -517,87 +514,99 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.fill();
       ctx.clip();
 
-      // Draw 45-degree rotated QR code directly inside the heart (black and white matching Image 2)
-      const qrDrawSize = heartW * 0.78;
-      ctx.translate(heartCx, heartCy - 0.5);
+      // Draw 45-degree rotated QR code directly inside the heart (black and white matching Image 4)
+      const qrDrawSize = 35;
+      ctx.translate(heartCx, heartTop + heartH * 0.46);
       ctx.rotate(225 * Math.PI / 180);
       ctx.drawImage(qrImg, -qrDrawSize / 2, -qrDrawSize / 2, qrDrawSize, qrDrawSize);
       ctx.restore();
 
       textX = divX + 16 + heartW + 14;
     } else if (qrShape === 'trolley') {
-      const qrSize = 34;
-      const qrX = divX + 22;
-      const qrY = 6;
-      const pad = 2;
-      const bLeft = qrX - pad;
-      const bTop = qrY - pad;
-      const bW = qrSize + pad * 2;
-      const bH = qrSize + pad * 2 - 3;
+      const bW = 34;
+      const bH = 28;
+      const bLeft = divX + 22;
+      const bTop = 9;
       const bBottom = bTop + bH;
+      const qrSize = 28;
+      const qrX = bLeft + 3;
+      const qrY = bTop + 1;
 
       ctx.save();
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.4;
       ctx.strokeStyle = '#000000';
       ctx.fillStyle = '#ffffff';
 
-      // Trolley basket
+      // 1. Cart Basket (clean wire cart frame holding QR)
       ctx.beginPath();
-      ctx.roundRect(bLeft, bTop, bW, bH, [2, 2, 4, 4]);
+      ctx.moveTo(bLeft, bTop);
+      ctx.lineTo(bLeft, bBottom);
+      ctx.lineTo(bLeft + bW - 3, bBottom);
+      ctx.lineTo(bLeft + bW, bTop);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Handle on left
+      // Top rim
       ctx.beginPath();
-      ctx.moveTo(bLeft, bTop + 4);
-      ctx.lineTo(bLeft - 5, bTop - 1);
-      ctx.lineTo(bLeft - 8, bTop - 1);
+      ctx.moveTo(bLeft - 1, bTop);
+      ctx.lineTo(bLeft + bW + 1, bTop);
+      ctx.stroke();
+
+      // 2. Push Handle (Angles safely DOWN-LEFT, staying far from top card border)
+      ctx.beginPath();
+      ctx.moveTo(bLeft, bTop + 3);
+      ctx.lineTo(bLeft - 5, bTop + 6);
+      ctx.lineTo(bLeft - 8, bTop + 6);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft - 8, bTop - 1, 1.5, 0, Math.PI * 2);
+      ctx.arc(bLeft - 8, bTop + 6, 1.4, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
 
-      // Two wheels below basket
-      const wheelY = bBottom + 3.5;
-      const wheelR = 2.4;
+      // 3. Chassis strut
+      const wheelY = bBottom + 5;
+      const wheelR = 2.8;
+      const w1X = bLeft + 7;
+      const w2X = bLeft + bW - 7;
+
       ctx.beginPath();
-      ctx.arc(bLeft + 6, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.moveTo(bLeft + 5, bBottom);
+      ctx.lineTo(w1X, wheelY - wheelR);
+      ctx.lineTo(w2X, wheelY - wheelR);
+      ctx.lineTo(bLeft + bW - 5, bBottom);
+      ctx.stroke();
+
+      // 4. Wheels
+      ctx.beginPath();
+      ctx.arc(w1X, wheelY, wheelR, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft + 6, wheelY, 1, 0, Math.PI * 2);
+      ctx.arc(w1X, wheelY, 1.2, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(bLeft + bW - 6, wheelY, wheelR, 0, Math.PI * 2);
+      ctx.arc(w2X, wheelY, wheelR, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bLeft + bW - 6, wheelY, 1, 0, Math.PI * 2);
+      ctx.arc(w2X, wheelY, 1.2, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
+
       ctx.restore();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = qrX + qrSize + 16;
+      textX = bLeft + bW + 14;
     } else {
-      // Default clean Square
-      const qrSize = 38;
+      // Clean borderless Square (no outer border)
+      const qrSize = 40;
       const qrX = divX + 16;
       const qrY = (h - qrSize) / 2;
-      const pad = 2.5;
-
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#000000';
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(qrX - pad, qrY - pad, qrSize + pad * 2, qrSize + pad * 2, 4);
-      ctx.fill();
-      ctx.stroke();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
       textX = qrX + qrSize + 14;
