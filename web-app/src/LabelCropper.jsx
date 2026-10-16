@@ -4067,6 +4067,26 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         if (storeMatch) storeName = storeMatch[1].trim().slice(0, 30);
       }
 
+      // 5. Detect exact bottom boundary of the shipping label (Product Details bottom border)
+      // Standard calibrated Meesho label height is 334.5 pt (ends on the bottom border line with zero TAX INVOICE)
+      let meeshoLabelHeight = 334.5;
+      const viewport = page.getViewport({ scale: 1.0 });
+      const pageH = viewport.height;
+
+      // Scan for TAX INVOICE or Original For Recipient text item to guarantee clean cut
+      for (const it of content.items) {
+        if (!it.str || !it.transform) continue;
+        if (/TAX\s*INVOICE|Original\s*For\s*Recipient/i.test(it.str)) {
+          const itemY = it.transform[5];
+          const distFromTop = pageH - itemY;
+          // The bottom black border of Product Details is located ~10-14pt above TAX INVOICE
+          if (distFromTop > 310 && distFromTop < 390) {
+            meeshoLabelHeight = Math.min(334.5, Math.max(320, distFromTop - 12.0));
+            break;
+          }
+        }
+      }
+
       return {
         success: true,
         awb,
@@ -4077,6 +4097,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
         quantity,
         orderNumber,
         storeName,
+        meeshoLabelHeight,
         isTop: true,
         rawText
       };
@@ -4399,8 +4420,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               }
             } else {
               // ================= MEESHO ORIGINAL CROPPING =================
-              // Standard Meesho A4 shipping label is exactly 345.6 pt tall from top of page.
-              const labelH = Math.min(pageSize.height, 345.6 + targetCropNudge);
+              // Standard Meesho A4 shipping label is exactly 334.5 pt tall (cleanly terminates on the bottom border of Product Details box, eliminating TAX INVOICE)
+              const baseLabelH = item.meeshoLabelHeight || 334.5;
+              const labelH = Math.min(pageSize.height, baseLabelH + targetCropNudge);
               const hasFollowUs = Boolean(printFollowUs && followUsLink.trim() && qrDataUrl);
               const hasThanks = Boolean(printThanksLine && thanksLineText.trim());
               const hasDateOrPage = Boolean(printDateTime || printPageNumber);
