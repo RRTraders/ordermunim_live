@@ -256,7 +256,7 @@ function drawBadgeShopSketch(ctx, x, y, size) {
 
 async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = false, qrShape = 'square') {
   const canvas = document.createElement('canvas');
-  const w = isLarge ? 420 : 252;
+  const w = isLarge ? 420 : 254;
   const h = isLarge ? 88 : 52;
   const scale = 4; // High-DPI 300+
   canvas.width = w * scale;
@@ -487,12 +487,12 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    let textX = 188;
+    let textX = 192;
 
     if (qrShape === 'heart') {
-      const heartW = 42;
-      const heartH = 41;
-      const heartCx = divX + 12 + heartW / 2;
+      const heartW = 48;
+      const heartH = 47;
+      const heartCx = divX + 9 + heartW / 2;
       const heartBot = (h + heartH) / 2 - 2;
       const heartTop = heartBot - heartH;
       const notchY = heartTop + heartH * 0.26;
@@ -512,20 +512,20 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.clip();
 
       // Draw 45-degree rotated QR code directly inside the heart (black and white matching Image 4)
-      const qrDrawSize = 34;
+      const qrDrawSize = 39;
       ctx.translate(heartCx, heartTop + heartH * 0.46);
       ctx.rotate(225 * Math.PI / 180);
       ctx.drawImage(qrImg, -qrDrawSize / 2, -qrDrawSize / 2, qrDrawSize, qrDrawSize);
       ctx.restore();
 
-      textX = 188;
+      textX = divX + 9 + heartW + 9;
     } else if (qrShape === 'trolley') {
-      const bW = 32;
-      const bH = 28;
+      const bW = 34;
+      const bH = 30;
       const bLeft = divX + 16;
-      const bTop = 9;
+      const bTop = 7;
       const bBottom = bTop + bH;
-      const qrSize = 26;
+      const qrSize = 28;
       const qrX = bLeft + 3;
       const qrY = bTop + 1;
 
@@ -598,15 +598,15 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.restore();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = 188;
+      textX = bLeft + bW + 9;
     } else {
-      // Clean borderless Square (no outer border)
-      const qrSize = 38;
-      const qrX = divX + 12;
-      const qrY = (h - qrSize) / 2;
+      // Clean borderless Square (no outer border) - touches top and bottom borders so it looks big
+      const qrSize = 48;
+      const qrX = divX + 9;
+      const qrY = 2;
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = 188;
+      textX = qrX + qrSize + 9;
     }
 
     // Follow our page text (Clean, no tiny hearts)
@@ -4571,7 +4571,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
 
               const cardH = 50;
-              const cardW = Math.min(252, srcW);
+              const cardW = Math.min(254, srcW);
               const footerH = hasFollowUs
                 ? (hasFooterRow ? (cardH + 22) : (cardH + 6))
                 : (hasFooterRow ? 18 : 0);
@@ -4662,7 +4662,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
 
               const cardH = 52;
-              const cardW = Math.min(252, pageSize.width - 24);
+              const cardW = Math.min(254, pageSize.width - 24);
               const extraH = hasFollowUs
                 ? (hasFooterRow ? (cardH + 24) : (cardH + 8))
                 : (hasFooterRow ? 20 : 0);
