@@ -138,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 51;
-const CURRENT_APP_VERSION_NAME = "6.1";
+const CURRENT_APP_VERSION_CODE = 52;
+const CURRENT_APP_VERSION_NAME = "6.2";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -486,10 +486,13 @@ export default function App() {
   const [expandedStoreIds, setExpandedStoreIds] = useState({});
 
   const toggleStoreExpand = (storeId) => {
-    setExpandedStoreIds((prev) => ({
-      ...prev,
-      [storeId]: !prev[storeId]
-    }));
+    setExpandedStoreIds((prev) => {
+      const isCurrentlyExpanded = prev[storeId] !== undefined ? Boolean(prev[storeId]) : true;
+      return {
+        ...prev,
+        [storeId]: !isCurrentlyExpanded
+      };
+    });
   };
 
   // Native Multi-Device Sessions & Reconnect State
@@ -3374,14 +3377,14 @@ export default function App() {
                       ? [{ courier: acc.courier || 'Courier', otp: acc.currentOtp, handoverCount: acc.handoverCount || 0, dateTime: acc.dateTime }]
                       : []);
 
-                const isExpanded = Boolean(expandedStoreIds[acc.id]);
+                const isExpanded = expandedStoreIds[acc.id] !== undefined ? Boolean(expandedStoreIds[acc.id]) : true;
                 const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                 const vaultCred = findCredentialsForAccount(acc, user?.uid);
                 const isSessionExpired = false;
                 const isAutoSync = true;
 
                 return (
-                  <div key={acc.id} className={`glass-card ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl p-4 transition-all shadow-md relative overflow-hidden`}>
+                  <div key={acc.id} className={`glass-card self-start ${isOnHold ? 'border-rose-500/40 bg-slate-950/80 shadow-rose-950/20' : isExpanded ? 'border-sky-500/50 shadow-xl shadow-sky-950/30' : 'hover:border-sky-500/30'} rounded-2xl ${isExpanded ? 'p-4' : 'p-3'} transition-all shadow-md relative overflow-hidden`}>
                     <div className={`transition-all duration-300 ${isOnHold ? 'filter blur-md opacity-30 select-none pointer-events-none' : ''}`}>
                       {/* Clickable Header Bar (Tap to Expand/Collapse) */}
                       <div 
@@ -5177,12 +5180,12 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5 items-start">
                   {accounts.map((acc, index) => {
                     const isOverQuota = index >= (profile.maxAccounts ?? 0);
                     const isLive = acc.status === 'live';
                     const isOnHold = profile.status === 'on_hold';
-                    const isExpanded = Boolean(expandedStoreIds[acc.id]);
+                    const isExpanded = expandedStoreIds[acc.id] !== undefined ? Boolean(expandedStoreIds[acc.id]) : true;
                     const localSess = localSessions[acc.syncKey] || localSessions[acc.id] || (acc.identifier ? localSessions[acc.identifier] : null) || (acc.email ? localSessions[acc.email.trim().toLowerCase()] : null) || Object.values(localSessions).find(s => (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase()) || (s.identifier && acc.identifier && s.identifier === acc.identifier));
                     const vaultCred = findCredentialsForAccount(acc, user?.uid);
                     const isSessionExpired = false;
@@ -5196,13 +5199,13 @@ export default function App() {
                     return (
                       <div 
                         key={acc.id} 
-                        className={`bg-white border relative ${
+                        className={`bg-white border relative self-start ${
                           isOnHold || isOverQuota
                             ? 'border-rose-300 bg-rose-50/20 shadow-xs' 
                             : isExpanded 
                             ? 'border-[#083B82]/30 shadow-md ring-1 ring-[#083B82]/10' 
                             : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'
-                        } rounded-2xl p-4.5 transition-all duration-200`}
+                        } rounded-2xl ${isExpanded ? 'p-4.5' : 'p-3.5'} transition-all duration-200`}
                       >
                         {/* Over Quota Badge & Direct Delete Button */}
                         {isOverQuota && (
