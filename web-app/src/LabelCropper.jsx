@@ -5517,11 +5517,11 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
       </div>
 
       {/* ================= TWO COLUMN WORKSPACE ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         {/* ================= LEFT COLUMN: UPLOAD & ACTION ================= */}
-        <div className="lg:col-span-7 space-y-3">
-          {/* Upload Dropzone */}
+        <div className="lg:col-span-5 space-y-3.5">
+          {/* Upload Dropzone (Clean, comfortable sizing matching user reference) */}
           <div
             onClick={() => fileInputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -5530,7 +5530,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               e.stopPropagation();
               if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
             }}
-            className="border-2 border-dashed border-sky-300 bg-sky-50/40 hover:bg-sky-50/70 rounded-xl p-3.5 py-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
+            className="border-2 border-dashed border-sky-300 bg-sky-50/40 hover:bg-sky-50/70 rounded-2xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center group"
           >
             <input
               ref={fileInputRef}
@@ -5540,67 +5540,67 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               onChange={(e) => handleFiles(e.target.files)}
               className="hidden"
             />
-            <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-600 border border-sky-200 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <UploadCloud className="w-4 h-4" />
+            <div className="w-10 h-10 rounded-full bg-sky-100 text-sky-600 border border-sky-200 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+              <UploadCloud className="w-5 h-5" />
             </div>
-            <h3 className="text-xs font-black text-slate-900">
+            <h3 className="text-sm font-black text-slate-900">
               Upload PDF Files
             </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Drag & drop or click to select files
             </p>
           </div>
 
-          {/* PDF Files Container Card */}
-          <div className="bg-white border border-slate-200/90 rounded-xl shadow-xs overflow-hidden">
-            <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-100">
-              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
-                <FileText className="w-3.5 h-3.5 text-orange-500" />
+          {/* PDF Files Container Card (Matching user reference) */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
+                <FileText className="w-4 h-4 text-orange-500" />
                 PDF Files {files.length > 0 && `(${files.length})`}
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 {files.length > 0 && (
                   <button
                     type="button"
                     onClick={clearAllFiles}
-                    className="text-[11px] text-rose-600 hover:text-rose-700 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-rose-600 hover:text-rose-700 px-2.5 py-1 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-1 cursor-pointer"
                   >
-                    <Trash2 className="w-3 h-3" /> Clear
+                    <Trash2 className="w-3.5 h-3.5" /> Clear
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <UploadCloud className="w-3 h-3 text-sky-600" />
+                  <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
                   Select PDFs
                 </button>
               </div>
             </div>
 
             {/* List / Empty view */}
-            <div className="p-2.5">
+            <div className="p-4">
               {files.length === 0 ? (
-                <div className="py-3 text-center text-xs text-slate-400">
+                <div className="py-6 text-center text-xs text-slate-400 font-medium">
                   No PDF files selected.
                 </div>
               ) : (
-                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {files.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
-                      <div className="flex items-center gap-2 truncate max-w-[85%]">
-                        <FileCheck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                        <span className="font-semibold text-slate-800 truncate text-[11px]">{file.name}</span>
-                        <span className="text-slate-400 shrink-0 text-[10px]">({(file.size / 1024).toFixed(0)} KB)</span>
+                    <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                      <div className="flex items-center gap-2.5 truncate max-w-[85%]">
+                        <FileCheck className="w-4 h-4 text-sky-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 truncate">{file.name}</span>
+                        <span className="text-slate-400 shrink-0 text-[11px]">({(file.size / 1024).toFixed(0)} KB)</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-0.5 rounded transition-colors cursor-pointer"
+                        className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
@@ -5614,16 +5614,16 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             type="button"
             disabled={files.length === 0 || isProcessing}
             onClick={processCropAndSort}
-            className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white text-xs font-black rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+            className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white text-sm font-black rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
           >
             {isProcessing ? (
               <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
                 Processing Labels ({processingProgress}%)...
               </>
             ) : (
               <>
-                <Scissors className="w-3.5 h-3.5 text-white" />
+                <Scissors className="w-4 h-4 text-white" />
                 Start Crop & Sort Process
               </>
             )}
@@ -5631,27 +5631,27 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
           {/* Result / Download Area */}
           {downloadReady && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 shadow-xs space-y-2 animate-in fade-in duration-200">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-800">
                       Processing Complete!
                     </h4>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[11px] text-slate-500">
                       {metrics.success} labels ready • Sorted & Formatted for Thermal 4x6
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setShowSkuModal(true)}
-                    className="px-2.5 py-1 bg-white border border-slate-200 text-[11px] font-semibold text-slate-700 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="px-2.5 py-1 bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     View SKU Summary
                   </button>
@@ -5663,9 +5663,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={() => setShowPreviewModal(true)}
-                    className="px-3 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-4 h-4" />
                     Preview Label
                   </button>
                 )}
@@ -5673,9 +5673,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                 <a
                   href={downloadReady.url}
                   download={downloadReady.filename}
-                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors text-center cursor-pointer"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors text-center cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="w-4 h-4" />
                   Download {downloadReady.type === 'zip' ? 'ZIP Archive' : 'Cropped PDF'}
                 </a>
 
@@ -5683,9 +5683,9 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
                   <button
                     type="button"
                     onClick={handleDirectPrint}
-                    className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
                   >
-                    <Printer className="w-3.5 h-3.5" />
+                    <Printer className="w-4 h-4" />
                     Print Directly
                   </button>
                 )}
@@ -5694,427 +5694,448 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           )}
         </div>
 
-        {/* ================= RIGHT COLUMN: PROCESSING SETTINGS ================= */}
-        {/* ================= RIGHT COLUMN: PROCESSING SETTINGS ================= */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="bg-white border border-slate-200/90 rounded-xl shadow-xs overflow-hidden">
+        {/* ================= RIGHT COLUMN: PROCESSING SETTINGS (2 COLUMNS SIDE-BY-SIDE) ================= */}
+        <div className="lg:col-span-7 space-y-3.5">
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
             {/* Header */}
             <div 
               onClick={() => setSettingsOpen(!settingsOpen)}
-              className="flex items-center justify-between px-3.5 py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
+              className="flex items-center justify-between px-5 py-3 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
             >
-              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
-                <svg className="w-3.5 h-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
                 Processing Settings
               </div>
               <button type="button" className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer">
-                {settingsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                {settingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             </div>
 
             {settingsOpen && (
-              <div className="p-3 space-y-2.5">
+              <div className="p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-5 divide-y md:divide-y-0 md:divide-x divide-slate-100">
                 
-                {/* 1. Label Action */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-slate-600 block mb-1">
-                    Label Action
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setLabelAction('crop')}
-                      className={`py-1.5 px-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        labelAction === 'crop'
-                          ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Scissors className="w-3.5 h-3.5 text-emerald-600" />
-                      Crop Label
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setLabelAction('keep_invoice')}
-                      className={`py-1.5 px-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        labelAction === 'keep_invoice'
-                          ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <FileText className="w-3.5 h-3.5 text-slate-500" />
-                      Keep Invoice
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Thanks Line Footer Setting */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10.5px] font-bold text-slate-700 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      Thanks Line
+                {/* ================= COLUMN 1: LABEL ACTION, THANKS LINE, FOLLOW US ================= */}
+                <div className="space-y-4">
+                  {/* 1. Label Action */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                      Label Action
                     </label>
-                    <span className={`text-[9.5px] font-semibold ${
-                      thanksLineText.trim().split(/\s+/).filter(Boolean).length >= 10 ? 'text-amber-600' : 'text-slate-400'
-                    }`}>
-                      {thanksLineText.trim().split(/\s+/).filter(Boolean).length}/10 words
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 w-full">
-                    <label 
-                      className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-lg border cursor-pointer transition-all select-none ${
-                        printThanksLine ? 'bg-emerald-50 border-emerald-400 text-emerald-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
-                      }`}
-                      title="Enable/disable thanks line"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={printThanksLine}
-                        onChange={(e) => {
-                          setPrintThanksLine(e.target.checked);
-                          localStorage.setItem('label_thanks_enabled', String(e.target.checked));
-                          if (showToast) showToast(e.target.checked ? 'Thanks line enabled' : 'Thanks line disabled', 'info');
-                        }}
-                        className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                      />
-                    </label>
-
-                    <input
-                      type="text"
-                      value={thanksLineText}
-                      onChange={handleThanksLineChange}
-                      placeholder="e.g. Thanks For Your Order"
-                      className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-xs"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={handleSaveThanksLine}
-                      className={`shrink-0 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer whitespace-nowrap ${
-                        isThanksSaved 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-                      }`}
-                    >
-                      <Check className="w-3 h-3" />
-                      <span>{isThanksSaved ? 'Saved' : 'Save'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. Follow Us Page Setting */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10.5px] font-bold text-slate-700 flex items-center gap-1">
-                      <QrCode className="w-3 h-3 text-blue-600" />
-                      Follow Us Page
-                    </label>
-                    {onNavigateTab && (
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          onNavigateTab('profile');
-                          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
-                        }}
-                        className="text-[9.5px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-0.5 cursor-pointer"
-                        title="Add or manage store links in Profile"
+                        onClick={() => setLabelAction('crop')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          labelAction === 'crop'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
                       >
-                        <Store className="w-2.5 h-2.5" />
-                        <span>Manage Stores</span>
+                        <Scissors className="w-3.5 h-3.5 text-emerald-600" />
+                        Crop Label
                       </button>
-                    )}
+
+                      <button
+                        type="button"
+                        onClick={() => setLabelAction('keep_invoice')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          labelAction === 'keep_invoice'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5 text-slate-500" />
+                        Keep Invoice
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 w-full">
-                    <label 
-                      className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-lg border cursor-pointer transition-all select-none ${
-                        printFollowUs ? 'bg-emerald-50 border-emerald-400 text-emerald-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
-                      }`}
-                      title="Enable/disable follow us badge"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={printFollowUs}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setPrintFollowUs(val);
-                          localStorage.setItem('label_follow_us_enabled', String(val));
-                          if (showToast) showToast(val ? 'Follow Us panel enabled' : 'Follow Us panel disabled', 'info');
-                        }}
-                        className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                      />
-                    </label>
+                  {/* 2. Thanks Line Footer Setting */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Thanks Line
+                      </label>
+                      <span className={`text-[10px] font-semibold ${
+                        thanksLineText.trim().split(/\s+/).filter(Boolean).length >= 10 ? 'text-amber-600' : 'text-slate-400'
+                      }`}>
+                        {thanksLineText.trim().split(/\s+/).filter(Boolean).length}/10 words
+                      </span>
+                    </div>
 
-                    {allFollowStores.length > 0 ? (
-                      <select
-                        value={selectedFollowStoreName}
-                        onChange={(e) => handleSelectFollowStore(e.target.value)}
-                        className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-xs cursor-pointer"
+                    <div className="flex items-center gap-1.5 w-full">
+                      <label 
+                        className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border cursor-pointer transition-all select-none ${
+                          printThanksLine ? 'bg-emerald-50 border-emerald-400 text-emerald-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                        }`}
+                        title="If checked, prints thanks line on label footer"
                       >
-                        <option value="">-- Select Store Name --</option>
-                        {allFollowStores.map((st) => (
-                          <option key={st.id || st.name} value={st.name}>
-                            {st.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="flex-1 min-w-0 flex items-center justify-between px-2 py-1 bg-slate-50 border border-dashed border-slate-300 rounded-lg">
-                        <span className="text-[10px] text-slate-500 italic">No stores added yet</span>
-                        {onNavigateTab && (
+                        <input
+                          type="checkbox"
+                          checked={printThanksLine}
+                          onChange={(e) => {
+                            setPrintThanksLine(e.target.checked);
+                            localStorage.setItem('label_thanks_enabled', String(e.target.checked));
+                            if (showToast) showToast(e.target.checked ? 'Thanks line enabled' : 'Thanks line disabled', 'info');
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                        />
+                      </label>
+
+                      <input
+                        type="text"
+                        value={thanksLineText}
+                        onChange={handleThanksLineChange}
+                        placeholder="e.g. Thanks For Your Order"
+                        className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-xs"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleSaveThanksLine}
+                        className={`shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer whitespace-nowrap ${
+                          isThanksSaved 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isThanksSaved ? 'Saved' : 'Save'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 pl-0.5">
+                      Prints on clean white footer line at bottom of label.
+                    </p>
+                  </div>
+
+                  {/* 3. Follow Us Page Setting */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                        Follow Us Page
+                      </label>
+                      {onNavigateTab && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onNavigateTab('profile');
+                            try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Add or manage store links in Profile"
+                        >
+                          <Store className="w-3 h-3" />
+                          <span>Manage Stores</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 w-full">
+                      <label 
+                        className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border cursor-pointer transition-all select-none ${
+                          printFollowUs ? 'bg-emerald-50 border-emerald-400 text-emerald-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                        }`}
+                        title="If checked, prints Follow Us QR panel on label"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={printFollowUs}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            setPrintFollowUs(val);
+                            localStorage.setItem('label_follow_us_enabled', String(val));
+                            if (showToast) showToast(val ? 'Follow Us panel enabled' : 'Follow Us panel disabled', 'info');
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                        />
+                      </label>
+
+                      {allFollowStores.length > 0 ? (
+                        <select
+                          value={selectedFollowStoreName}
+                          onChange={(e) => handleSelectFollowStore(e.target.value)}
+                          className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-xs cursor-pointer"
+                        >
+                          <option value="">-- Select Store Name --</option>
+                          {allFollowStores.map((st) => (
+                            <option key={st.id || st.name} value={st.name}>
+                              {st.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                          <span className="text-[11px] text-slate-500 italic">No stores added yet</span>
+                          {onNavigateTab && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onNavigateTab('profile');
+                                try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+                              }}
+                              className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                            >
+                              + Add
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* QR Shape Selector */}
+                    {printFollowUs && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                        <span className="text-[11px] font-semibold text-slate-600 shrink-0">QR Shape:</span>
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => {
-                              onNavigateTab('profile');
-                              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
-                            }}
-                            className="text-[9.5px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                            onClick={() => handleSelectQrShape('square')}
+                            className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                              followUsQrShape === 'square'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
                           >
-                            + Add
+                            <span>▢</span>
+                            <span>Square</span>
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQrShape('heart')}
+                            className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                              followUsQrShape === 'heart'
+                                ? 'bg-pink-600 text-white border-pink-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>♥</span>
+                            <span>Heart</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQrShape('trolley')}
+                            className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                              followUsQrShape === 'trolley'
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>🛒</span>
+                            <span>Trolley</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
+                </div>
 
-                  {/* QR Shape Selector (Inline & Compact) */}
-                  {printFollowUs && (
-                    <div className="mt-1 flex items-center justify-between gap-1 bg-slate-50/70 border border-slate-100 rounded-lg p-1 px-1.5">
-                      <span className="text-[9.5px] font-semibold text-slate-600 shrink-0">QR Shape:</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectQrShape('square')}
-                          className={`px-1.5 py-0.5 text-[9.5px] font-bold rounded border transition-all cursor-pointer flex items-center gap-0.5 ${
-                            followUsQrShape === 'square'
-                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>▢</span>
-                          <span>Square</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectQrShape('heart')}
-                          className={`px-1.5 py-0.5 text-[9.5px] font-bold rounded border transition-all cursor-pointer flex items-center gap-0.5 ${
-                            followUsQrShape === 'heart'
-                              ? 'bg-pink-600 text-white border-pink-600 shadow-xs'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>♥</span>
-                          <span>Heart</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectQrShape('trolley')}
-                          className={`px-1.5 py-0.5 text-[9.5px] font-bold rounded border transition-all cursor-pointer flex items-center gap-0.5 ${
-                            followUsQrShape === 'trolley'
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>🛒</span>
-                          <span>Trolley</span>
-                        </button>
+                {/* ================= COLUMN 2: PRINT OPTIONS, SORT BY, OUTPUT FILE TYPE ================= */}
+                <div className="space-y-4 md:pl-5 pt-3 md:pt-0">
+                  {/* 4. Print Options */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                      Print Options
+                    </label>
+                    <div className="space-y-1.5">
+                      {/* Date/Time */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        printDateTime ? 'border-emerald-200/80 bg-emerald-50/40' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                          <Clock className="w-3.5 h-3.5 text-cyan-500" />
+                          Print Date/Time
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={printDateTime}
+                            onChange={(e) => {
+                              setPrintDateTime(e.target.checked);
+                              try { localStorage.setItem('label_print_datetime', String(e.target.checked)); } catch {}
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Page Number */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        printPageNumber ? 'border-emerald-200/80 bg-emerald-50/40' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                          <FileCode className="w-3.5 h-3.5 text-purple-500" />
+                          Print Page Number
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={printPageNumber}
+                            onChange={(e) => {
+                              setPrintPageNumber(e.target.checked);
+                              try { localStorage.setItem('label_print_pagenum', String(e.target.checked)); } catch {}
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Packing Slip */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        addPackingSlip ? 'border-emerald-200/80 bg-emerald-50/40' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                          <FilePlus className="w-3.5 h-3.5 text-blue-500" />
+                          Add Packing Slip Page In Last
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={addPackingSlip}
+                            onChange={(e) => setAddPackingSlip(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
                       </div>
                     </div>
-                  )}
-                </div>
-
-                {/* 4. Print Options (Compact 3-column Grid) */}
-                <div>
-                  <span className="text-[10.5px] font-bold text-slate-700 block mb-1">
-                    Print Options
-                  </span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {/* Date/Time */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const val = !printDateTime;
-                        setPrintDateTime(val);
-                        try { localStorage.setItem('label_print_datetime', String(val)); } catch {}
-                      }}
-                      className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        printDateTime 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                      title="Toggle Print Date/Time"
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <Clock className="w-3 h-3 text-cyan-600 shrink-0" />
-                        <span className="truncate">Date/Time</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${printDateTime ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
-
-                    {/* Page Number */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const val = !printPageNumber;
-                        setPrintPageNumber(val);
-                        try { localStorage.setItem('label_print_pagenum', String(val)); } catch {}
-                      }}
-                      className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        printPageNumber 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                      title="Toggle Print Page Number"
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <FileCode className="w-3 h-3 text-purple-600 shrink-0" />
-                        <span className="truncate">Page No</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${printPageNumber ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
-
-                    {/* Packing Slip */}
-                    <button
-                      type="button"
-                      onClick={() => setAddPackingSlip(!addPackingSlip)}
-                      className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        addPackingSlip 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                      title="Toggle Add Packing Slip Page In Last"
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <FilePlus className="w-3 h-3 text-blue-600 shrink-0" />
-                        <span className="truncate">Packing Slip</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${addPackingSlip ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
                   </div>
-                </div>
 
-                {/* 5. Sort By (Compact 3-column Grid) */}
-                <div>
-                  <span className="text-[10.5px] font-bold text-purple-800 block mb-1">
-                    Sort By
-                  </span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {/* SKU Wise */}
-                    <button
-                      type="button"
-                      onClick={() => setSortSku(!sortSku)}
-                      className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        sortSku 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <span className="text-xs">🛍️</span>
-                        <span className="truncate">SKU wise</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${sortSku ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
+                  {/* 5. Sort By */}
+                  <div>
+                    <label className="text-xs font-bold text-purple-700 block mb-1.5">
+                      Sort By
+                    </label>
+                    <div className="space-y-1.5">
+                      {/* SKU Wise */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        sortSku ? 'border-emerald-400 bg-emerald-50/60 shadow-xs' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                          <span className="text-sm">🛍️</span>
+                          <span className={sortSku ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                            SKU wise
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={sortSku}
+                            onChange={(e) => setSortSku(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
 
-                    {/* Courier Wise */}
-                    <button
-                      type="button"
-                      onClick={() => setSortCourier(!sortCourier)}
-                      className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        sortCourier 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <span className="text-xs">🚚</span>
-                        <span className="truncate">Courier</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${sortCourier ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
+                      {/* Courier Wise */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        sortCourier ? 'border-emerald-400 bg-emerald-50/60 shadow-xs' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                          <span className="text-sm">🚚</span>
+                          <span className={sortCourier ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                            Courier wise
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={sortCourier}
+                            onChange={(e) => setSortCourier(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
 
-                    {/* Quantity Wise */}
-                    <button
-                      type="button"
-                      onClick={() => setSortQuantity(!sortQuantity)}
-                      className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-between gap-1 transition-all cursor-pointer ${
-                        sortQuantity 
-                          ? 'border-emerald-500 bg-emerald-50/90 text-emerald-800 shadow-xs ring-1 ring-emerald-500/20' 
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <span className="text-xs">📦</span>
-                        <span className="truncate">Quantity</span>
-                      </span>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${sortQuantity ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    </button>
+                      {/* Quantity Wise */}
+                      <div className={`flex items-center justify-between p-2 px-3 rounded-xl border transition-all ${
+                        sortQuantity ? 'border-emerald-400 bg-emerald-50/60 shadow-xs' : 'border-slate-200 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                          <span className="text-sm">📦</span>
+                          <span className={sortQuantity ? 'text-emerald-900 font-bold' : 'text-slate-700'}>
+                            Quantity wise
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={sortQuantity}
+                            onChange={(e) => setSortQuantity(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* 6. Output File Type (Compact 4-column Single Row) */}
-                <div>
-                  <span className="text-[10.5px] font-bold text-slate-700 block mb-1">
-                    Output File Type
-                  </span>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setOutputType('single')}
-                      className={`py-1.5 px-1 rounded-lg border text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
-                        outputType === 'single'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span className="truncate">Single PDF</span>
-                    </button>
+                  {/* 6. Output File Type */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                      Output File Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOutputType('single')}
+                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          outputType === 'single'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Single PDF
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setOutputType('courier')}
-                      className={`py-1.5 px-1 rounded-lg border text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
-                        outputType === 'courier'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      <span className="truncate">By Courier</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setOutputType('courier')}
+                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          outputType === 'courier'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        By Courier
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setOutputType('quantity')}
-                      className={`py-1.5 px-1 rounded-lg border text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
-                        outputType === 'quantity'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Boxes className="w-3.5 h-3.5" />
-                      <span className="truncate">By Quantity</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setOutputType('quantity')}
+                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          outputType === 'quantity'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Boxes className="w-3.5 h-3.5" />
+                        By Quantity
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setOutputType('store')}
-                      className={`py-1.5 px-1 rounded-lg border text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
-                        outputType === 'store'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Store className="w-3.5 h-3.5" />
-                      <span className="truncate">By Store</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setOutputType('store')}
+                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          outputType === 'store'
+                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Store className="w-3.5 h-3.5" />
+                        By Store
+                      </button>
+                    </div>
                   </div>
                 </div>
 
