@@ -256,7 +256,7 @@ function drawBadgeShopSketch(ctx, x, y, size) {
 
 async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = false, qrShape = 'square') {
   const canvas = document.createElement('canvas');
-  const w = isLarge ? 470 : 340;
+  const w = isLarge ? 420 : 252;
   const h = isLarge ? 88 : 52;
   const scale = 4; // High-DPI 300+
   canvas.width = w * scale;
@@ -286,7 +286,7 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.stroke();
 
     // LEFT: SHOP SKETCH + STORE NAME
-    const shopX = 20;
+    const shopX = 16;
     const shopY = 12;
     const shopSize = 64;
     drawBadgeShopSketch(ctx, shopX, shopY, shopSize);
@@ -305,7 +305,7 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.fillText('OFFICIAL STORE PROFILE', nameX, 52);
 
     // CENTER: Clean Vertical Divider
-    const divX = 226;
+    const divX = 210;
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = '#cbd5e1';
     ctx.beginPath();
@@ -321,12 +321,12 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    let textX = divX + 22 + 54 + 18;
+    let textX = divX + 16 + 54 + 16;
 
     if (qrShape === 'heart') {
-      const heartW = 68;
-      const heartH = 66;
-      const heartCx = divX + 22 + heartW / 2;
+      const heartW = 66;
+      const heartH = 64;
+      const heartCx = divX + 16 + heartW / 2;
       const heartBot = (h + heartH) / 2 - 3;
       const heartTop = heartBot - heartH;
       const notchY = heartTop + heartH * 0.26;
@@ -344,22 +344,22 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.fill();
       ctx.clip();
 
-      const qrDrawSize = 54;
+      const qrDrawSize = 52;
       ctx.translate(heartCx, heartTop + heartH * 0.46);
       ctx.rotate(225 * Math.PI / 180);
       ctx.drawImage(qrImg, -qrDrawSize / 2, -qrDrawSize / 2, qrDrawSize, qrDrawSize);
       ctx.restore();
 
-      textX = divX + 22 + heartW + 18;
+      textX = divX + 16 + heartW + 14;
     } else if (qrShape === 'trolley') {
-      const bW = 56;
-      const bH = 48;
-      const bLeft = divX + 30;
-      const bTop = 15;
+      const bW = 50;
+      const bH = 42;
+      const bLeft = divX + 22;
+      const bTop = 16;
       const bBottom = bTop + bH;
-      const qrSize = 46;
-      const qrX = bLeft + 5;
-      const qrY = bTop + 1;
+      const qrSize = 42;
+      const qrX = bLeft + 4;
+      const qrY = bTop + 2;
 
       ctx.save();
       ctx.lineWidth = 1.8;
@@ -422,15 +422,15 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.restore();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = bLeft + bW + 20;
+      textX = bLeft + bW + 16;
     } else {
       // Clean borderless Square
       const qrSize = 56;
-      const qrX = divX + 20;
+      const qrX = divX + 16;
       const qrY = (h - qrSize) / 2;
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = qrX + qrSize + 18;
+      textX = qrX + qrSize + 16;
     }
 
     // CALL TO ACTION TEXT (Clean, no tiny hearts)
@@ -444,7 +444,7 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
     ctx.font = 'bold 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('Scan with phone camera', textX, 66);
   } else {
-    // Compact version for crop mode (w=340, h=52)
+    // Compact version for crop mode (w=252, h=52)
     const r = 9;
     ctx.lineWidth = 1.6;
     ctx.strokeStyle = '#000000';
@@ -458,18 +458,18 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
 
     // Store Name
     const cleanName = (storeName || 'SHRINANT').toUpperCase().trim().slice(0, 18);
-    const divX = 142;
-    let nameFontSize = 13;
+    const divX = 126;
+    let nameFontSize = 12;
     ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
     let nameW = ctx.measureText(cleanName).width;
-    const maxNameW = divX - 56;
+    const maxNameW = divX - 54;
     if (nameW > maxNameW && maxNameW > 30) {
-      nameFontSize = Math.max(9, Math.floor(nameFontSize * maxNameW / nameW));
+      nameFontSize = Math.max(8.5, Math.floor(nameFontSize * maxNameW / nameW));
       ctx.font = `bold ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
     }
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cleanName, 52, h / 2);
+    ctx.fillText(cleanName, 50, h / 2);
 
     // Clean Divider (no heart)
     ctx.lineWidth = 1;
@@ -487,15 +487,12 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       qrImg.src = qrDataUrl;
     });
 
-    let qrSize = 38;
-    let qrX = divX + 16;
-    let qrY = (h - qrSize) / 2;
-    let textX = divX + 16 + 38 + 14;
+    let textX = 188;
 
     if (qrShape === 'heart') {
-      const heartW = 44;
-      const heartH = 43;
-      const heartCx = divX + 16 + heartW / 2;
+      const heartW = 42;
+      const heartH = 41;
+      const heartCx = divX + 12 + heartW / 2;
       const heartBot = (h + heartH) / 2 - 2;
       const heartTop = heartBot - heartH;
       const notchY = heartTop + heartH * 0.26;
@@ -515,20 +512,20 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.clip();
 
       // Draw 45-degree rotated QR code directly inside the heart (black and white matching Image 4)
-      const qrDrawSize = 35;
+      const qrDrawSize = 34;
       ctx.translate(heartCx, heartTop + heartH * 0.46);
       ctx.rotate(225 * Math.PI / 180);
       ctx.drawImage(qrImg, -qrDrawSize / 2, -qrDrawSize / 2, qrDrawSize, qrDrawSize);
       ctx.restore();
 
-      textX = divX + 16 + heartW + 14;
+      textX = 188;
     } else if (qrShape === 'trolley') {
-      const bW = 34;
+      const bW = 32;
       const bH = 28;
-      const bLeft = divX + 22;
+      const bLeft = divX + 16;
       const bTop = 9;
       const bBottom = bTop + bH;
-      const qrSize = 28;
+      const qrSize = 26;
       const qrX = bLeft + 3;
       const qrY = bTop + 1;
 
@@ -601,15 +598,15 @@ async function generateFollowUsBadgeDataUrl(storeName, qrDataUrl, isLarge = fals
       ctx.restore();
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = bLeft + bW + 14;
+      textX = 188;
     } else {
       // Clean borderless Square (no outer border)
-      const qrSize = 40;
-      const qrX = divX + 16;
+      const qrSize = 38;
+      const qrX = divX + 12;
       const qrY = (h - qrSize) / 2;
 
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      textX = qrX + qrSize + 14;
+      textX = 188;
     }
 
     // Follow our page text (Clean, no tiny hearts)
@@ -4574,7 +4571,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
 
               const cardH = 50;
-              const cardW = Math.min(320, srcW);
+              const cardW = Math.min(252, srcW);
               const footerH = hasFollowUs
                 ? (hasFooterRow ? (cardH + 22) : (cardH + 6))
                 : (hasFooterRow ? 18 : 0);
@@ -4665,7 +4662,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
               const hasFooterRow = Boolean(hasDateOrPage || hasThanks);
 
               const cardH = 52;
-              const cardW = Math.min(340, pageSize.width - 24);
+              const cardW = Math.min(252, pageSize.width - 24);
               const extraH = hasFollowUs
                 ? (hasFooterRow ? (cardH + 24) : (cardH + 8))
                 : (hasFooterRow ? 20 : 0);
@@ -4823,7 +4820,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
             // 4. Follow Us Panel (Large, attractive boutique design matching Image 2)
             if (hasFollowUs) {
-              const cardW = Math.min(470, pW - 28);
+              const cardW = Math.min(420, pW - 28);
               const cardX = (pW - cardW) / 2;
 
               const badgeImg = await getBadgeImage(selectedFollowStoreName || item.storeName, true);
