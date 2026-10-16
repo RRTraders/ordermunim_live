@@ -138,8 +138,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 52;
-const CURRENT_APP_VERSION_NAME = "6.2";
+const CURRENT_APP_VERSION_CODE = 53;
+const CURRENT_APP_VERSION_NAME = "6.3";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -198,7 +198,13 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
 export const getCheckedDisplayTime = (acc, liveCheckedTimes) => {
   if (!acc) return 'Just now';
   const key = acc.syncKey || acc.id;
-  if (liveCheckedTimes && liveCheckedTimes[key]) return liveCheckedTimes[key];
+  if (liveCheckedTimes && liveCheckedTimes[key]) {
+    const val = liveCheckedTimes[key];
+    if (val && !val.toLowerCase().includes('today') && !val.toLowerCase().includes('yesterday')) {
+      return `Today, ${val}`;
+    }
+    return val;
+  }
 
   let rawDate = null;
   if (acc.lastChecked) {
@@ -237,6 +243,9 @@ export const getCheckedDisplayTime = (acc, liveCheckedTimes) => {
   }
 
   if (acc.dateTime && /(?:am|pm)/i.test(acc.dateTime) && !/\d{1,2}\s+[a-zA-Z]{3,}/i.test(acc.dateTime)) {
+    if (!acc.dateTime.toLowerCase().includes('today') && !acc.dateTime.toLowerCase().includes('yesterday')) {
+      return `Today, ${acc.dateTime}`;
+    }
     return acc.dateTime;
   }
   return 'Just now';
@@ -1559,15 +1568,6 @@ export default function App() {
           const newOtpListJson = JSON.stringify(otpRes.otpList || []);
           const currentTimeStr = otpRes.dateTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-          // Instantly update live timestamp on this device
-          setLiveCheckedTimes(prev => ({
-            ...prev,
-            [key]: currentTimeStr,
-            [targetDocId]: currentTimeStr,
-            ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
-            ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
-          }));
-
           // Compare against raw unmasked Firestore value so if Firestore still holds a stale OTP, we always send updateDoc to erase it
           const existingAcc = accountsRef.current?.find(a => a.id === key || a.syncKey === key || a.id === targetDocId);
           const prevSynced = lastSyncedDocRef.current[key];
@@ -1585,11 +1585,20 @@ export default function App() {
           const lastSyncedAt = prevSynced?.syncedAt || (existingAcc?.lastUpdated ? new Date(existingAcc.lastUpdated).getTime() : 0);
           const timeSinceLastSyncMs = Date.now() - lastSyncedAt;
           const pollInterval = getPollIntervalMs();
-          const isStaleTimestamp = forceInstant || !lastSyncedAt || timeSinceLastSyncMs >= (pollInterval - 10000);
+          const isStaleTimestamp = !lastSyncedAt || timeSinceLastSyncMs >= (pollInterval - 10000);
 
           if (isSameAsExisting && !isStaleTimestamp && existingAcc?.status === 'live') {
             continue;
           }
+
+          // Instantly update live timestamp on this device when data actually changes or poll interval expired
+          setLiveCheckedTimes(prev => ({
+            ...prev,
+            [key]: currentTimeStr,
+            [targetDocId]: currentTimeStr,
+            ...(targetAcc?.syncKey ? { [targetAcc.syncKey]: currentTimeStr } : {}),
+            ...(targetAcc?.id ? { [targetAcc.id]: currentTimeStr } : {})
+          }));
 
           lastSyncedDocRef.current[key] = {
             currentOtp: newOtp,
@@ -1698,17 +1707,17 @@ export default function App() {
 
     scheduleNextForegroundPoll();
 
-    // 3. Instant trigger whenever user opens app, clicks notification, or returns to app
+    // 3. Trigger poll on app resume or visibility change (strictly respects 5m/60m interval)
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        pollAllNativeSessions(true);
+        pollAllNativeSessions(false);
       }
     };
     const onFocus = () => {
-      pollAllNativeSessions(true);
+      pollAllNativeSessions(false);
     };
     const onNativeResume = () => {
-      pollAllNativeSessions(true);
+      pollAllNativeSessions(false);
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -1720,7 +1729,7 @@ export default function App() {
       try {
         appStateListener = Capacitor.addListener('appStateChange', (state) => {
           if (state && state.isActive) {
-            pollAllNativeSessions(true);
+            pollAllNativeSessions(false);
           }
         });
       } catch (e) {}

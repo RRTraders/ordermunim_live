@@ -34,7 +34,7 @@ public class PollAlarmReceiver extends BroadcastReceiver {
         if (pm != null) {
             try {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OrderMunim:AlarmPollLock");
-                wakeLock.acquire(25000); // 25s WakeLock to guarantee network call completion
+                wakeLock.acquire(60000); // 60s WakeLock to guarantee network call completion and potential auto-relogin
             } catch (Exception ignored) {}
         }
 
@@ -71,6 +71,16 @@ public class PollAlarmReceiver extends BroadcastReceiver {
             );
 
             long triggerAtMillis = System.currentTimeMillis() + (delaySeconds * 1000L);
+
+            // Master Spec Feature 3: Schedule strictly through Android OS AlarmManager
+            // with setAlarmClock / setExactAndAllowWhileIdle for unkillable wakeup in deep Doze mode
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                try {
+                    AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(triggerAtMillis, pi);
+                    am.setAlarmClock(clockInfo, pi);
+                    return;
+                } catch (Exception ignored) {}
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 try {

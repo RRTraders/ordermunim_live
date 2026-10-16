@@ -190,38 +190,14 @@ public class MeeshoBackgroundService extends Service {
     }
 
     private void startBackgroundPolling() {
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Dynamic, battery-efficient polling:
-        // Runs scheduled poll task that determines next delay based on delivery hours & sleep state
-        scheduleNextPoll(5);
+        // Master Spec Feature 3: Calls are scheduled strictly through Android OS AlarmManager
+        // Kickstart the alarm cycle (3 seconds for initial scan)
+        scheduleNextPoll(3);
     }
 
     private void scheduleNextPoll(long delaySeconds) {
-        // 1. Schedule OS-level Alarm to guarantee execution even when swiped away or sleeping
+        // Schedule OS-level Alarm to guarantee execution even when swiped away or sleeping
         PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), delaySeconds);
-
-        // 2. Also schedule in executor if process remains alive
-        if (scheduler == null || scheduler.isShutdown()) return;
-        scheduler.schedule(() -> {
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            PowerManager.WakeLock wakeLock = null;
-            if (pm != null) {
-                try {
-                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OrderMunim:BgPoll");
-                    wakeLock.acquire(15000);
-                } catch (Exception ignored) {}
-            }
-            try {
-                pollAllAccountsStatic(this);
-            } catch (Exception ignored) {
-            } finally {
-                if (wakeLock != null && wakeLock.isHeld()) {
-                    try { wakeLock.release(); } catch (Exception ignored) {}
-                }
-                long nextDelay = getDynamicPollDelaySecondsStatic();
-                scheduleNextPoll(nextDelay);
-            }
-        }, delaySeconds, TimeUnit.SECONDS);
     }
 
     /**
