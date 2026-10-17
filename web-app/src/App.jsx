@@ -3673,7 +3673,7 @@ export default function App() {
     );
   }
 
-  // Render Auth Modal Dialog (Sign In with Google + Email)
+  // Render Auth Modal Dialog (Strictly Google Sign In Only)
   const renderAuthModalDialog = () => {
     if (!showAuthModal) return null;
 
@@ -3688,38 +3688,14 @@ export default function App() {
             <X className="w-5 h-5" />
           </button>
 
-          <div className="text-center mb-5">
-            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-2.5 overflow-hidden bg-white p-1 border border-slate-200">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-3 overflow-hidden bg-white p-1.5 border border-slate-200">
               <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
             </div>
-            <h2 className="text-xl font-black tracking-tight text-[#083B82]">Sign in to OrderMunim</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {authModalReason || 'Get 3 days full free evaluation & instant access.'}
+            <h2 className="text-2xl font-black tracking-tight text-[#083B82]">Sign in to OrderMunim</h2>
+            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+              {authModalReason || 'Sign in with your Google account for instant 3 days full free evaluation.'}
             </p>
-          </div>
-
-          {/* Quick 1-Tap Google Sign-In (Chrome Logged-In Account) */}
-          <div className="mb-4 space-y-2">
-            <button
-              type="button"
-              disabled={authLoading}
-              onClick={handleGoogleSignIn}
-              className="w-full py-3 px-4 rounded-xl border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-50"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.43 7.34 24 12 24z" />
-                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
-              </svg>
-              <span>{authLoading ? 'Connecting...' : 'Continue with Google (1-Click)'}</span>
-            </button>
-
-            <div className="flex items-center gap-3 my-3">
-              <div className="flex-1 h-[1px] bg-slate-200" />
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">or email</span>
-              <div className="flex-1 h-[1px] bg-slate-200" />
-            </div>
           </div>
 
           {authError && (
@@ -3729,251 +3705,38 @@ export default function App() {
             </div>
           )}
 
-          {/* Unified Authentication (Sign In / Sign Up) */}
-          <div>
-            {/* Mode Tabs (Sign In vs Create Account) */}
-              {authMode !== 'forgot' && (
-                <div className="flex items-center justify-center gap-6 border-b border-slate-200 pb-3 mb-5">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
-                      authMode === 'login' 
-                        ? 'text-orange-600 border-b-2 border-orange-500' 
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Sign In
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('signup'); setAuthError(''); }}
-                    className={`text-sm font-bold pb-2 transition-all relative cursor-pointer ${
-                      authMode === 'signup' 
-                        ? 'text-orange-600 border-b-2 border-orange-500' 
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Sign Up
-                  </button>
-                </div>
-              )}
+          {/* Quick 1-Tap Google Sign-In (Chrome Logged-In Account) */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              disabled={authLoading}
+              onClick={handleGoogleSignIn}
+              className="w-full py-4 px-5 rounded-2xl border-2 border-slate-200 hover:border-[#083B82] hover:bg-slate-50 text-slate-800 font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-sm hover:shadow cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.43 7.34 24 12 24z" />
+                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
+              </svg>
+              <span>{authLoading ? 'Connecting to Google...' : 'Continue with Google (1-Click)'}</span>
+            </button>
 
-              {/* 1. CUSTOMER SIGN IN FORM */}
-              {authMode === 'login' && (
-                <form onSubmit={handleCustomerLogin} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="seller@example.com"
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => { setAuthMode('forgot'); setAuthError(''); }}
-                        className="text-[11px] text-[#083B82] hover:underline cursor-pointer font-medium"
-                      >
-                        Forgot Password?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="password"
-                        value={customerPassword}
-                        onChange={(e) => setCustomerPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {authLoading ? 'Signing In...' : 'Sign In to Dashboard'}
-                  </button>
-
-                  <div className="text-center pt-2">
-                    <span className="text-xs text-slate-500">
-                      New to OrderMunim?{' '}
-                      <button
-                        type="button"
-                        onClick={() => { setAuthMode('signup'); setAuthError(''); }}
-                        className="text-orange-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Sign Up
-                      </button>
-                    </span>
-                  </div>
-                </form>
-              )}
-
-              {/* 2. CUSTOMER SIGN UP FORM (NAME + EMAIL + PASSWORD + EMAIL VERIFICATION) */}
-              {authMode === 'signup' && (
-                <form onSubmit={handleCustomerSignup} className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Full Name
-                    </label>
-                    <div className="relative">
-                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Rajesh Kumar"
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="seller@example.com"
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Create Password (Min 6 Characters)
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="password"
-                        value={customerPassword}
-                        onChange={(e) => setCustomerPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="password"
-                        value={customerConfirmPass}
-                        onChange={(e) => setCustomerConfirmPass(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        minLength={6}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 p-2.5 rounded-xl">
-                    📧 An official verification link will be sent to your email. You must verify your email before accessing the dashboard.
-                  </p>
-
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {authLoading ? 'Creating Account...' : 'Sign Up & Send Verification Link'}
-                  </button>
-
-                  <div className="text-center pt-2">
-                    <span className="text-xs text-slate-500">
-                      Already have an account?{' '}
-                      <button
-                        type="button"
-                        onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                        className="text-orange-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Sign In
-                      </button>
-                    </span>
-                  </div>
-                </form>
-              )}
-
-              {/* 3. FORGOT PASSWORD FORM */}
-              {authMode === 'forgot' && (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div className="text-center mb-3">
-                    <h3 className="font-bold text-slate-900 text-base">Reset Your Password</h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Enter your email address and we will send you a password reset link.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
-                      <input
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="seller@example.com"
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-[#083B82] focus:bg-white transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {authLoading ? 'Sending link...' : 'Send Password Reset Link'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className="w-full text-xs text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5 pt-2 cursor-pointer font-medium"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    Back to Sign In
-                  </button>
-                </form>
-              )}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-slate-600 space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                <span><strong>No signup forms or passwords:</strong> Connects securely with your existing Chrome Google account.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                <span><strong>3 Days Free Trial:</strong> Full access to Meesho, Flipkart, Amazon Label Croppers, PDF tools & Webcam.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 font-bold shrink-0">🔒</span>
+                <span><strong>Admin Protected:</strong> Delivery Return OTP Auto-Sync & Myntra M-Direct are reserved for approved accounts.</span>
+              </div>
             </div>
+          </div>
 
         </div>
       </div>
