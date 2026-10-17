@@ -366,8 +366,8 @@ export default function App() {
   const [emailNeedsVerification, setEmailNeedsVerification] = useState(false);
 
   // Super Admin Credentials
-  const [adminEmail, setAdminEmail] = useState('rrtradersofficials@gmail.com');
-  const [adminPassword, setAdminPassword] = useState('@rrt123');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   // Phone Auth state
   const [phone, setPhone] = useState('+91');
@@ -2119,6 +2119,9 @@ export default function App() {
       // Send official email verification link (100% Free)
       await sendEmailVerification(newUser);
 
+      const now = new Date();
+      const trialEnd = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000)); // Exactly 3 days default free trial
+
       // Create seller document in Firestore
       await setDoc(doc(db, 'users', newUser.uid), {
         name: customerName.trim(),
@@ -2127,9 +2130,11 @@ export default function App() {
         maxAccounts: 0, // 0 stores quota by default
         status: 'active',
         emailVerified: false,
+        trialStartDate: now.toISOString(),
+        trialEndDate: trialEnd.toISOString(),
         activeDeviceId: getDeviceId(),
-        activeDeviceAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+        activeDeviceAt: now.toISOString(),
+        createdAt: now.toISOString()
       });
 
       setUser(newUser);
@@ -3926,7 +3931,8 @@ export default function App() {
                     required
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="rrtradersofficials@gmail.com"
+                    placeholder="admin@example.com"
+                    autoComplete="off"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#083B82] focus:bg-white transition-all"
                   />
                 </div>
@@ -3942,6 +3948,7 @@ export default function App() {
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="new-password"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#083B82] focus:bg-white transition-all"
                   />
                 </div>
@@ -4874,6 +4881,24 @@ export default function App() {
                                       }`}>
                                         {u.status === 'on_hold' ? 'On Hold' : 'Active'}
                                       </span>
+
+                                      {/* Trial Validity Badge */}
+                                      {u.trialEndDate && (() => {
+                                        const isExp = new Date(u.trialEndDate).getTime() <= Date.now();
+                                        const daysLeft = Math.max(0, Math.ceil((new Date(u.trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                                        return (
+                                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                            isExp 
+                                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                                              : daysLeft <= 1 
+                                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                                                : 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                                          }`}>
+                                            <Clock className="w-2.5 h-2.5" />
+                                            {isExp ? 'Trial Expired' : `${daysLeft}d Trial Left`}
+                                          </span>
+                                        );
+                                      })()}
 
                                       {u.paymentAlert && (
                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
