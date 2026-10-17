@@ -5819,127 +5819,6 @@ export default function LabelCropper({
             </div>
           </div>
 
-      {/* ================= TOP PROCESSING REPORT CARD ================= */}
-      <div className="bg-white border border-slate-200/90 rounded-xl shadow-xs mb-3 overflow-hidden transition-all">
-        <div 
-          onClick={() => setReportOpen(!reportOpen)}
-          className="flex items-center justify-between px-4 py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50/60 transition-colors"
-        >
-          <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
-            <svg className="w-3.5 h-3.5 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="20" x2="18" y2="10" />
-              <line x1="12" y1="20" x2="12" y2="4" />
-              <line x1="6" y1="20" x2="6" y2="14" />
-            </svg>
-            Processing Report
-          </div>
-          <button type="button" className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer">
-            {reportOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
-        {reportOpen && (
-          <div className="p-2.5 md:p-3 grid grid-cols-2 md:grid-cols-4 gap-2.5">
-            {/* Total Labels */}
-            <div className="bg-sky-50 border border-sky-200/80 rounded-lg p-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-semibold text-sky-700">Total Labels</div>
-                  <div className="text-base font-bold text-[#083B82] font-mono leading-tight">
-                    {metrics.success} <span className="text-slate-500 text-[10px] font-normal">/ {metrics.totalLabels}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Success */}
-            <div className="bg-orange-50 border border-orange-200/80 rounded-lg p-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-semibold text-orange-700">Success</div>
-                  <div className="text-base font-bold text-orange-600 font-mono leading-tight">
-                    {metrics.success}
-                  </div>
-                </div>
-              </div>
-              {parsedLabels.length > 0 && (
-                <button 
-                  type="button" 
-                  onClick={() => setShowSkuModal(true)} 
-                  title="View SKU Summary"
-                  className="text-orange-600 hover:text-orange-700 transition-colors cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Duplicates */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-                  <Copy className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-semibold text-slate-600">Duplicates</div>
-                  <div className="text-base font-bold text-slate-800 font-mono leading-tight">
-                    {metrics.duplicates}
-                  </div>
-                </div>
-              </div>
-              {metrics.duplicates > 0 && (
-                <button 
-                  type="button" 
-                  onClick={() => setShowDuplicateModal(true)} 
-                  title="View duplicate labels"
-                  className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* OCR Failed */}
-            <div className="bg-rose-50 border border-rose-200/80 rounded-lg p-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-semibold text-rose-700">OCR Failed</div>
-                  <div className="text-base font-bold text-rose-600 font-mono leading-tight">
-                    {metrics.ocrFailed}
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Courier Breakdown Chips */}
-            {Object.keys(courierSummary).length > 0 && (
-              <div className="col-span-2 md:col-span-4 mt-0.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1 mr-1">
-                  <Truck className="w-3.5 h-3.5 text-sky-600" />
-                  Rearranged by Courier:
-                </span>
-                {Object.entries(courierSummary).sort((a, b) => a[0].localeCompare(b[0])).map(([cName, count]) => (
-                  <span
-                    key={cName}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200 text-[10px] font-semibold text-sky-800 shadow-xs"
-                  >
-                    {cName}: <span className="font-mono text-orange-600 font-bold">{count} labels</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* ================= TWO COLUMN WORKSPACE ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
@@ -6538,6 +6417,127 @@ export default function LabelCropper({
           </div>
         </div>
 
+      </div>
+
+      {/* ================= PROCESSING REPORT CARD (SHIFTED TO BOTTOM) ================= */}
+      <div className="bg-white border border-slate-200/90 rounded-xl shadow-xs mt-4 overflow-hidden transition-all">
+        <div 
+          onClick={() => setReportOpen(!reportOpen)}
+          className="flex items-center justify-between px-4 py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50/60 transition-colors"
+        >
+          <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
+            <svg className="w-3.5 h-3.5 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Processing Report
+          </div>
+          <button type="button" className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer">
+            {reportOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {reportOpen && (
+          <div className="p-2.5 md:p-3 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            {/* Total Labels */}
+            <div className="bg-sky-50 border border-sky-200/80 rounded-lg p-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-sky-700">Total Labels</div>
+                  <div className="text-base font-bold text-[#083B82] font-mono leading-tight">
+                    {metrics.success} <span className="text-slate-500 text-[10px] font-normal">/ {metrics.totalLabels}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Success */}
+            <div className="bg-orange-50 border border-orange-200/80 rounded-lg p-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-orange-700">Success</div>
+                  <div className="text-base font-bold text-orange-600 font-mono leading-tight">
+                    {metrics.success}
+                  </div>
+                </div>
+              </div>
+              {parsedLabels.length > 0 && (
+                <button 
+                  type="button" 
+                  onClick={() => setShowSkuModal(true)} 
+                  title="View SKU Summary"
+                  className="text-orange-600 hover:text-orange-700 transition-colors cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Duplicates */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                  <Copy className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-600">Duplicates</div>
+                  <div className="text-base font-bold text-slate-800 font-mono leading-tight">
+                    {metrics.duplicates}
+                  </div>
+                </div>
+              </div>
+              {metrics.duplicates > 0 && (
+                <button 
+                  type="button" 
+                  onClick={() => setShowDuplicateModal(true)} 
+                  title="View duplicate labels"
+                  className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* OCR Failed */}
+            <div className="bg-rose-50 border border-rose-200/80 rounded-lg p-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-rose-700">OCR Failed</div>
+                  <div className="text-base font-bold text-rose-600 font-mono leading-tight">
+                    {metrics.ocrFailed}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Courier Breakdown Chips */}
+            {Object.keys(courierSummary).length > 0 && (
+              <div className="col-span-2 md:col-span-4 mt-0.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1 mr-1">
+                  <Truck className="w-3.5 h-3.5 text-sky-600" />
+                  Rearranged by Courier:
+                </span>
+                {Object.entries(courierSummary).sort((a, b) => a[0].localeCompare(b[0])).map(([cName, count]) => (
+                  <span
+                    key={cName}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200 text-[10px] font-semibold text-sky-800 shadow-xs"
+                  >
+                    {cName}: <span className="font-mono text-orange-600 font-bold">{count} labels</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
         </>
       ) : selectedMarketplace === 'ajio' ? (
