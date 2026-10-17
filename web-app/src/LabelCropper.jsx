@@ -86,7 +86,7 @@ export const MARKETPLACES = [
     badgeText: 'amazon',
     badgeStyle: 'bg-[#131921] text-[#FF9900] border border-amber-500/30 shadow-orange-500/10',
     iconLetter: 'a',
-    description: 'Filter out tax invoice pages and extract only shipping labels from Amazon single PDF.',
+    description: 'Remove tax invoice pages and print product SKU name & quantity on clean shipping labels.',
     ready: true
   },
   {
@@ -6945,13 +6945,13 @@ export default function LabelCropper({
                 <div className="w-6 h-6 rounded-lg bg-[#131921] text-[#FF9900] flex items-center justify-center text-xs font-bold shadow-xs">
                   a
                 </div>
-                Amazon Shipping Label Extractor
+                Amazon Invoice Remover &amp; SKU Printing
                 <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Easy Ship & Seller Flex
+                  Easy Ship &amp; Seller Flex
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Upload your Amazon PDF file(s). OrderMunim automatically filters out and removes the tax invoice pages, keeping only the clean shipping labels ready for 4x6 / A4 printing.
+                Upload your Amazon PDF file(s). OrderMunim automatically removes the tax invoice pages and prints product SKU name &amp; quantity directly on your clean shipping labels ready for 4x6 / A4 printing.
               </p>
             </div>
             {(amazonState.files?.length > 0 || amazonState.error) && (
@@ -8494,7 +8494,7 @@ export default function LabelCropper({
                   {selectedMarketplace === 'ajio'
                     ? `Ajio Merged Label & Invoice Preview (${ajioState.mergedDownload?.totalPages || 0} Pages)`
                     : selectedMarketplace === 'amazon'
-                    ? `Amazon Clean Shipping Labels Preview (${amazonState.result?.totalPages || 0} Labels)`
+                    ? `Amazon Invoice Remover & SKU Printing Preview (${amazonState.result?.totalPages || 0} Labels)`
                     : `Cropped Thermal Label Preview (${selectedMarketplace === 'flipcart' ? '4x6" Thermal Portrait' : (selectedMarketplace === 'snapdeal' ? 'Snapdeal Thermal' : '4x6" Landscape')})`}
                 </h3>
               </div>
