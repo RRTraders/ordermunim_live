@@ -2111,9 +2111,16 @@ export default function LabelCropper({
     // SHIPPING LABEL: Detect exact printing coordinates
     let printCoord = null;
     if (isLabel && Array.isArray(textItems)) {
-      // Find table left margin (e.g. from '#' or 'SELLER' column)
-      const tableLeftItem = textItems.find(it => it.str && /^(?:#|SELLER|GSTIN)$/i.test(it.str.trim()));
-      const startX = (tableLeftItem && Array.isArray(tableLeftItem.transform)) ? tableLeftItem.transform[4] : 32;
+      // Find lower box left margin (e.g. from 'STXA' or lower routing box) or table left
+      const lowerBoxItem = textItems.find(it => 
+        it.str && Array.isArray(it.transform) && /(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL|Sold)/i.test(it.str)
+      );
+
+      // Target X: aligns directly with the lower box left vertical line (~46 pt)
+      let startX = 46;
+      if (lowerBoxItem && Array.isArray(lowerBoxItem.transform) && lowerBoxItem.transform[4] >= 35 && lowerBoxItem.transform[4] <= 60) {
+        startX = lowerBoxItem.transform[4];
+      }
 
       // 1. Detect Lithium ion line:
       const lithiumItem = textItems.find(it => 
@@ -2127,8 +2134,8 @@ export default function LabelCropper({
 
       if (lithiumItem && Array.isArray(lithiumItem.transform)) {
         const rawLithiumY = lithiumItem.transform[5];
-        // Ensure Y is within reasonable lower-half bounds (~160-205), otherwise use 180
-        const lithiumY = (rawLithiumY >= 150 && rawLithiumY <= 215) ? rawLithiumY : 180;
+        // Enforce Y sits in the lower white space above the routing box (~122-145), default 130
+        const lithiumY = (rawLithiumY >= 115 && rawLithiumY <= 150) ? rawLithiumY : 130;
         
         const sameLineItems = textItems.filter(it => 
           Array.isArray(it.transform) && 
@@ -2139,40 +2146,29 @@ export default function LabelCropper({
           ? Math.min(...sameLineItems.map(it => it.transform[4])) 
           : 185;
 
-        // User requested: "not above line, print before line there is also white space like Car Washer Gun-S5 (1)"
         printCoord = {
           type: 'before_lithium',
-          x: Math.max(28, Math.min(startX, 42)),
+          x: startX,
           y: lithiumY,
-          maxX: Math.max(60, lithiumMinX - 8)
+          maxX: Math.max(80, lithiumMinX - 8)
         };
       } else {
-        // 2. Fallback: Lithium line is absent ("very rare case so if this line not available then print between 2 boxes white space")
-        // In Amazon 4x6 labels, the white space between the 2 boxes is at y = 180
-        const upperHeaderItem = textItems.find(it => 
-          it.str && Array.isArray(it.transform) && /(?:INVOICE|GSTIN|ITEM|SELLER)/i.test(it.str.trim())
-        );
-        const lowerBoxItem = textItems.find(it => 
-          it.str && Array.isArray(it.transform) && /(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL|Sold)/i.test(it.str)
-        );
-
-        let targetY = 180;
-        if (upperHeaderItem && lowerBoxItem) {
-          const calculatedMid = (upperHeaderItem.transform[5] - 30 + lowerBoxItem.transform[5] + 15) / 2;
-          if (calculatedMid >= 160 && calculatedMid <= 205) targetY = calculatedMid;
-        } else if (upperHeaderItem && upperHeaderItem.transform[5] > 240) {
-          const fromHeader = upperHeaderItem.transform[5] - 90;
-          if (fromHeader >= 160 && fromHeader <= 205) targetY = fromHeader;
-        } else if (lowerBoxItem && lowerBoxItem.transform[5] < 160) {
-          const fromLower = lowerBoxItem.transform[5] + 35;
-          if (fromLower >= 160 && fromLower <= 205) targetY = fromLower;
+        // 2. Fallback: Lithium line is absent
+        // User requested: "name must start above from lowerbox uper line"
+        // Lower box upper line is at y ≈ 116. Placing text at y = 130 sits cleanly above it in the white space.
+        let targetY = 130;
+        if (lowerBoxItem && Array.isArray(lowerBoxItem.transform)) {
+          const calculatedY = lowerBoxItem.transform[5] + 28;
+          if (calculatedY >= 122 && calculatedY <= 145) {
+            targetY = calculatedY;
+          }
         }
 
         printCoord = {
           type: 'between_boxes',
-          x: Math.max(28, Math.min(startX, 42)),
+          x: startX,
           y: targetY,
-          maxX: 185
+          maxX: 350
         };
       }
     }
@@ -2430,22 +2426,22 @@ export default function LabelCropper({
         if (item.skuText) {
           try {
             let fontSize = 8.5;
-            let targetX = 32;
-            let targetY = 180;
-            let maxX = 185;
+            let targetX = 46;
+            let targetY = 130;
+            let maxX = 350;
 
             if (item.printCoord?.y) {
-              if (item.printCoord.y >= 150 && item.printCoord.y <= 215) {
+              if (item.printCoord.y >= 115 && item.printCoord.y <= 150) {
                 targetY = item.printCoord.y;
               } else {
-                targetY = 180;
+                targetY = 130;
               }
             }
-            if (item.printCoord?.x && item.printCoord.x >= 25 && item.printCoord.x <= 50) {
+            if (item.printCoord?.x && item.printCoord.x >= 35 && item.printCoord.x <= 60) {
               targetX = item.printCoord.x;
             }
             if (item.printCoord?.maxX && item.printCoord.maxX > targetX + 40) {
-              maxX = Math.min(item.printCoord.maxX, 185);
+              maxX = item.printCoord.maxX;
             }
             const maxAllowedWidth = Math.max(60, maxX - targetX);
 
