@@ -4321,6 +4321,30 @@ export default function App() {
           </div>
         )}
 
+        {/* Global Trial Expired Banner */}
+        {trialCountdown?.expired && !isSuperAdmin && profile?.status !== 'on_hold' && (
+          <div className="bg-rose-50 border-2 border-rose-400 text-rose-950 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-rose-950">Evaluation Access Expired</h3>
+                <p className="text-xs text-rose-800 mt-0.5">
+                  Your access period has expired. Label cropping, Amazon invoice removal, and automated tools are locked. Please contact administrator to renew.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              Contact Admin to Renew
+            </button>
+          </div>
+        )}
+
         {activeTab === 'profile' ? (
           <div className="max-w-md mx-auto bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 animate-in fade-in duration-200 text-slate-900">
             {/* 1. Round Profile Picture */}
@@ -4667,8 +4691,13 @@ export default function App() {
                 currentUser={user}
                 userProfile={profile}
                 onRequireAuth={(reason) => {
-                  setAuthModalReason(reason || 'Sign in with your Google account to get 3 days free trial.');
-                  setShowAuthModal(true);
+                  if (user) {
+                    showToast(reason || 'Your trial period has expired. Please contact admin to renew.', 'error');
+                    setShowContactModal(true);
+                  } else {
+                    setAuthModalReason(reason || 'Sign in with your Google account to get 3 days free trial.');
+                    setShowAuthModal(true);
+                  }
                 }}
               />
             </Suspense>

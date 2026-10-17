@@ -654,55 +654,78 @@ export default function LabelCropper({
   userProfile = null,
   onRequireAuth = null
 }) {
-  // Check 3-day trial validity for guest or registered user
+  // Comprehensive Access & Trial Enforcement Checks
+  const isSuperAdmin = Boolean(
+    currentUser?.email === 'rrtradersofficials@gmail.com' ||
+    userProfile?.role === 'super_admin' ||
+    userProfile?.email === 'rrtradersofficials@gmail.com' ||
+    currentUser?.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63'
+  );
+
+  const isAccountOnHold = Boolean(currentUser && userProfile?.status === 'on_hold' && !isSuperAdmin);
+
+  const isTrialExpired = Boolean(
+    !isSuperAdmin &&
+    currentUser &&
+    userProfile?.trialEndDate &&
+    new Date(userProfile.trialEndDate).getTime() < Date.now()
+  );
+
+  const isGuestExpired = Boolean(
+    !currentUser &&
+    (() => {
+      try {
+        const guestStart = localStorage.getItem('om_guest_trial_start');
+        if (guestStart) {
+          const startTime = new Date(guestStart).getTime();
+          return ((Date.now() - startTime) / (1000 * 60 * 60 * 24)) > 3;
+        }
+      } catch {}
+      return false;
+    })()
+  );
+
+  const isAccessBlocked = isAccountOnHold || isTrialExpired || isGuestExpired;
+
+  // Check trial validity for guest or registered user
   const checkTrialStatus = () => {
     // 1. Super Admin is always active
-    if (currentUser?.email === 'rrtradersofficials@gmail.com' || userProfile?.role === 'super_admin' || currentUser?.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63') {
+    if (isSuperAdmin) {
       return { allowed: true };
     }
 
-    // Check if account was put On Hold by Admin
-    if (currentUser && userProfile?.status === 'on_hold') {
+    // 2. Check if account was put On Hold by Admin
+    if (isAccountOnHold) {
       return {
         allowed: false,
         reason: 'Your account is currently placed on hold by the administrator. Label cropping is paused. Please contact admin to reactivate.'
       };
     }
 
-    // 2. Logged-in user with trialEndDate in profile
-    if (currentUser && userProfile?.trialEndDate) {
-      const expiry = new Date(userProfile.trialEndDate).getTime();
-      const isExpired = Date.now() > expiry;
-      if (isExpired) {
-        return {
-          allowed: false,
-          reason: 'Your evaluation / access period has expired. Please contact admin to extend or upgrade your plan.'
-        };
-      }
-      return { allowed: true };
+    // 3. Logged-in user with trialEndDate in profile
+    if (isTrialExpired) {
+      return {
+        allowed: false,
+        reason: 'Your evaluation / access period has expired. Please contact admin to extend or renew your plan.'
+      };
     }
 
-    // 3. Guest User (Not logged in)
+    // 4. Guest User (Not logged in)
+    if (isGuestExpired) {
+      return {
+        allowed: false,
+        reason: 'Your 3 days free trial has completed. Please sign in with your Google account to continue using OrderMunim.'
+      };
+    }
+
+    // Initialize guest trial timestamp if first time
     if (!currentUser) {
       try {
         const guestStart = localStorage.getItem('om_guest_trial_start');
         if (!guestStart) {
-          // Set start timestamp on first use
           localStorage.setItem('om_guest_trial_start', new Date().toISOString());
-          return { allowed: true };
         }
-        const startTime = new Date(guestStart).getTime();
-        const elapsedDays = (Date.now() - startTime) / (1000 * 60 * 60 * 24);
-        if (elapsedDays > 3) {
-          return {
-            allowed: false,
-            reason: 'Your 3 days free trial has completed. Please sign in with your Google account to continue using OrderMunim.'
-          };
-        }
-        return { allowed: true };
-      } catch {
-        return { allowed: true };
-      }
+      } catch {}
     }
 
     return { allowed: true };
@@ -1482,6 +1505,13 @@ export default function LabelCropper({
   };
 
   const handleMergeAjioPdf = async (options = {}) => {
+    const trial = checkTrialStatus();
+    if (!trial.allowed) {
+      if (onRequireAuth) onRequireAuth(trial.reason);
+      else if (showToast) showToast(trial.reason, 'error');
+      return;
+    }
+
     const includeInvoices = typeof options === 'boolean' ? options : (options?.includeInvoices !== false);
     const mergeMode = includeInvoices ? 'with_invoice' : 'without_invoice';
 
@@ -2393,6 +2423,16 @@ export default function LabelCropper({
   };
 
   const handleExtractAmazonLabels = async () => {
+    const trial = checkTrialStatus();
+    if (!trial.allowed) {
+      if (onRequireAuth) {
+        onRequireAuth(trial.reason);
+      } else if (showToast) {
+        showToast(trial.reason, 'error');
+      }
+      return;
+    }
+
     if (!amazonState.files?.length || !amazonState.pagesAnalysis?.length) {
       showToast?.('Please upload an Amazon PDF first', 'warning');
       return;
@@ -2540,6 +2580,13 @@ export default function LabelCropper({
   };
 
   const handleDownloadAmazonInvoices = async () => {
+    const trial = checkTrialStatus();
+    if (!trial.allowed) {
+      if (onRequireAuth) onRequireAuth(trial.reason);
+      else if (showToast) showToast(trial.reason, 'error');
+      return;
+    }
+
     const invoicePages = amazonState.pagesAnalysis.filter(p => !p.keep);
     if (invoicePages.length === 0) {
       showToast?.('No invoice pages to extract.', 'info');
@@ -3879,6 +3926,13 @@ export default function LabelCropper({
   };
 
   const handleStartRecording = () => {
+    const trial = checkTrialStatus();
+    if (!trial.allowed) {
+      if (onRequireAuth) onRequireAuth(trial.reason);
+      else if (showToast) showToast(trial.reason, 'error');
+      return;
+    }
+
     if (!webcamStream || !webcamVideoRef.current) {
       if (showToast) showToast('Please start webcam first', 'error');
       return;
@@ -5979,16 +6033,20 @@ export default function LabelCropper({
             </div>
           </div>
 
-          {/* Account On Hold Warning */}
-          {userProfile?.status === 'on_hold' && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+          {/* Access Blocked Warning (On Hold or Trial Expired) */}
+          {isAccessBlocked && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>Account On Hold: Label cropping is paused by administrator.</span>
+                <span>
+                  {isAccountOnHold 
+                    ? 'Account On Hold: Label cropping is paused by administrator.' 
+                    : 'Trial Expired: Your evaluation period has ended. Label cropping is locked.'}
+                </span>
               </div>
               <button
                 type="button"
-                onClick={() => onRequireAuth && onRequireAuth('Your account is on hold. Please contact admin to reactivate.')}
+                onClick={() => onRequireAuth && onRequireAuth(isAccountOnHold ? 'Your account is on hold. Please contact admin to reactivate.' : 'Your trial period has expired. Please contact admin to extend or upgrade.')}
                 className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
               >
                 Contact Admin
@@ -5999,11 +6057,20 @@ export default function LabelCropper({
           {/* Primary Action Button */}
           <button
             type="button"
-            disabled={files.length === 0 || isProcessing || userProfile?.status === 'on_hold'}
+            disabled={files.length === 0 || isProcessing || isAccessBlocked}
             onClick={processCropAndSort}
-            className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white text-sm font-black rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+            className={`w-full py-3 ${
+              isAccessBlocked
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white shadow-md shadow-orange-500/20'
+            } text-sm font-black rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed`}
           >
-            {isProcessing ? (
+            {isAccessBlocked ? (
+              <>
+                <AlertCircle className="w-4 h-4 text-rose-500" />
+                <span>{isAccountOnHold ? 'Account On Hold - Contact Admin' : 'Trial Expired - Contact Admin to Extend'}</span>
+              </>
+            ) : isProcessing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-white" />
                 Processing Labels ({processingProgress}%)...
@@ -7219,14 +7286,37 @@ export default function LabelCropper({
             </div>
           )}
 
+          {/* Access Blocked Warning (On Hold or Trial Expired) */}
+          {isAccessBlocked && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs font-semibold flex items-center justify-between gap-3 shadow-sm animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                <span>
+                  {isAccountOnHold 
+                    ? 'Account On Hold: Label extraction is paused by administrator.' 
+                    : 'Trial Expired: Your evaluation period has ended. Invoice extraction is locked.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRequireAuth && onRequireAuth(isAccountOnHold ? 'Your account is on hold. Please contact admin to reactivate.' : 'Your trial period has expired. Please contact admin to extend access.')}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shrink-0 transition-colors cursor-pointer"
+              >
+                Contact Admin
+              </button>
+            </div>
+          )}
+
           {/* Primary Action Button: Extract & Download Clean PDF */}
           <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               type="button"
-              disabled={!amazonState.files?.length || amazonState.labelsCount === 0 || amazonState.isProcessing}
+              disabled={!amazonState.files?.length || amazonState.labelsCount === 0 || amazonState.isProcessing || isAccessBlocked}
               onClick={handleExtractAmazonLabels}
               className={`flex-1 py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer ${
-                !amazonState.files?.length || amazonState.labelsCount === 0
+                isAccessBlocked
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-not-allowed shadow-none'
+                  : !amazonState.files?.length || amazonState.labelsCount === 0
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                   : amazonState.isProcessing
                   ? 'bg-amber-400 text-white cursor-wait'
@@ -7235,7 +7325,9 @@ export default function LabelCropper({
             >
               <FileCheck className="w-4 h-4 text-amber-400" />
               <span>
-                {amazonState.isProcessing
+                {isAccessBlocked
+                  ? (isAccountOnHold ? 'Account On Hold - Contact Admin' : 'Trial Expired - Contact Admin to Extend')
+                  : amazonState.isProcessing
                   ? (amazonState.statusText || 'Extracting Labels...')
                   : !amazonState.files?.length
                   ? 'Please Upload Amazon PDF First'
@@ -7247,8 +7339,9 @@ export default function LabelCropper({
             {amazonState.invoicesCount > 0 && (
               <button
                 type="button"
+                disabled={isAccessBlocked}
                 onClick={handleDownloadAmazonInvoices}
-                className="px-4 py-3 sm:py-0 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                className="px-4 py-3 sm:py-0 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:cursor-not-allowed"
                 title="Download only the extracted tax invoice pages"
               >
                 <Download className="w-3.5 h-3.5 text-rose-600" />
