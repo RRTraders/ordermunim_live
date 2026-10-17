@@ -623,6 +623,7 @@ export default function App() {
   const [adminCurrentPage, setAdminCurrentPage] = useState(1);
   const [expandedAdminUserIds, setExpandedAdminUserIds] = useState({});
   const [adminSettingsUser, setAdminSettingsUser] = useState(null);
+  const [customTrialDays, setCustomTrialDays] = useState(3);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showAdminLoginForm, setShowAdminLoginForm] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
@@ -870,7 +871,7 @@ export default function App() {
       if (guestStart) {
         const guestExpiry = new Date(new Date(guestStart).getTime() + (3 * 24 * 60 * 60 * 1000)).getTime();
         const diffMs = guestExpiry - trialTimeNow;
-        if (diffMs <= 0) return { expired: true, text: 'Trial Expired', days: 0, hours: 0, percent: 100 };
+        if (diffMs <= 0) return { expired: true, text: 'Trial Expired', days: 0, hours: 0, percent: 100, totalDays: 3, planName: '3-Day Free Evaluation' };
         const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
         const days = Math.floor(totalHours / 24);
         const hours = totalHours % 24;
@@ -881,22 +882,58 @@ export default function App() {
           hours, 
           totalHours, 
           text, 
+          totalDays: 3,
+          planName: '3-Day Free Evaluation',
           percent: Math.max(0, Math.min(100, Math.round(((72 - totalHours) / 72) * 100))),
-          expiryDate: new Date(guestExpiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          expiryDate: new Date(guestExpiry).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         };
       }
       return null;
     }
     const expiry = new Date(expiryStr).getTime();
     const diffMs = expiry - trialTimeNow;
+
+    // Calculate total plan duration in days from trialStartDate (or calculate based on expiry)
+    let totalPlanDays = 3;
+    if (profile?.trialStartDate) {
+      const startMs = new Date(profile.trialStartDate).getTime();
+      totalPlanDays = Math.max(1, Math.round((expiry - startMs) / (1000 * 60 * 60 * 24)));
+    } else {
+      totalPlanDays = Math.max(3, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    }
+
+    const expiryDateFormatted = new Date(expiry).toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+
+    const planName = totalPlanDays > 3 ? `${totalPlanDays}-Day Access Plan` : '3-Day Free Evaluation';
+
     if (diffMs <= 0) {
-      return { expired: true, text: 'Trial Expired', days: 0, hours: 0, percent: 100, expiryDate: new Date(expiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) };
+      return { 
+        expired: true, 
+        text: 'Trial Expired', 
+        days: 0, 
+        hours: 0, 
+        percent: 100, 
+        totalDays: totalPlanDays,
+        planName,
+        expiryDate: expiryDateFormatted 
+      };
     }
     const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
     const text = days > 0 ? `${days} Days Left` : `${hours} Hours Left`;
-    const percent = Math.max(0, Math.min(100, Math.round(((72 - totalHours) / 72) * 100)));
+
+    // Dynamic percent based on actual total plan duration
+    const totalDurationHours = Math.max(24, totalPlanDays * 24);
+    const elapsedHours = Math.max(0, totalDurationHours - totalHours);
+    const percent = Math.max(0, Math.min(100, Math.round((elapsedHours / totalDurationHours) * 100)));
+
     return { 
       expired: false, 
       days, 
@@ -904,7 +941,9 @@ export default function App() {
       totalHours, 
       text, 
       percent, 
-      expiryDate: new Date(expiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+      totalDays: totalPlanDays,
+      planName,
+      expiryDate: expiryDateFormatted 
     };
   };
 
@@ -3403,6 +3442,11 @@ export default function App() {
   // Admin: Toggle On Hold status
   const handleToggleUserStatus = async (targetUid, currentStatus) => {
     const newStatus = currentStatus === 'on_hold' ? 'active' : 'on_hold';
+    setAllUsersList(prev => prev.map(u => u.id === targetUid ? { ...u, status: newStatus } : u));
+    setAdminSettingsUser(prev => (prev && prev.id === targetUid ? { ...prev, status: newStatus } : prev));
+    if (user?.uid === targetUid) {
+      setProfile(prev => ({ ...prev, status: newStatus }));
+    }
     try {
       await updateDoc(doc(db, 'users', targetUid), { status: newStatus });
       showToast(newStatus === 'on_hold' ? 'Account placed on hold' : 'Account activated', 'info');
@@ -3414,10 +3458,16 @@ export default function App() {
   // Admin: Send or toggle payment alert notification
   const handleTogglePaymentAlert = async (targetUid, currentAlert, slots) => {
     const newAlert = !currentAlert;
+    const amount = (slots || 1) * 249;
+    setAllUsersList(prev => prev.map(u => u.id === targetUid ? { ...u, paymentAlert: newAlert, paymentAmount: amount } : u));
+    setAdminSettingsUser(prev => (prev && prev.id === targetUid ? { ...prev, paymentAlert: newAlert, paymentAmount: amount } : prev));
+    if (user?.uid === targetUid) {
+      setProfile(prev => ({ ...prev, paymentAlert: newAlert, paymentAmount: amount }));
+    }
     try {
       await updateDoc(doc(db, 'users', targetUid), {
         paymentAlert: newAlert,
-        paymentAmount: (slots || 1) * 249
+        paymentAmount: amount
       });
       showToast(newAlert ? 'Payment alert sent to client' : 'Payment alert cancelled', 'info');
     } catch (err) {
@@ -4222,6 +4272,54 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 ${activeTab === 'cropper' ? 'pb-6' : 'pb-28'} space-y-6`}>
+        {/* Global Account Status Banner (When placed On Hold by Admin) */}
+        {profile?.status === 'on_hold' && !isSuperAdmin && (
+          <div className="bg-rose-50 border-2 border-rose-400 text-rose-950 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-rose-950">Account Placed On Hold</h3>
+                <p className="text-xs text-rose-800 mt-0.5">
+                  Your account has been temporarily placed on hold by the administrator. Processing tools and automated services are paused.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              Contact Admin
+            </button>
+          </div>
+        )}
+
+        {/* Global Payment Due Alert Banner */}
+        {profile?.paymentAlert && profile?.status !== 'on_hold' && !isSuperAdmin && (
+          <div className="bg-amber-50 border-2 border-amber-400 text-amber-950 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <BellRing className="w-6 h-6 animate-bounce" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm sm:text-base tracking-tight text-amber-950">Subscription Payment Due Alert</h4>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Your renewal payment of ₹{profile.paymentAmount || 249} is due. Please contact admin to complete payment and ensure uninterrupted service.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              Contact Admin
+            </button>
+          </div>
+        )}
+
         {activeTab === 'profile' ? (
           <div className="max-w-md mx-auto bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 animate-in fade-in duration-200 text-slate-900">
             {/* 1. Round Profile Picture */}
@@ -4252,21 +4350,23 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3 Days Free Evaluation Countdown Card */}
+            {/* Evaluation Countdown Card */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#083B82] text-white shadow-md space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  {isSuperAdmin ? 'Lifetime Access' : '3-Day Free Evaluation'}
+                  {isSuperAdmin ? 'Lifetime Access' : (trialCountdown?.planName || 'Free Evaluation')}
                 </span>
                 <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                   isSuperAdmin 
                     ? 'bg-amber-400/20 text-amber-300' 
-                    : trialCountdown?.expired 
-                      ? 'bg-rose-500 text-white' 
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                    : profile?.status === 'on_hold'
+                      ? 'bg-rose-500 text-white font-bold'
+                      : trialCountdown?.expired 
+                        ? 'bg-rose-500 text-white' 
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
                 }`}>
-                  {isSuperAdmin ? 'Unlimited' : trialCountdown?.expired ? 'Expired' : 'Active'}
+                  {isSuperAdmin ? 'Unlimited' : profile?.status === 'on_hold' ? 'On Hold' : trialCountdown?.expired ? 'Expired' : 'Active'}
                 </span>
               </div>
               <div>
@@ -4294,7 +4394,7 @@ export default function App() {
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-400">
-                    <span>3 Days Free Evaluation</span>
+                    <span>{trialCountdown.planName || `${trialCountdown.totalDays || 3} Days Free Evaluation`}</span>
                     <span>{trialCountdown.expired ? '0h remaining' : `${trialCountdown.totalHours || 0}h remaining`}</span>
                   </div>
                 </div>
@@ -5118,27 +5218,115 @@ export default function App() {
                               </button>
                             </div>
 
-                            {/* Trial Validity / Extend 3 Days */}
-                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
-                              <div>
-                                <span className="text-xs font-semibold text-slate-200 block">⏳ Trial Validity</span>
-                                <span className="text-[10px] text-slate-400">
-                                  {targetUser.trialEndDate ? `Expires: ${new Date(targetUser.trialEndDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Standard registered'}
-                                </span>
+                            {/* Trial Validity / Editable Extra Days */}
+                            <div className="pt-2 border-t border-slate-800/60 space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-xs font-semibold text-slate-200 block">⏳ Trial / Access Validity</span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {targetUser.trialEndDate 
+                                      ? `Expires: ${new Date(targetUser.trialEndDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` 
+                                      : 'Standard trial not set'}
+                                  </span>
+                                </div>
+                                {targetUser.trialEndDate && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    new Date(targetUser.trialEndDate).getTime() > Date.now()
+                                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                      : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                  }`}>
+                                    {new Date(targetUser.trialEndDate).getTime() > Date.now()
+                                      ? `${Math.max(1, Math.ceil((new Date(targetUser.trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} Days Left`
+                                      : 'Expired'}
+                                  </span>
+                                )}
                               </div>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const currentEnd = targetUser.trialEndDate ? new Date(targetUser.trialEndDate) : new Date();
-                                  const newEnd = new Date(Math.max(Date.now(), currentEnd.getTime()) + (3 * 24 * 60 * 60 * 1000));
-                                  await updateDoc(doc(db, 'users', targetUser.id), { trialEndDate: newEnd.toISOString(), status: 'active' });
-                                  setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, trialEndDate: newEnd.toISOString(), status: 'active' } : u));
-                                  showToast(`Extended 3 days free trial for ${targetUser.email || targetUser.name}!`, 'success');
-                                }}
-                                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/40 transition-all cursor-pointer"
-                              >
-                                +3 Days Trial
-                              </button>
+
+                              {/* Editable Days Input & Preset Buttons */}
+                              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 space-y-2">
+                                <div className="flex items-center justify-between text-[11px] text-slate-300 font-medium">
+                                  <span>Add Extra Days:</span>
+                                  <div className="flex items-center gap-1">
+                                    {[3, 7, 15, 30].map(d => (
+                                      <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => setCustomTrialDays(d)}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
+                                          customTrialDays === d 
+                                            ? 'bg-orange-500 text-white' 
+                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                        }`}
+                                      >
+                                        {d}d
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <div className="relative flex-1">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="365"
+                                      value={customTrialDays}
+                                      onChange={(e) => setCustomTrialDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-orange-500"
+                                      placeholder="Days"
+                                    />
+                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">
+                                      days
+                                    </span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const daysToAdd = Math.max(1, parseInt(customTrialDays, 10) || 3);
+                                      const currentEnd = targetUser.trialEndDate ? new Date(targetUser.trialEndDate) : new Date();
+                                      const baseTime = Math.max(Date.now(), currentEnd.getTime());
+                                      const newEnd = new Date(baseTime + (daysToAdd * 24 * 60 * 60 * 1000));
+                                      const newStart = targetUser.trialStartDate || new Date().toISOString();
+                                      const preserveStatus = targetUser.status === 'on_hold' ? 'on_hold' : 'active';
+
+                                      await updateDoc(doc(db, 'users', targetUser.id), { 
+                                        trialEndDate: newEnd.toISOString(), 
+                                        trialStartDate: newStart,
+                                        status: preserveStatus 
+                                      });
+
+                                      setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { 
+                                        ...u, 
+                                        trialEndDate: newEnd.toISOString(), 
+                                        trialStartDate: newStart,
+                                        status: preserveStatus 
+                                      } : u));
+
+                                      setAdminSettingsUser(prev => prev ? { 
+                                        ...prev, 
+                                        trialEndDate: newEnd.toISOString(), 
+                                        trialStartDate: newStart,
+                                        status: preserveStatus 
+                                      } : prev);
+
+                                      if (user?.uid === targetUser.id) {
+                                        setProfile(prev => ({ 
+                                          ...prev, 
+                                          trialEndDate: newEnd.toISOString(), 
+                                          trialStartDate: newStart,
+                                          status: preserveStatus 
+                                        }));
+                                      }
+
+                                      showToast(`Added +${daysToAdd} days to ${targetUser.email || targetUser.name || 'user'}!`, 'success');
+                                    }}
+                                    className="px-3 py-1 text-xs font-bold rounded-lg bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all cursor-pointer shrink-0"
+                                  >
+                                    +{customTrialDays} Days Trial
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -6540,21 +6728,23 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3 Days Free Evaluation Countdown Card */}
+              {/* Evaluation Countdown Card */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#083B82] text-white shadow-md space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    {isSuperAdmin ? 'Lifetime Access' : '3-Day Free Evaluation'}
+                    {isSuperAdmin ? 'Lifetime Access' : (trialCountdown?.planName || 'Free Evaluation')}
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     isSuperAdmin 
                       ? 'bg-amber-400/20 text-amber-300' 
-                      : trialCountdown?.expired 
-                        ? 'bg-rose-500 text-white' 
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                      : profile?.status === 'on_hold'
+                        ? 'bg-rose-500 text-white font-bold'
+                        : trialCountdown?.expired 
+                          ? 'bg-rose-500 text-white' 
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
                   }`}>
-                    {isSuperAdmin ? 'Unlimited' : trialCountdown?.expired ? 'Expired' : 'Active'}
+                    {isSuperAdmin ? 'Unlimited' : profile?.status === 'on_hold' ? 'On Hold' : trialCountdown?.expired ? 'Expired' : 'Active'}
                   </span>
                 </div>
                 <div>
@@ -6582,7 +6772,7 @@ export default function App() {
                       />
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-400">
-                      <span>3 Days Free Evaluation</span>
+                      <span>{trialCountdown.planName || `${trialCountdown.totalDays || 3} Days Free Evaluation`}</span>
                       <span>{trialCountdown.expired ? '0h remaining' : `${trialCountdown.totalHours || 0}h remaining`}</span>
                     </div>
                   </div>

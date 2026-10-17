@@ -661,6 +661,14 @@ export default function LabelCropper({
       return { allowed: true };
     }
 
+    // Check if account was put On Hold by Admin
+    if (currentUser && userProfile?.status === 'on_hold') {
+      return {
+        allowed: false,
+        reason: 'Your account is currently placed on hold by the administrator. Label cropping is paused. Please contact admin to reactivate.'
+      };
+    }
+
     // 2. Logged-in user with trialEndDate in profile
     if (currentUser && userProfile?.trialEndDate) {
       const expiry = new Date(userProfile.trialEndDate).getTime();
@@ -668,7 +676,7 @@ export default function LabelCropper({
       if (isExpired) {
         return {
           allowed: false,
-          reason: 'Your 3-day free trial has expired. Please contact admin to extend or upgrade your plan.'
+          reason: 'Your evaluation / access period has expired. Please contact admin to extend or upgrade your plan.'
         };
       }
       return { allowed: true };
@@ -5971,10 +5979,27 @@ export default function LabelCropper({
             </div>
           </div>
 
+          {/* Account On Hold Warning */}
+          {userProfile?.status === 'on_hold' && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Account On Hold: Label cropping is paused by administrator.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRequireAuth && onRequireAuth('Your account is on hold. Please contact admin to reactivate.')}
+                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
+              >
+                Contact Admin
+              </button>
+            </div>
+          )}
+
           {/* Primary Action Button */}
           <button
             type="button"
-            disabled={files.length === 0 || isProcessing}
+            disabled={files.length === 0 || isProcessing || userProfile?.status === 'on_hold'}
             onClick={processCropAndSort}
             className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:opacity-40 text-white text-sm font-black rounded-xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
           >
