@@ -781,6 +781,7 @@ export default function LabelCropper({
     pagesAnalysis: [], // Array of { fileIndex, fileName, pageIndex, pageNum, globalPageNum, isInvoice, isLabel, orderId, trackingId, recipientName, reason, keep }
     labelsCount: 0,
     invoicesCount: 0,
+    printSkuOnLabel: true, // Auto-print SKU on Shipping Label
     result: null, // { url, filename, totalPages, labelsCount, invoicesCount, blob }
     error: null,
   });
@@ -2010,7 +2011,7 @@ export default function LabelCropper({
   };
 
   // ================= AMAZON LABEL & INVOICE PARSER & SEPARATOR =================
-  const analyzeAmazonPage = (pageText) => {
+  const analyzeAmazonPage = (pageText, textItems = []) => {
     const lower = (pageText || '').toLowerCase();
 
     // Strong Invoice Indicators
@@ -2049,7 +2050,17 @@ export default function LabelCropper({
 
     // Extract Order ID if present (Amazon order format: 40X-XXXXXXX-XXXXXXX)
     const orderMatch = pageText.match(/\b([0-9]{3}-[0-9]{7}-[0-9]{7})\b/) || pageText.match(/(?:Order\s*(?:ID|#|Number|No)[\s:#\-]+)([A-Za-z0-9\-]+)/i);
-    const orderId = orderMatch ? (orderMatch[1] || orderMatch[0]) : '';
+    const orderId = orderMatch ? (orderMatch[1] || orderMatch[0]).trim() : '';
+
+    // Extract Invoice Number (e.g. IN-11041)
+    let invoiceNo = '';
+    const invMatch = pageText.match(/(?:Invoice\s*(?:Number|No|#)[\s:#\-]+)([A-Za-z0-9\-]+)/i);
+    if (invMatch) {
+      invoiceNo = invMatch[1].trim();
+    } else {
+      const inMatch = pageText.match(/\b(IN[\s\-]+[0-9]{3,10})\b/i);
+      if (inMatch) invoiceNo = inMatch[1].replace(/\s+/g, '');
+    }
 
     // Extract Tracking ID / AWB if present
     const trackMatch = pageText.match(/(?:Tracking\s*(?:ID|#|Number|No)[\s:#\-]+)([A-Za-z0-9]+)/i) || pageText.match(/\b(TBA[0-9]{12}|IN[0-9]{10,14})\b/i);
@@ -2062,13 +2073,104 @@ export default function LabelCropper({
       recipientName = shipMatch[1].trim().replace(/[\r\n].*$/s, '').trim();
     }
 
+    // TAX INVOICE: Extract SKU name and Quantity from description (e.g. B0GPX86T7V (Car Washer Gun-S5))
+    let skuDisplayString = '';
+    let extractedSkus = [];
+    if (isInvoice) {
+      // 1. Primary: 10-char ASIN followed by (SKU in parentheses)
+      const asinMatches = [...pageText.matchAll(/\b([A-Z0-9]{10})\s*\(\s*([^)\r\n]+?)\s*\)/gi)];
+      for (const m of asinMatches) {
+        const rawSku = (m[2] || '').trim();
+        if (rawSku && !/^\d{4,}$/.test(rawSku)) {
+          extractedSkus.push(rawSku);
+        }
+      }
+
+      // 2. Fallback: SKU: or Item: labels
+      if (extractedSkus.length === 0) {
+        const skuMatch = pageText.match(/(?:SKU|Seller\s*SKU|MSKU)[\s:#\-]+([A-Za-z0-9_\-\.\s]+?)(?:\s*(?:HSN|Qty|\n|\)|$))/i);
+        if (skuMatch && skuMatch[1].trim()) {
+          extractedSkus.push(skuMatch[1].trim());
+        }
+      }
+
+      // Extract Quantity from table (e.g. Qty: 1)
+      let qty = 1;
+      const qtyMatch = pageText.match(/(?:Qty|Quantity)[\s:#\-]+(\d+)/i) || 
+                       pageText.match(/(?:₹|\bINR\b|[0-9,]+\.\d{2})\s+(\d+)\s+(?:₹|\bINR\b|[0-9,]+\.\d{2})/);
+      if (qtyMatch && parseInt(qtyMatch[1], 10) > 0) {
+        qty = parseInt(qtyMatch[1], 10);
+      }
+
+      // Format requested by user: "Car Washer Gun-S5 (1)"
+      if (extractedSkus.length > 0) {
+        skuDisplayString = extractedSkus.map(s => `${s} (${qty})`).join(', ');
+      }
+    }
+
+    // SHIPPING LABEL: Detect exact printing coordinates
+    let printCoord = null;
+    if (isLabel && Array.isArray(textItems)) {
+      const lithiumItem = textItems.find(it => 
+        /(?:lithium\s*ion|compliance\s*with\s*Section|PI\s*966)/i.test(it.str)
+      );
+
+      if (lithiumItem && Array.isArray(lithiumItem.transform)) {
+        // User requested: "not above line, print before line there is also white space like Car Washer Gun-S5 (1)"
+        // Printed on the same line (y = lithiumItem.transform[5]), on the left side before "Lithium ion..."
+        printCoord = {
+          type: 'before_lithium',
+          x: 42,
+          y: lithiumItem.transform[5],
+          maxX: Math.max(50, lithiumItem.transform[4] - 8)
+        };
+      } else {
+        // User requested: "if this line not available then print between 2 boxes white space"
+        const topBoxItem = textItems.find(it => 
+          /(?:ITEM\s*TYPE|GSTIN|INVOICE\s*DATE|Customer\s*Self)/i.test(it.str)
+        );
+        const bottomBoxItem = textItems.find(it => 
+          /(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL|Sold\s*on)/i.test(it.str)
+        );
+
+        if (topBoxItem && bottomBoxItem && Array.isArray(topBoxItem.transform) && Array.isArray(bottomBoxItem.transform)) {
+          const topY = topBoxItem.transform[5];
+          const botY = bottomBoxItem.transform[5];
+          const midY = (topY - 18 + botY + 22) / 2;
+          printCoord = {
+            type: 'between_boxes',
+            x: 42,
+            y: midY,
+            maxX: 350
+          };
+        } else if (topBoxItem && Array.isArray(topBoxItem.transform)) {
+          printCoord = {
+            type: 'below_top_box',
+            x: 42,
+            y: topBoxItem.transform[5] - 38,
+            maxX: 350
+          };
+        } else {
+          printCoord = {
+            type: 'fallback',
+            x: 42,
+            y: 280,
+            maxX: 350
+          };
+        }
+      }
+    }
+
     return {
       isInvoice,
       isLabel,
       reason: isInvoice ? 'Tax Invoice Page (Filtered out)' : 'Shipping Label Page (Kept)',
       orderId,
+      invoiceNo,
       trackingId,
       recipientName,
+      skuDisplayString,
+      printCoord
     };
   };
 
@@ -2140,7 +2242,7 @@ export default function LabelCropper({
           const textContent = await page.getTextContent();
           const pageText = textContent.items.map(it => it.str).join(' ');
 
-          const analysis = analyzeAmazonPage(pageText);
+          const analysis = analyzeAmazonPage(pageText, textContent.items);
 
           allPagesAnalysis.push({
             fileIndex: fIdx,
@@ -2161,6 +2263,42 @@ export default function LabelCropper({
             }));
             await new Promise(r => setTimeout(r, 0));
           }
+        }
+      }
+
+      // Match invoices to shipping labels to populate skuText
+      const invoiceLookupByInv = new Map();
+      const invoiceLookupByOrd = new Map();
+      const invoiceList = [];
+
+      for (const p of allPagesAnalysis) {
+        if (p.isInvoice && p.skuDisplayString) {
+          if (p.invoiceNo) {
+            invoiceLookupByInv.set(p.invoiceNo.toLowerCase().replace(/[^a-z0-9]/g, ''), p.skuDisplayString);
+          }
+          if (p.orderId) {
+            invoiceLookupByOrd.set(p.orderId.toLowerCase().trim(), p.skuDisplayString);
+          }
+          invoiceList.push(p.skuDisplayString);
+        }
+      }
+
+      let labelIdx = 0;
+      for (const p of allPagesAnalysis) {
+        if (p.isLabel) {
+          let matchedSku = '';
+          const normInv = p.invoiceNo ? p.invoiceNo.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+          const normOrd = p.orderId ? p.orderId.toLowerCase().trim() : '';
+
+          if (normInv && invoiceLookupByInv.has(normInv)) {
+            matchedSku = invoiceLookupByInv.get(normInv);
+          } else if (normOrd && invoiceLookupByOrd.has(normOrd)) {
+            matchedSku = invoiceLookupByOrd.get(normOrd);
+          } else if (labelIdx < invoiceList.length) {
+            matchedSku = invoiceList[labelIdx];
+          }
+          p.skuText = matchedSku;
+          labelIdx++;
         }
       }
 
@@ -2265,11 +2403,40 @@ export default function LabelCropper({
       }
 
       const cleanDoc = await PDFDocument.create();
+      const boldFont = await cleanDoc.embedFont(StandardFonts.HelveticaBold);
 
       for (let idx = 0; idx < pagesToKeep.length; idx++) {
         const item = pagesToKeep[idx];
         const srcDoc = pdfLibDocs[item.fileIndex];
         const [copiedPage] = await cleanDoc.copyPages(srcDoc, [item.pageIndex]);
+
+        // Print SKU on label if enabled and SKU was found
+        if (amazonState.printSkuOnLabel && item.skuText) {
+          try {
+            let fontSize = 9;
+            const targetX = item.printCoord?.x || 42;
+            const targetY = item.printCoord?.y || 280;
+            const maxX = item.printCoord?.maxX || 350;
+            const maxAllowedWidth = Math.max(60, maxX - targetX);
+
+            let textW = boldFont.widthOfTextAtSize(item.skuText, fontSize);
+            while (textW > maxAllowedWidth && fontSize > 6) {
+              fontSize -= 0.5;
+              textW = boldFont.widthOfTextAtSize(item.skuText, fontSize);
+            }
+
+            copiedPage.drawText(item.skuText, {
+              x: targetX,
+              y: targetY,
+              size: fontSize,
+              font: boldFont,
+              color: rgb(0, 0, 0),
+            });
+          } catch (drawErr) {
+            console.warn('Error drawing SKU on Amazon label:', drawErr);
+          }
+        }
+
         cleanDoc.addPage(copiedPage);
 
         if (idx % 5 === 0 || idx === pagesToKeep.length - 1) {
@@ -6950,6 +7117,16 @@ export default function LabelCropper({
                           {p.recipientName && <span className="font-semibold mr-1.5">To: {p.recipientName}</span>}
                           {p.orderId && <span className="text-slate-500 font-mono text-[10px] mr-1.5">({p.orderId})</span>}
                           {p.trackingId && <span className="text-indigo-600 font-mono text-[10px]">Track: {p.trackingId}</span>}
+                          {p.isLabel && p.skuText && (
+                            <span className="inline-block text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ml-1.5">
+                              🏷️ {p.skuText}
+                            </span>
+                          )}
+                          {p.isInvoice && p.skuDisplayString && (
+                            <span className="inline-block text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-medium font-mono ml-1.5">
+                              Found: {p.skuDisplayString}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -6969,6 +7146,31 @@ export default function LabelCropper({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Options / Auto-Print SKU */}
+          {amazonState.pagesAnalysis && amazonState.pagesAnalysis.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label className="flex items-start sm:items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={amazonState.printSkuOnLabel ?? true}
+                  onChange={(e) => setAmazonState(prev => ({ ...prev, printSkuOnLabel: e.target.checked }))}
+                  className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 mt-0.5 sm:mt-0 cursor-pointer"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>Auto-Print SKU Name &amp; Quantity on Shipping Labels</span>
+                    <span className="text-[10px] font-semibold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                      Auto-Detect
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Extracts product SKU name &amp; quantity (e.g. <span className="font-semibold text-slate-700 font-mono">Car Washer Gun-S5 (1)</span>) from invoices and prints it directly on shipping labels before packaging.
+                  </p>
+                </div>
+              </label>
             </div>
           )}
 
