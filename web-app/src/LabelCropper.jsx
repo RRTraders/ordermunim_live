@@ -6917,17 +6917,11 @@ export default function LabelCropper({
                 </div>
               </div>
 
-              <div className="text-slate-600 bg-white p-3 rounded-lg border border-slate-200/80 text-[11px] leading-relaxed">
-                <p>
-                  <strong>How it works:</strong> OrderMunim inspects each page's text. Pages containing Tax Invoice indicators (<code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Tax Invoice</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">HSN</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Taxable Value</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-700 font-semibold font-mono">Authorized Signatory</code>) are automatically filtered out. Only pure shipping labels will be saved in the clean PDF.
-                </p>
-              </div>
-
               {/* Expandable Page-by-Page Table with Keep/Remove Toggles */}
               {showAmazonBreakdown && (
                 <div className="p-3 bg-white rounded-xl border border-slate-200 max-h-72 overflow-y-auto space-y-1.5 text-xs">
                   <div className="flex items-center justify-between font-bold text-slate-800 pb-1.5 border-b border-slate-100 text-[11px]">
-                    <span>Page-by-Page Inspection:</span>
+                    <span>Page-by-Page Breakdown:</span>
                     <span className="text-[10px] text-slate-400 font-normal">Click toggle button to override any page</span>
                   </div>
                   {amazonState.pagesAnalysis.map((p, idx) => (
@@ -8136,7 +8130,7 @@ export default function LabelCropper({
             </h2>
 
             <p className="text-xs md:text-sm text-sky-200/70 max-w-lg mx-auto mb-6 leading-relaxed">
-              We are fine-tuning the 4x6 thermal cropping layout and barcode parsing algorithms for <strong className="text-white">{activeMarketplace?.name}</strong>. This module will be released in an upcoming update!
+              We are fine-tuning the 4x6 thermal cropping layout for <strong className="text-white">{activeMarketplace?.name}</strong>. This module will be released in an upcoming update!
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-md mx-auto mb-8">
