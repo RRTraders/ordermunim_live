@@ -850,6 +850,65 @@ export default function App() {
     profile?.email === SUPER_ADMIN_EMAIL
   );
 
+  // Realtime trial countdown calculation (updates every minute)
+  const [trialTimeNow, setTrialTimeNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTrialTimeNow(Date.now());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getTrialCountdown = () => {
+    if (isSuperAdmin) {
+      return { isSuper: true, text: 'Lifetime', days: 999 };
+    }
+    const expiryStr = profile?.trialEndDate;
+    if (!expiryStr) {
+      const guestStart = typeof window !== 'undefined' ? localStorage.getItem('om_guest_trial_start') : null;
+      if (guestStart) {
+        const guestExpiry = new Date(new Date(guestStart).getTime() + (3 * 24 * 60 * 60 * 1000)).getTime();
+        const diffMs = guestExpiry - trialTimeNow;
+        if (diffMs <= 0) return { expired: true, text: 'Trial Expired', days: 0, hours: 0, percent: 100 };
+        const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const days = Math.floor(totalHours / 24);
+        const hours = totalHours % 24;
+        const text = days > 0 ? `${days}d ${hours}h left` : `${hours}h left`;
+        return { 
+          expired: false, 
+          days, 
+          hours, 
+          totalHours, 
+          text, 
+          percent: Math.max(0, Math.min(100, Math.round(((72 - totalHours) / 72) * 100))),
+          expiryDate: new Date(guestExpiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        };
+      }
+      return null;
+    }
+    const expiry = new Date(expiryStr).getTime();
+    const diffMs = expiry - trialTimeNow;
+    if (diffMs <= 0) {
+      return { expired: true, text: 'Trial Expired', days: 0, hours: 0, percent: 100, expiryDate: new Date(expiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) };
+    }
+    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    const text = days > 0 ? `${days} Days Left` : `${hours} Hours Left`;
+    const percent = Math.max(0, Math.min(100, Math.round(((72 - totalHours) / 72) * 100)));
+    return { 
+      expired: false, 
+      days, 
+      hours, 
+      totalHours, 
+      text, 
+      percent, 
+      expiryDate: new Date(expiry).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+    };
+  };
+
+  const trialCountdown = getTrialCountdown();
+
   // Backend Cloudflare Tunnel / Server config listener
   const [serverConfig, setServerConfig] = useState(null);
   useEffect(() => {
@@ -1015,8 +1074,26 @@ export default function App() {
     const unsubUser = onSnapshot(userRef, (snap) => {
       if (snap.exists()) {
         const profData = snap.data();
-        setProfile(profData);
-        try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
+        // AUTO-HEAL: If trialEndDate is missing and user is not super_admin, assign 3-day trial from now
+        if (!profData.trialEndDate && !isSuper && profData.role !== 'super_admin') {
+          const now = new Date();
+          const trialEnd = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));
+          const updatedWithTrial = {
+            ...profData,
+            trialStartDate: now.toISOString(),
+            trialEndDate: trialEnd.toISOString()
+          };
+          updateDoc(userRef, {
+            trialStartDate: now.toISOString(),
+            trialEndDate: trialEnd.toISOString()
+          }).catch(() => {});
+          setProfile(updatedWithTrial);
+          try { localStorage.setItem('cached_user_profile', JSON.stringify(updatedWithTrial)); } catch {}
+        } else {
+          setProfile(profData);
+          try { localStorage.setItem('cached_user_profile', JSON.stringify(profData)); } catch {}
+        }
+
         if (profData.emailVerified === false && !isSuper && profData.role !== 'super_admin') {
           setEmailNeedsVerification(true);
         } else {
@@ -1034,15 +1111,19 @@ export default function App() {
         }
       } else {
         const currentDeviceId = getDeviceId();
+        const now = new Date();
+        const trialEnd = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));
         const initialProf = {
           mobile: userPhone || '',
           email: userEmail || '',
           maxAccounts: isSuper ? 999 : 0,
           role: isSuper ? 'super_admin' : 'seller',
           status: 'active',
+          trialStartDate: now.toISOString(),
+          trialEndDate: trialEnd.toISOString(),
           activeDeviceId: currentDeviceId,
-          activeDeviceAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
+          activeDeviceAt: now.toISOString(),
+          createdAt: now.toISOString()
         };
         setDoc(userRef, initialProf).catch(() => {});
         setProfile(initialProf);
@@ -2026,7 +2107,10 @@ export default function App() {
       await loadUserProfile(gUser.uid, gUser.phoneNumber, gUser.email);
     } catch (err) {
       console.error("Google sign in error:", err);
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/unauthorized-domain') {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your domain';
+        setAuthError(`Domain "${currentHost}" is not authorized. Please add "${currentHost}" in Firebase Console ➔ Authentication ➔ Settings ➔ Authorized domains.`);
+      } else if (err.code !== 'auth/popup-closed-by-user') {
         setAuthError(err.message || 'Google sign in failed. Please try again.');
       }
     } finally {
@@ -3963,14 +4047,35 @@ export default function App() {
                 <span>Sign In</span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => setIsProfileDrawerOpen(true)}
-                className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-700 transition-all shadow-xs cursor-pointer group"
-                title="Open Profile"
-              >
-                <User className="w-5 h-5 text-slate-600 group-hover:text-orange-600 transition-colors" />
-              </button>
+              <div className="flex items-center gap-2">
+                {trialCountdown && (
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileDrawerOpen(true)}
+                    title={trialCountdown.isSuper ? "Super Admin - Lifetime Unlimited" : `Evaluation Expires: ${trialCountdown.expiryDate || 'in 3 days'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 ${
+                      trialCountdown.isSuper
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : trialCountdown.expired
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : trialCountdown.days <= 1
+                            ? 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span>{trialCountdown.isSuper ? '👑 Lifetime' : `⏳ ${trialCountdown.text}`}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsProfileDrawerOpen(true)}
+                  className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-700 transition-all shadow-xs cursor-pointer group"
+                  title="Open Profile"
+                >
+                  <User className="w-5 h-5 text-slate-600 group-hover:text-orange-600 transition-colors" />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -4006,6 +4111,55 @@ export default function App() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* 3 Days Free Evaluation Countdown Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#083B82] text-white shadow-md space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  {isSuperAdmin ? 'Lifetime Access' : '3-Day Free Evaluation'}
+                </span>
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                  isSuperAdmin 
+                    ? 'bg-amber-400/20 text-amber-300' 
+                    : trialCountdown?.expired 
+                      ? 'bg-rose-500 text-white' 
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                }`}>
+                  {isSuperAdmin ? 'Unlimited' : trialCountdown?.expired ? 'Expired' : 'Active'}
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                  {isSuperAdmin ? 'Super Admin' : trialCountdown?.expired ? 'Trial Expired' : trialCountdown?.text || '3 Days Left'}
+                </div>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  {isSuperAdmin 
+                    ? 'Permanent unlimited access to all OrderMunim tools & features.' 
+                    : trialCountdown?.expiryDate 
+                      ? `Valid until: ${trialCountdown.expiryDate}` 
+                      : 'Full free access to Meesho, Flipkart, Amazon Label Croppers & PDF tools.'}
+                </p>
+              </div>
+              {!isSuperAdmin && trialCountdown && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        trialCountdown.expired 
+                          ? 'bg-rose-500' 
+                          : 'bg-gradient-to-r from-emerald-400 to-amber-400'
+                      }`}
+                      style={{ width: `${Math.max(5, 100 - (trialCountdown.percent || 0))}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>3 Days Free Evaluation</span>
+                    <span>{trialCountdown.expired ? '0h remaining' : `${trialCountdown.totalHours || 0}h remaining`}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Connected Stores Quota Box */}
@@ -6245,6 +6399,55 @@ export default function App() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* 3 Days Free Evaluation Countdown Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#083B82] text-white shadow-md space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    {isSuperAdmin ? 'Lifetime Access' : '3-Day Free Evaluation'}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isSuperAdmin 
+                      ? 'bg-amber-400/20 text-amber-300' 
+                      : trialCountdown?.expired 
+                        ? 'bg-rose-500 text-white' 
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                  }`}>
+                    {isSuperAdmin ? 'Unlimited' : trialCountdown?.expired ? 'Expired' : 'Active'}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                    {isSuperAdmin ? 'Super Admin' : trialCountdown?.expired ? 'Trial Expired' : trialCountdown?.text || '3 Days Left'}
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-1">
+                    {isSuperAdmin 
+                      ? 'Permanent unlimited access to all OrderMunim tools & features.' 
+                      : trialCountdown?.expiryDate 
+                        ? `Valid until: ${trialCountdown.expiryDate}` 
+                        : 'Full free access to Meesho, Flipkart, Amazon Label Croppers & PDF tools.'}
+                  </p>
+                </div>
+                {!isSuperAdmin && trialCountdown && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          trialCountdown.expired 
+                            ? 'bg-rose-500' 
+                            : 'bg-gradient-to-r from-emerald-400 to-amber-400'
+                        }`}
+                        style={{ width: `${Math.max(5, 100 - (trialCountdown.percent || 0))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>3 Days Free Evaluation</span>
+                      <span>{trialCountdown.expired ? '0h remaining' : `${trialCountdown.totalHours || 0}h remaining`}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Connected Stores Quota Box */}
