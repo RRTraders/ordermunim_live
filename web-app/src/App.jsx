@@ -624,6 +624,7 @@ export default function App() {
   const [expandedAdminUserIds, setExpandedAdminUserIds] = useState({});
   const [adminSettingsUser, setAdminSettingsUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAdminLoginForm, setShowAdminLoginForm] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
 
   const toggleAdminUserExpand = (uid) => {
@@ -965,6 +966,27 @@ export default function App() {
         unsubAcc();
       };
     }
+  }, []);
+
+  // Check URL params for Admin Login link (e.g. ordermunim.com/?admin=login or #admin or /admin-login)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hash = (window.location.hash || '').toLowerCase();
+      const pathname = (window.location.pathname || '').toLowerCase();
+      if (
+        params.get('admin') === 'login' || 
+        params.get('admin') === '1' || 
+        params.get('admin') === 'true' || 
+        hash === '#admin' || 
+        hash === '#admin-login' || 
+        pathname === '/admin-login' ||
+        pathname === '/admin'
+      ) {
+        setShowAuthModal(true);
+        setShowAdminLoginForm(true);
+      }
+    } catch (e) {}
   }, []);
 
   // Listen to Auth state (Instant Startup — No 5-second blocking waterfall!)
@@ -2206,6 +2228,9 @@ export default function App() {
       setUser(userCred.user);
       savePersistentAuth(adminEmail.trim(), adminPassword, 'admin');
       await loadUserProfile(userCred.user.uid, '', userCred.user.email);
+      setShowAuthModal(false);
+      setShowAdminLoginForm(false);
+      showToast('Logged in as Super Admin!', 'success');
     } catch (err) {
       console.error("Firebase admin login error:", err);
       // Fallback matching credentials
@@ -2218,6 +2243,9 @@ export default function App() {
         };
         setUser(localAdmin);
         await loadUserProfile(localAdmin.uid, '', localAdmin.email);
+        setShowAuthModal(false);
+        setShowAdminLoginForm(false);
+        showToast('Logged in as Super Admin!', 'success');
       } else {
         setAuthError(err.message || 'Invalid super admin email or password.');
       }
@@ -3757,7 +3785,7 @@ export default function App() {
     );
   }
 
-  // Render Auth Modal Dialog (Strictly Google Sign In Only)
+  // Render Auth Modal Dialog (Google 1-Click for users, Dedicated Email & Password for Super Admin)
   const renderAuthModalDialog = () => {
     if (!showAuthModal) return null;
 
@@ -3766,7 +3794,7 @@ export default function App() {
         <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200/90 relative max-h-[92vh] overflow-y-auto animate-in zoom-in-95 duration-150">
           <button
             type="button"
-            onClick={() => { setShowAuthModal(false); setAuthError(''); }}
+            onClick={() => { setShowAuthModal(false); setShowAdminLoginForm(false); setAuthError(''); }}
             className="absolute top-5 right-5 p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -3776,9 +3804,13 @@ export default function App() {
             <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-3 overflow-hidden bg-white p-1.5 border border-slate-200">
               <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
             </div>
-            <h2 className="text-2xl font-black tracking-tight text-[#083B82]">Sign in to OrderMunim</h2>
+            <h2 className="text-2xl font-black tracking-tight text-[#083B82]">
+              {showAdminLoginForm ? 'Super Admin Login' : 'Sign in to OrderMunim'}
+            </h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              {authModalReason || 'Sign in with your Google account for instant 3 days full free evaluation.'}
+              {showAdminLoginForm
+                ? 'Enter super admin credentials to access system dashboard.'
+                : (authModalReason || 'Sign in with your Google account for instant 3 days full free evaluation.')}
             </p>
           </div>
 
@@ -3789,38 +3821,103 @@ export default function App() {
             </div>
           )}
 
-          {/* Quick 1-Tap Google Sign-In (Chrome Logged-In Account) */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              disabled={authLoading}
-              onClick={handleGoogleSignIn}
-              className="w-full py-4 px-5 rounded-2xl border-2 border-slate-200 hover:border-[#083B82] hover:bg-slate-50 text-slate-800 font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-sm hover:shadow cursor-pointer active:scale-98 disabled:opacity-50"
-            >
-              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.43 7.34 24 12 24z" />
-                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
-              </svg>
-              <span>{authLoading ? 'Connecting to Google...' : 'Continue with Google (1-Click)'}</span>
-            </button>
+          {showAdminLoginForm ? (
+            /* ================= ADMIN EMAIL & PASSWORD FORM ================= */
+            <form onSubmit={handleAdminEmailLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Admin Email ID</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="rrtradersofficials@gmail.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#083B82] focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-slate-600 space-y-2">
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-600 font-bold shrink-0">✓</span>
-                <span><strong>No signup forms or passwords:</strong> Connects securely with your existing Chrome Google account.</span>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Admin Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#083B82] focus:bg-white transition-all"
+                  />
+                </div>
               </div>
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-600 font-bold shrink-0">✓</span>
-                <span><strong>3 Days Free Trial:</strong> Full access to Meesho, Flipkart, Amazon Label Croppers, PDF tools & Webcam.</span>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>{authLoading ? 'Verifying Admin...' : 'Sign In as Super Admin'}</span>
+              </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAdminLoginForm(false); setAuthError(''); }}
+                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors cursor-pointer"
+                >
+                  ← Back to Google Sign In
+                </button>
               </div>
-              <div className="flex items-start gap-2">
-                <span className="text-amber-600 font-bold shrink-0">🔒</span>
-                <span><strong>Admin Protected:</strong> Delivery Return OTP Auto-Sync & Myntra M-Direct are reserved for approved accounts.</span>
+            </form>
+          ) : (
+            /* ================= REGULAR USER GOOGLE 1-CLICK SIGN IN ================= */
+            <div className="space-y-4">
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={handleGoogleSignIn}
+                className="w-full py-4 px-5 rounded-2xl border-2 border-slate-200 hover:border-[#083B82] hover:bg-slate-50 text-slate-800 font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-sm hover:shadow cursor-pointer active:scale-98 disabled:opacity-50"
+              >
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.43 7.34 24 12 24z" />
+                  <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
+                </svg>
+                <span>{authLoading ? 'Connecting to Google...' : 'Continue with Google (1-Click)'}</span>
+              </button>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-slate-600 space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                  <span><strong>No signup forms or passwords:</strong> Connects securely with your existing Chrome Google account.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                  <span><strong>3 Days Free Trial:</strong> Full access to Meesho, Flipkart, Amazon Label Croppers, PDF tools & Webcam.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-amber-600 font-bold shrink-0">🔒</span>
+                  <span><strong>Admin Protected:</strong> Delivery Return OTP Auto-Sync & Myntra M-Direct are reserved for approved accounts.</span>
+                </div>
+              </div>
+
+              {/* Discreet Admin Login Link */}
+              <div className="pt-2 text-center border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowAdminLoginForm(true); setAuthError(''); }}
+                  className="text-[11px] text-slate-400 hover:text-slate-700 font-medium transition-colors cursor-pointer"
+                >
+                  Admin Portal (Email &amp; Password) →
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
         </div>
       </div>
