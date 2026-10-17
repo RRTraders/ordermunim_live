@@ -23,7 +23,9 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   onAuthStateChanged, 
-  signOut 
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { 
   collection, 
@@ -621,6 +623,8 @@ export default function App() {
   const [adminCurrentPage, setAdminCurrentPage] = useState(1);
   const [expandedAdminUserIds, setExpandedAdminUserIds] = useState({});
   const [adminSettingsUser, setAdminSettingsUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState('');
 
   const toggleAdminUserExpand = (uid) => {
     setExpandedAdminUserIds(prev => ({
@@ -1964,6 +1968,66 @@ export default function App() {
         setAuthError('An account with this email already exists. Please sign in instead.');
       } else {
         setAuthError(err.message || 'Signup failed. Please try again.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Google 1-Tap / Sign-In with already logged-in Google profile
+  const handleGoogleSignIn = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const cred = await signInWithPopup(auth, provider);
+      const gUser = cred.user;
+      const isSuper = (gUser.email && gUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) || gUser.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63';
+      const currentDeviceId = getDeviceId();
+
+      // Check if user already exists in Firestore
+      const userRef = doc(db, 'users', gUser.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        // Calculate 3-day trial from now
+        const now = new Date();
+        const trialEnd = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000)); // exactly 3 days free trial
+        const newProf = {
+          name: gUser.displayName || 'Seller User',
+          email: (gUser.email || '').toLowerCase(),
+          role: isSuper ? 'super_admin' : 'seller',
+          maxAccounts: isSuper ? 999 : 0,
+          status: 'active',
+          emailVerified: true, // Google accounts are auto-verified
+          hasOtpAccess: isSuper ? true : false,
+          hasMyntraAccess: isSuper ? true : false,
+          trialStartDate: now.toISOString(),
+          trialEndDate: trialEnd.toISOString(),
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: now.toISOString(),
+          createdAt: now.toISOString()
+        };
+        await setDoc(userRef, newProf);
+        setProfile(newProf);
+      } else {
+        await updateDoc(userRef, {
+          emailVerified: true,
+          activeDeviceId: currentDeviceId,
+          activeDeviceAt: new Date().toISOString()
+        }).catch(() => {});
+      }
+
+      setUser(gUser);
+      setEmailNeedsVerification(false);
+      setShowAuthModal(false);
+      showToast(`Welcome ${gUser.displayName || ''}!`, 'success');
+      await loadUserProfile(gUser.uid, gUser.phoneNumber, gUser.email);
+    } catch (err) {
+      console.error("Google sign in error:", err);
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setAuthError(err.message || 'Google sign in failed. Please try again.');
       }
     } finally {
       setAuthLoading(false);
@@ -3609,17 +3673,53 @@ export default function App() {
     );
   }
 
-  // ===================== AUTH SCREEN (CUSTOMER & SUPER ADMIN) =====================
-  if (!user) {
+  // Render Auth Modal Dialog (Sign In with Google + Email)
+  const renderAuthModalDialog = () => {
+    if (!showAuthModal) return null;
+
     return (
-      <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-xs border border-slate-200/90">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-3 overflow-hidden bg-white p-1 border border-slate-200">
-              <img src="/logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
+      <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 text-slate-900 animate-in fade-in duration-150">
+        <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200/90 relative max-h-[92vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+          <button
+            type="button"
+            onClick={() => { setShowAuthModal(false); setAuthError(''); }}
+            className="absolute top-5 right-5 p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="text-center mb-5">
+            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-xs mb-2.5 overflow-hidden bg-white p-1 border border-slate-200">
+              <img src="/ordermunim_logo.png" alt="OrderMunim" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-[#083B82]">OrderMunim</h1>
-            <p className="text-xs text-slate-500 mt-1">Smart Multi-Account Return Handover &amp; OTP Hub</p>
+            <h2 className="text-xl font-black tracking-tight text-[#083B82]">Sign in to OrderMunim</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {authModalReason || 'Get 3 days full free evaluation & instant access.'}
+            </p>
+          </div>
+
+          {/* Quick 1-Tap Google Sign-In (Chrome Logged-In Account) */}
+          <div className="mb-4 space-y-2">
+            <button
+              type="button"
+              disabled={authLoading}
+              onClick={handleGoogleSignIn}
+              className="w-full py-3 px-4 rounded-xl border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.43 7.34 24 12 24z" />
+                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
+              </svg>
+              <span>{authLoading ? 'Connecting...' : 'Continue with Google (1-Click)'}</span>
+            </button>
+
+            <div className="flex items-center gap-3 my-3">
+              <div className="flex-1 h-[1px] bg-slate-200" />
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">or email</span>
+              <div className="flex-1 h-[1px] bg-slate-200" />
+            </div>
           </div>
 
           {authError && (
@@ -4075,7 +4175,7 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Right: Audio Mute & Profile Trigger (Opens Vertical Right Drawer) */}
+          {/* Right: Audio Mute, Login Button (if guest) & Profile Trigger */}
           <div className="flex items-center gap-2 shrink-0">
             {isMobileApp && !isSuperAdmin && (
               <button
@@ -4087,15 +4187,28 @@ export default function App() {
               </button>
             )}
 
-            {/* Profile Button - Opens Vertical Drawer From Right (Icon Only) */}
-            <button
-              type="button"
-              onClick={() => setIsProfileDrawerOpen(true)}
-              className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-700 transition-all shadow-xs cursor-pointer group"
-              title="Open Profile"
-            >
-              <User className="w-5 h-5 text-slate-600 group-hover:text-orange-600 transition-colors" />
-            </button>
+            {!user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalReason('Sign in to activate your 3 days full free evaluation.');
+                  setShowAuthModal(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-md shadow-orange-500/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsProfileDrawerOpen(true)}
+                className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-700 transition-all shadow-xs cursor-pointer group"
+                title="Open Profile"
+              >
+                <User className="w-5 h-5 text-slate-600 group-hover:text-orange-600 transition-colors" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -4394,6 +4507,12 @@ export default function App() {
                 followStores={profile?.followStores || []}
                 onNavigateTab={setActiveTab}
                 activeMarketplaceId={activeCropperMarketplace}
+                currentUser={user}
+                userProfile={profile}
+                onRequireAuth={(reason) => {
+                  setAuthModalReason(reason || 'Sign in with your Google account to get 3 days free trial.');
+                  setShowAuthModal(true);
+                }}
               />
             </Suspense>
           </CropperErrorBoundary>
@@ -4887,7 +5006,87 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* 2. Account Status */}
+                          {/* 2. Feature Access Controls (OTP & Myntra Strictly Controlled by Admin) */}
+                          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-3">
+                            <span className="font-bold text-xs text-white block">Feature Access Controls</span>
+                            
+                            {/* OTP Access Toggle */}
+                            <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-800/60">
+                              <div>
+                                <span className="text-xs font-semibold text-slate-200 block">⚡ Delivery OTP Auto-Sync</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {targetUser.hasOtpAccess ? 'Unlocked & Active' : 'Locked (Admin only)'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const newVal = !targetUser.hasOtpAccess;
+                                  await updateDoc(doc(db, 'users', targetUser.id), { hasOtpAccess: newVal });
+                                  setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, hasOtpAccess: newVal } : u));
+                                  showToast(`OTP access ${newVal ? 'granted' : 'revoked'} for ${targetUser.email || targetUser.name}`, 'info');
+                                }}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                                  targetUser.hasOtpAccess
+                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-sm'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                {targetUser.hasOtpAccess ? 'Access Granted' : 'Grant Access'}
+                              </button>
+                            </div>
+
+                            {/* Myntra Access Toggle */}
+                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
+                              <div>
+                                <span className="text-xs font-semibold text-slate-200 block">👗 Myntra M-Direct Portal</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {targetUser.hasMyntraAccess ? 'Unlocked & Active' : 'Locked (Admin only)'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const newVal = !targetUser.hasMyntraAccess;
+                                  await updateDoc(doc(db, 'users', targetUser.id), { hasMyntraAccess: newVal });
+                                  setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, hasMyntraAccess: newVal } : u));
+                                  showToast(`Myntra access ${newVal ? 'granted' : 'revoked'} for ${targetUser.email || targetUser.name}`, 'info');
+                                }}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                                  targetUser.hasMyntraAccess
+                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-sm'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                {targetUser.hasMyntraAccess ? 'Access Granted' : 'Grant Access'}
+                              </button>
+                            </div>
+
+                            {/* Trial Validity / Extend 3 Days */}
+                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
+                              <div>
+                                <span className="text-xs font-semibold text-slate-200 block">⏳ Trial Validity</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {targetUser.trialEndDate ? `Expires: ${new Date(targetUser.trialEndDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Standard registered'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const currentEnd = targetUser.trialEndDate ? new Date(targetUser.trialEndDate) : new Date();
+                                  const newEnd = new Date(Math.max(Date.now(), currentEnd.getTime()) + (3 * 24 * 60 * 60 * 1000));
+                                  await updateDoc(doc(db, 'users', targetUser.id), { trialEndDate: newEnd.toISOString(), status: 'active' });
+                                  setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, trialEndDate: newEnd.toISOString(), status: 'active' } : u));
+                                  showToast(`Extended 3 days free trial for ${targetUser.email || targetUser.name}!`, 'success');
+                                }}
+                                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/40 transition-all cursor-pointer"
+                              >
+                                +3 Days Trial
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 3. Account Status */}
                           <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 flex items-center justify-between gap-3">
                             <div>
                               <span className="font-bold text-xs text-white block">Account Status</span>
@@ -4960,7 +5159,69 @@ export default function App() {
             })()}
           </div>
         ) : activeTab === 'otp' ? (
-          /* ================= OTP FEATURE TAB (CONNECTED STORES & LIVE OTPS) ================= */
+          /* ================= OTP FEATURE TAB (STRICTLY CONTROLLED BY ADMIN) ================= */
+          (!user || (!isSuperAdmin && !profile?.hasOtpAccess && (profile?.maxAccounts ?? 0) <= 0)) ? (
+            <div className="max-w-xl mx-auto bg-white border border-slate-200/90 rounded-3xl p-8 text-center space-y-5 shadow-xs animate-in fade-in duration-150">
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 text-orange-600 flex items-center justify-center mx-auto shadow-xs">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                  Strict Admin-Controlled Feature
+                </span>
+                <h3 className="text-xl font-extrabold text-slate-900 pt-1">
+                  Meesho 24/7 Delivery OTP Hub
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+                  Automatic courier return delivery OTP capture requires registered seller verification and direct activation by our admin team to safeguard store credentials.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-1.5 text-left">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  What is included in OTP Hub:
+                </div>
+                <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
+                  <li>24/7 automatic courier return OTP capture</li>
+                  <li>Multi-account Meesho store linking with 0-click handover</li>
+                  <li>Audio voice alerts for arriving delivery riders</li>
+                  <li>Team Staff Mode with instant secure sync</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthModalReason('Sign in to request OTP access from the admin team.');
+                      setShowAuthModal(true);
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 cursor-pointer transition-all flex items-center justify-center gap-2"
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Sign In with Google</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowContactModal(true)}
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 cursor-pointer transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Contact Admin to Activate OTP</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('cropper')}
+                  className="w-full sm:w-auto px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Use Free Label Cropper
+                </button>
+              </div>
+            </div>
+          ) : (
           <>
             {/* Account Status Alerts */}
             {profile.status === 'on_hold' && (
@@ -5397,6 +5658,7 @@ export default function App() {
             )}
 
           </>
+          )
         ) : activeTab === 'pdf-tools' ? (
           /* ================= PDF TOOLS SUITE (FULL PAGE WORKSPACE) ================= */
           <Suspense fallback={
@@ -7147,6 +7409,9 @@ export default function App() {
 
       {/* In-App Downloading & Auto-Install Modal */}
       {renderUpdateProgressModal()}
+
+      {/* Unified Google & Email Auth Modal */}
+      {renderAuthModalDialog()}
     </div>
   );
 }

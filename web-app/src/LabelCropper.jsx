@@ -645,7 +645,61 @@ const createInitialMarketplaceState = () => ({
   addPackingSlip: false,
 });
 
-export default function LabelCropper({ showToast, followStores = [], onNavigateTab, activeMarketplaceId }) {
+export default function LabelCropper({ 
+  showToast, 
+  followStores = [], 
+  onNavigateTab, 
+  activeMarketplaceId,
+  currentUser = null,
+  userProfile = null,
+  onRequireAuth = null
+}) {
+  // Check 3-day trial validity for guest or registered user
+  const checkTrialStatus = () => {
+    // 1. Super Admin is always active
+    if (currentUser?.email === 'rrtradersofficials@gmail.com' || userProfile?.role === 'super_admin' || currentUser?.uid === 'vJID6QrALTf4ybiDP5TuLvNkyN63') {
+      return { allowed: true };
+    }
+
+    // 2. Logged-in user with trialEndDate in profile
+    if (currentUser && userProfile?.trialEndDate) {
+      const expiry = new Date(userProfile.trialEndDate).getTime();
+      const isExpired = Date.now() > expiry;
+      if (isExpired) {
+        return {
+          allowed: false,
+          reason: 'Your 3-day free trial has expired. Please contact admin to extend or upgrade your plan.'
+        };
+      }
+      return { allowed: true };
+    }
+
+    // 3. Guest User (Not logged in)
+    if (!currentUser) {
+      try {
+        const guestStart = localStorage.getItem('om_guest_trial_start');
+        if (!guestStart) {
+          // Set start timestamp on first use
+          localStorage.setItem('om_guest_trial_start', new Date().toISOString());
+          return { allowed: true };
+        }
+        const startTime = new Date(guestStart).getTime();
+        const elapsedDays = (Date.now() - startTime) / (1000 * 60 * 60 * 24);
+        if (elapsedDays > 3) {
+          return {
+            allowed: false,
+            reason: 'Your 3 days free trial has completed. Please sign in with your Google account to continue using OrderMunim.'
+          };
+        }
+        return { allowed: true };
+      } catch {
+        return { allowed: true };
+      }
+    }
+
+    return { allowed: true };
+  };
+
   // Selected marketplace state (default Meesho as developed)
   const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
     return activeMarketplaceId || localStorage.getItem('om_selected_marketplace') || 'meesho';
@@ -4455,6 +4509,17 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
 
   // Main Crop & Sort Execution
   const processCropAndSort = async () => {
+    // 3-Day Trial Expiration Check
+    const trial = checkTrialStatus();
+    if (!trial.allowed) {
+      if (onRequireAuth) {
+        onRequireAuth(trial.reason);
+      } else if (showToast) {
+        showToast(trial.reason, 'warning');
+      }
+      return;
+    }
+
     const targetMarketplace = selectedMarketplace;
     const targetState = marketplaceStates[targetMarketplace] || createInitialMarketplaceState();
     const targetFiles = targetState.files;
@@ -7012,7 +7077,66 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
           )}
         </div>
       ) : selectedMarketplace === 'myntra' ? (
-        /* ================= MYNTRA M-DIRECT (mdirect.myntrainfo.com/Orders/Search) IN-APP WORKSPACE ================= */
+        /* ================= MYNTRA M-DIRECT (STRICTLY CONTROLLED BY ADMIN) ================= */
+        (!currentUser || (!userProfile?.hasMyntraAccess && userProfile?.role !== 'super_admin' && currentUser?.email !== 'rrtradersofficials@gmail.com' && currentUser?.uid !== 'vJID6QrALTf4ybiDP5TuLvNkyN63')) ? (
+          <div className="max-w-xl mx-auto bg-white border border-slate-200/90 rounded-3xl p-8 text-center space-y-5 shadow-xs animate-in fade-in duration-150">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF3F6C] to-[#F16521] text-white flex items-center justify-center mx-auto text-2xl font-black shadow-md shadow-rose-500/20">
+              M
+            </div>
+            <div className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                Strict Admin-Controlled Feature
+              </span>
+              <h3 className="text-xl font-extrabold text-slate-900 pt-1">
+                Myntra M-Direct Portal (Partner PPMP)
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+                Direct Myntra partner portal access with instant label generation without QZ Tray requires registered seller verification and direct activation by our admin team.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-1.5 text-left">
+              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Included with Myntra M-Direct:
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
+                <li>Direct in-app login to mdirect.myntrainfo.com</li>
+                <li>Instant 1-click 4x6 thermal PDF label &amp; invoice download</li>
+                <li>Zero printer driver or Java QZ Tray requirements</li>
+                <li>Automatic packet ID &amp; SKU synchronization</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              {!currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onRequireAuth) {
+                      onRequireAuth('Sign in with your Google account to request Myntra access.');
+                    }
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 cursor-pointer transition-all flex items-center justify-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Sign In with Google</span>
+                </button>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-semibold">
+                  ⚠️ Please contact the OrderMunim admin team to activate Myntra portal access for your registered account.
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedMarketplace('meesho')}
+                className="w-full sm:w-auto px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Switch to Meesho Cropper
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="mb-6 space-y-6">
           {!myntraSession ? (
             /* ========================================================================= */
@@ -7707,6 +7831,7 @@ export default function LabelCropper({ showToast, followStores = [], onNavigateT
             </div>
           )}
         </div>
+        )
       ) : selectedMarketplace === 'webcam' ? (
         /* ================= WEBCAM RETURN PROOF & UNBOXING STUDIO ================= */
         <div className="mb-6 space-y-6 animate-in fade-in duration-200">
