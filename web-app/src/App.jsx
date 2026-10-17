@@ -5132,16 +5132,21 @@ export default function App() {
                     const quota = targetUser.maxAccounts !== undefined ? targetUser.maxAccounts : 0;
 
                     return (
-                      <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 text-white animate-in fade-in duration-150">
-                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl shadow-cyan-950/40 animate-in zoom-in-95 duration-150">
-                          {/* Header */}
-                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
-                                <Settings className="w-5 h-5" />
+                      <div 
+                        className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 text-white animate-in fade-in duration-150 overflow-y-auto"
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) setAdminSettingsUser(null);
+                        }}
+                      >
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl max-w-lg w-full shadow-2xl shadow-cyan-950/50 animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] my-auto overflow-hidden">
+                          {/* Header (Pinned) */}
+                          <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-3.5 shrink-0 bg-slate-900/95 sticky top-0 z-10 backdrop-blur">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
+                                <Settings className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <h3 className="text-base font-bold text-white truncate">
+                                <h3 className="text-sm font-bold text-white truncate">
                                   Account Settings
                                 </h3>
                                 <p className="text-xs text-slate-400 font-mono truncate">
@@ -5152,17 +5157,20 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setAdminSettingsUser(null)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                              title="Close dialog"
                             >
                               <X className="w-5 h-5" />
                             </button>
                           </div>
 
-                          {/* 1. Store Quota */}
-                          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-bold text-xs text-white block">Store Slot Quota</span>
+                          {/* Scrollable Body */}
+                          <div className="p-4 sm:p-5 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+                            {/* 1. Store Quota */}
+                            <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="font-bold text-xs text-white block">Store Slot Quota</span>
                                 <span className="text-[11px] text-slate-400">
                                   {userStores.length} of {quota} slots currently used
                                 </span>
@@ -5514,7 +5522,8 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                    );
+                    </div>
+                  );
                   })()}
                 </>
               );
