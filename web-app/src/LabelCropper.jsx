@@ -3600,6 +3600,43 @@ export default function LabelCropper({
     return isMobileUA || isSmallTouch || isCapacitor;
   }, []);
 
+  // Friendly camera display name identifying Front vs Behind/Back camera
+  const getCameraDisplayName = (cam, idx) => {
+    if (cam?.label) {
+      const l = cam.label.toLowerCase();
+      if (l.includes('back') || l.includes('rear') || l.includes('environment') || l.includes('world')) {
+        return `📷 Behind Camera (${cam.label})`;
+      }
+      if (l.includes('front') || l.includes('user') || l.includes('selfie') || l.includes('integrated') || l.includes('webcam')) {
+        return `🤳 Front Camera (${cam.label})`;
+      }
+      return `📹 ${cam.label}`;
+    }
+    return idx === 0 ? '🤳 Front Camera' : `📷 Behind / Camera ${idx + 1}`;
+  };
+
+  // Auto-detect all available cameras on device (Front, Behind/Rear, USB)
+  useEffect(() => {
+    const detectCams = async () => {
+      try {
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevs = devices.filter(d => d.kind === 'videoinput');
+          if (videoDevs.length > 0) {
+            setAvailableCameras(videoDevs);
+          }
+        }
+      } catch {}
+    };
+    detectCams();
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', detectCams);
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', detectCams);
+      };
+    }
+  }, []);
+
   const webcamVideoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -3818,12 +3855,7 @@ export default function LabelCropper({
         throw new Error('Camera is not supported on this device/browser. Please open in Chrome or Edge and ensure HTTPS.');
       }
 
-      const isMobile = isMobileDevice;
-      // On laptops / PCs, built-in camera is "user" facing (never "environment")
-      let targetFacing = mode;
-      if (!isMobile && (!targetFacing || targetFacing === 'environment')) {
-        targetFacing = 'user';
-      }
+      const targetFacing = mode || (isMobileDevice ? 'environment' : 'user');
 
       let stream = null;
       let lastErr = null;
@@ -3902,17 +3934,17 @@ export default function LabelCropper({
         }
       }
 
-      // Enumerate cameras once permission is granted
+      // Enumerate cameras once permission is granted and refresh list with full device labels
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevs = devices.filter(d => d.kind === 'videoinput');
-        setAvailableCameras(videoDevs);
-        if (!selectedCameraId && videoDevs.length > 0) {
-          const activeTrack = stream.getVideoTracks()[0];
-          const trackDevId = activeTrack?.getSettings?.()?.deviceId;
-          if (trackDevId) {
-            setSelectedCameraId(trackDevId);
-          }
+        if (videoDevs.length > 0) {
+          setAvailableCameras(videoDevs);
+        }
+        const activeTrack = stream.getVideoTracks()[0];
+        const trackDevId = activeTrack?.getSettings?.()?.deviceId;
+        if (trackDevId) {
+          setSelectedCameraId(trackDevId);
         }
       } catch {}
 
@@ -3923,11 +3955,11 @@ export default function LabelCropper({
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         errMsg = 'Camera permission denied. Please click the camera/lock icon in your browser address bar and allow Camera access.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errMsg = 'No webcam device detected on this laptop. Please check that your laptop camera is not disabled by a physical privacy slider or function key (e.g. Fn+F6 / Fn+F10).';
+        errMsg = 'No webcam device detected on this laptop/computer.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
         errMsg = 'Laptop camera is currently in use by another app (e.g. Zoom, MS Teams, Skype, or another tab). Please close other apps and try again.';
       } else if (err.name === 'OverconstrainedError') {
-        errMsg = `Camera constraint (${err.constraint}) not supported by this laptop camera.`;
+        errMsg = `Camera constraint (${err.constraint}) not supported by this camera.`;
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -3939,9 +3971,29 @@ export default function LabelCropper({
   const handleToggleFacingMode = async () => {
     const nextMode = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(nextMode);
-    setSelectedCameraId('');
+
+    let matchingCamId = '';
+    if (availableCameras.length > 1) {
+      const isLookingForBack = nextMode === 'environment';
+      const found = availableCameras.find(cam => {
+        const l = (cam.label || '').toLowerCase();
+        if (isLookingForBack) {
+          return l.includes('back') || l.includes('rear') || l.includes('environment') || l.includes('world');
+        } else {
+          return l.includes('front') || l.includes('user') || l.includes('selfie') || l.includes('integrated');
+        }
+      });
+      const targetCam = found || (isLookingForBack ? availableCameras[1] : availableCameras[0]);
+      if (targetCam) {
+        matchingCamId = targetCam.deviceId;
+        setSelectedCameraId(targetCam.deviceId);
+      }
+    } else {
+      setSelectedCameraId('');
+    }
+
     if (isWebcamActive) {
-      await handleStartWebcam('', nextMode);
+      await handleStartWebcam(matchingCamId, nextMode);
     }
   };
 
@@ -8254,34 +8306,45 @@ export default function LabelCropper({
                 )}
               </div>
 
-              {/* Camera Selector & Flip Front/Back Controls (Flip button only on mobile devices) */}
-              <div className="flex items-center gap-2 ml-auto">
-                {isMobileDevice && (
-                  <button
-                    type="button"
-                    onClick={handleToggleFacingMode}
-                    className="px-3.5 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/15 text-white rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-white/15 active:scale-95 shadow-sm"
-                    title="Switch between Rear (Back) and Front Camera"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-                    <span>{facingMode === 'environment' ? 'Rear Cam 📷' : 'Front Cam 🤳'}</span>
-                  </button>
-                )}
+              {/* Camera Selector & Flip Front/Behind Controls (Available for ALL devices: Laptop, PC, Mobile) */}
+              <div className="flex items-center gap-2 ml-auto flex-wrap">
+                {/* 1. Toggle Front / Behind View button */}
+                <button
+                  type="button"
+                  onClick={handleToggleFacingMode}
+                  className="px-3 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/15 text-white rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-white/15 active:scale-95 shadow-sm"
+                  title="Switch between Front Camera and Behind/Back Camera"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{facingMode === 'environment' ? '📷 Behind Cam' : '🤳 Front Cam'}</span>
+                </button>
 
+                {/* 2. Direct Camera Selector Dropdown (Shows whenever multiple cameras are detected) */}
                 {availableCameras.length > 1 && (
                   <select
                     value={selectedCameraId}
                     onChange={(e) => {
-                      setSelectedCameraId(e.target.value);
+                      const newId = e.target.value;
+                      setSelectedCameraId(newId);
+                      const chosen = availableCameras.find(c => c.deviceId === newId);
+                      if (chosen) {
+                        const l = (chosen.label || '').toLowerCase();
+                        if (l.includes('back') || l.includes('rear') || l.includes('environment') || l.includes('world')) {
+                          setFacingMode('environment');
+                        } else if (l.includes('front') || l.includes('user') || l.includes('selfie') || l.includes('integrated')) {
+                          setFacingMode('user');
+                        }
+                      }
                       if (isWebcamActive) {
-                        handleStartWebcam(e.target.value);
+                        handleStartWebcam(newId);
                       }
                     }}
-                    className="px-2.5 py-1 text-xs font-semibold bg-[#040914] border border-white/15 rounded-xl text-white focus:outline-none focus:border-sky-400 cursor-pointer"
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-[#040914] border border-white/20 rounded-xl text-white focus:outline-none focus:border-sky-400 cursor-pointer shadow-sm max-w-[210px] truncate"
+                    title="Select specific camera device"
                   >
                     {availableCameras.map((cam, idx) => (
                       <option key={cam.deviceId || idx} value={cam.deviceId}>
-                        {cam.label || `Camera ${idx + 1}`}
+                        {getCameraDisplayName(cam, idx)}
                       </option>
                     ))}
                   </select>
