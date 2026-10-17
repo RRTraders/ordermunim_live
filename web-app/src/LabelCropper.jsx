@@ -3582,7 +3582,12 @@ export default function LabelCropper({
   const [recordedVideoBlob, setRecordedVideoBlob] = useState(null);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
-  const [facingMode, setFacingMode] = useState('environment'); // default to rear camera on mobile for return parcel unboxing!
+  const [facingMode, setFacingMode] = useState(() => {
+    if (typeof window === 'undefined') return 'user';
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+    return isMobileUA ? 'environment' : 'user';
+  });
   const [webcamError, setWebcamError] = useState(null);
 
   // Detect mobile device (phones/tablets/Capacitor) so rear/front flip is shown only on mobile
@@ -3676,11 +3681,15 @@ export default function LabelCropper({
 
   // Ensure video element receives the media stream as soon as it mounts or stream changes
   useEffect(() => {
-    if (webcamVideoRef.current && webcamStream) {
-      if (webcamVideoRef.current.srcObject !== webcamStream) {
-        webcamVideoRef.current.srcObject = webcamStream;
+    const video = webcamVideoRef.current;
+    if (video && webcamStream) {
+      if (video.srcObject !== webcamStream) {
+        video.srcObject = webcamStream;
       }
-      webcamVideoRef.current.play().catch(e => console.warn('Webcam video play:', e));
+      video.onloadedmetadata = () => {
+        video.play().catch(e => console.warn('Webcam video play metadata:', e));
+      };
+      video.play().catch(e => console.warn('Webcam video play:', e));
     }
   }, [webcamStream, isWebcamActive]);
 
@@ -3806,76 +3815,91 @@ export default function LabelCropper({
       }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera is not supported on this device/browser. Please open in Chrome or ensure HTTPS.');
+        throw new Error('Camera is not supported on this device/browser. Please open in Chrome or Edge and ensure HTTPS.');
+      }
+
+      const isMobile = isMobileDevice;
+      // On laptops / PCs, built-in camera is "user" facing (never "environment")
+      let targetFacing = mode;
+      if (!isMobile && (!targetFacing || targetFacing === 'environment')) {
+        targetFacing = 'user';
       }
 
       let stream = null;
-      // High-Definition 60 FPS constraints: 1280x720 (or 848x480 widescreen) at 60 fps
-      const hdVideoConstraint = {
-        ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: mode } }),
-        width: { ideal: 1280, min: 848 },
-        height: { ideal: 720, min: 480 },
-        frameRate: { ideal: 60, min: 30 }
-      };
+      let lastErr = null;
 
-      try {
-        // Attempt hardware 60 fps first
-        stream = await navigator.mediaDevices.getUserMedia({
+      // Progressive constraint tiers for 100% compatibility across Laptops (DirectShow/MediaFoundation), Desktops & Mobile:
+      const constraintTiers = [
+        // Tier 1: Ideal 720p HD with soft ideal bounds (NEVER exact min/max to avoid OverconstrainedError on laptop webcams)
+        {
           video: {
-            ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: mode } }),
-            width: { ideal: 1280, min: 848 },
-            height: { ideal: 720, min: 480 },
-            frameRate: { ideal: 60, exact: 60 }
+            ...(cameraId ? { deviceId: { exact: cameraId } } : (targetFacing ? { facingMode: { ideal: targetFacing } } : {})),
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 60 }
           },
           audio: false
-        });
-      } catch {
+        },
+        // Tier 2: Standard resolution with camera ID or facing mode
+        {
+          video: {
+            ...(cameraId ? { deviceId: { exact: cameraId } } : (targetFacing ? { facingMode: { ideal: targetFacing } } : {})),
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        },
+        // Tier 3: Basic resolution with camera ID or facing mode
+        {
+          video: {
+            ...(cameraId ? { deviceId: { exact: cameraId } } : (targetFacing ? { facingMode: { ideal: targetFacing } } : {}))
+          },
+          audio: false
+        },
+        // Tier 4: Universal fallback (works with ANY laptop/desktop camera hardware regardless of vendor)
+        {
+          video: true,
+          audio: false
+        }
+      ];
+
+      for (const tier of constraintTiers) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: hdVideoConstraint,
-            audio: false
-          });
-        } catch (e1) {
-          console.warn('Attempt 1 (60 FPS HD ideal) failed, trying flexible widescreen fallback', e1);
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                width: { ideal: 1280, min: 640 },
-                height: { ideal: 720, min: 480 },
-                frameRate: { ideal: 60, min: 30 }
-              },
-              audio: false
-            });
-          } catch (e2) {
-            console.warn('Attempt 2 failed, trying user facing', e2);
-            try {
-              stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } },
-                audio: false
-              });
-            } catch (e3) {
-              console.warn('Attempt 3 failed, trying video: true fallback', e3);
-              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            }
-          }
+          stream = await navigator.mediaDevices.getUserMedia(tier);
+          if (stream) break;
+        } catch (err) {
+          lastErr = err;
+          console.warn('getUserMedia tier attempt failed, trying next fallback:', err?.name || err);
         }
       }
 
-      // Enforce 60 fps on the active camera track
-      if (stream && stream.getVideoTracks().length > 0) {
-        const camTrack = stream.getVideoTracks()[0];
-        if (camTrack.applyConstraints) {
-          camTrack.applyConstraints({ frameRate: 60 }).catch(() => {});
-        }
+      if (!stream) {
+        throw lastErr || new Error('Could not access camera on this laptop or computer.');
       }
+
+      // Try soft-enforcing 60fps only if the hardware supports it (silent catch)
+      try {
+        const camTrack = stream.getVideoTracks()[0];
+        if (camTrack && camTrack.applyConstraints) {
+          camTrack.applyConstraints({ frameRate: { ideal: 60 } }).catch(() => {});
+        }
+      } catch {}
 
       setWebcamStream(stream);
       setIsWebcamActive(true);
+
+      // Connect stream to video element
       if (webcamVideoRef.current) {
-        webcamVideoRef.current.srcObject = stream;
+        const v = webcamVideoRef.current;
+        v.srcObject = stream;
+        v.onloadedmetadata = () => {
+          v.play().catch(e => console.warn('Webcam video play metadata error:', e));
+        };
         try {
-          await webcamVideoRef.current.play();
-        } catch {}
+          await v.play();
+        } catch (playErr) {
+          console.warn('Initial direct play error (metadata will trigger play):', playErr);
+        }
       }
 
       // Enumerate cameras once permission is granted
@@ -3883,16 +3907,27 @@ export default function LabelCropper({
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevs = devices.filter(d => d.kind === 'videoinput');
         setAvailableCameras(videoDevs);
+        if (!selectedCameraId && videoDevs.length > 0) {
+          const activeTrack = stream.getVideoTracks()[0];
+          const trackDevId = activeTrack?.getSettings?.()?.deviceId;
+          if (trackDevId) {
+            setSelectedCameraId(trackDevId);
+          }
+        }
       } catch {}
 
-      if (showToast) showToast('Camera started in 60 FPS HD! Timer is ticking live.', 'success');
+      if (showToast) showToast('Camera connected successfully! Timer is ticking live.', 'success');
     } catch (err) {
       console.error('Camera access error:', err);
       let errMsg = 'Camera permission denied or camera not found.';
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errMsg = 'Camera permission denied. On mobile, please tap the lock icon in the browser address bar (or App Settings) and allow Camera permission.';
+        errMsg = 'Camera permission denied. Please click the camera/lock icon in your browser address bar and allow Camera access.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errMsg = 'No camera device detected on this device.';
+        errMsg = 'No webcam device detected on this laptop. Please check that your laptop camera is not disabled by a physical privacy slider or function key (e.g. Fn+F6 / Fn+F10).';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errMsg = 'Laptop camera is currently in use by another app (e.g. Zoom, MS Teams, Skype, or another tab). Please close other apps and try again.';
+      } else if (err.name === 'OverconstrainedError') {
+        errMsg = `Camera constraint (${err.constraint}) not supported by this laptop camera.`;
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -8261,6 +8296,9 @@ export default function LabelCropper({
                 autoPlay
                 playsInline
                 muted
+                onLoadedMetadata={(e) => {
+                  try { e.target.play().catch(() => {}); } catch {}
+                }}
                 className={`w-full h-full object-cover ${isWebcamActive ? 'block' : 'hidden'}`}
               />
 
