@@ -2111,53 +2111,84 @@ export default function LabelCropper({
     // SHIPPING LABEL: Detect exact printing coordinates
     let printCoord = null;
     if (isLabel && Array.isArray(textItems)) {
+      // Find table left margin (e.g. from '#' or 'SELLER' column)
+      const tableLeftItem = textItems.find(it => it.str && /^(?:#|SELLER|GSTIN)$/i.test(it.str.trim()));
+      const startX = (tableLeftItem && Array.isArray(tableLeftItem.transform)) ? tableLeftItem.transform[4] : 42;
+
+      // 1. Detect Lithium ion line:
+      // pdf.js emits tokens word-by-word ('Lithium', 'batteries', '966', 'Section II')
       const lithiumItem = textItems.find(it => 
-        /(?:lithium\s*ion|compliance\s*with\s*Section|PI\s*966)/i.test(it.str)
+        it.str && Array.isArray(it.transform) && (
+          /\b(?:lithium|batteries)\b/i.test(it.str) || 
+          /\b966\b/.test(it.str) || 
+          /Section\s*II/i.test(it.str)
+        )
       );
 
       if (lithiumItem && Array.isArray(lithiumItem.transform)) {
+        // Find all text tokens on this line to determine where "Lithium ion..." starts on the X axis
+        const lithiumY = lithiumItem.transform[5];
+        const sameLineItems = textItems.filter(it => 
+          Array.isArray(it.transform) && 
+          Math.abs(it.transform[5] - lithiumY) < 4 && 
+          it.str && it.str.trim()
+        );
+        const lithiumMinX = sameLineItems.length > 0 
+          ? Math.min(...sameLineItems.map(it => it.transform[4])) 
+          : 180;
+
         // User requested: "not above line, print before line there is also white space like Car Washer Gun-S5 (1)"
-        // Printed on the same line (y = lithiumItem.transform[5]), on the left side before "Lithium ion..."
         printCoord = {
           type: 'before_lithium',
-          x: 42,
-          y: lithiumItem.transform[5],
-          maxX: Math.max(50, lithiumItem.transform[4] - 8)
+          x: Math.max(30, startX),
+          y: lithiumY,
+          maxX: Math.max(60, lithiumMinX - 8)
         };
       } else {
-        // User requested: "if this line not available then print between 2 boxes white space"
-        const topBoxItem = textItems.find(it => 
-          /(?:ITEM\s*TYPE|GSTIN|INVOICE\s*DATE|Customer\s*Self)/i.test(it.str)
-        );
-        const bottomBoxItem = textItems.find(it => 
-          /(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL|Sold\s*on)/i.test(it.str)
+        // 2. Fallback: Lithium line is absent ("very rare case so if this line not available then print between 2 boxes white space")
+        // Find upper table header (GSTIN, INVOICE, ITEM TYPE)
+        const upperHeaderItem = textItems.find(it => 
+          it.str && Array.isArray(it.transform) && /^(?:INVOICE|GSTIN|ITEM\s*TYPE)$/i.test(it.str.trim())
         );
 
-        if (topBoxItem && bottomBoxItem && Array.isArray(topBoxItem.transform) && Array.isArray(bottomBoxItem.transform)) {
-          const topY = topBoxItem.transform[5];
-          const botY = bottomBoxItem.transform[5];
-          const midY = (topY - 18 + botY + 22) / 2;
-          printCoord = {
-            type: 'between_boxes',
-            x: 42,
-            y: midY,
-            maxX: 350
-          };
-        } else if (topBoxItem && Array.isArray(topBoxItem.transform)) {
-          printCoord = {
-            type: 'below_top_box',
-            x: 42,
-            y: topBoxItem.transform[5] - 38,
-            maxX: 350
-          };
-        } else {
-          printCoord = {
-            type: 'fallback',
-            x: 42,
-            y: 280,
-            maxX: 350
-          };
+        // Find data row in upper table below header
+        let upperTableBottom = null;
+        if (upperHeaderItem) {
+          const upperRowItems = textItems.filter(it => 
+            Array.isArray(it.transform) && 
+            it.transform[5] < upperHeaderItem.transform[5] && 
+            it.transform[5] > upperHeaderItem.transform[5] - 30 && 
+            it.str && it.str.trim()
+          );
+          if (upperRowItems.length > 0) {
+            const minUpperY = Math.min(...upperRowItems.map(it => it.transform[5]));
+            upperTableBottom = minUpperY - 10;
+          } else {
+            upperTableBottom = upperHeaderItem.transform[5] - 28;
+          }
         }
+
+        // Find lower box (routing box: STXA, STAL, MSTA, MRJA, KARD, ATSPL, etc.)
+        const lowerBoxItem = textItems.find(it => 
+          it.str && Array.isArray(it.transform) && /\b(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL)\b/i.test(it.str)
+        );
+
+        let targetY = 280;
+        if (upperTableBottom !== null && lowerBoxItem) {
+          const lowerBoxTop = lowerBoxItem.transform[5] + 12;
+          targetY = (upperTableBottom + lowerBoxTop) / 2;
+        } else if (upperTableBottom !== null) {
+          targetY = upperTableBottom - 16;
+        } else if (lowerBoxItem) {
+          targetY = lowerBoxItem.transform[5] + 25;
+        }
+
+        printCoord = {
+          type: 'between_boxes',
+          x: Math.max(30, startX),
+          y: targetY,
+          maxX: 350
+        };
       }
     }
 
