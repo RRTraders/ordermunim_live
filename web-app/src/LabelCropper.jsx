@@ -2410,8 +2410,8 @@ export default function LabelCropper({
         const srcDoc = pdfLibDocs[item.fileIndex];
         const [copiedPage] = await cleanDoc.copyPages(srcDoc, [item.pageIndex]);
 
-        // Print SKU on label if enabled and SKU was found
-        if (amazonState.printSkuOnLabel && item.skuText) {
+        // Automatically print detected SKU & Qty on shipping label
+        if (item.skuText) {
           try {
             let fontSize = 9;
             const targetX = item.printCoord?.x || 42;
@@ -7146,31 +7146,6 @@ export default function LabelCropper({
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Options / Auto-Print SKU */}
-          {amazonState.pagesAnalysis && amazonState.pagesAnalysis.length > 0 && (
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <label className="flex items-start sm:items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={amazonState.printSkuOnLabel ?? true}
-                  onChange={(e) => setAmazonState(prev => ({ ...prev, printSkuOnLabel: e.target.checked }))}
-                  className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 mt-0.5 sm:mt-0 cursor-pointer"
-                />
-                <div>
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <span>Auto-Print SKU Name &amp; Quantity on Shipping Labels</span>
-                    <span className="text-[10px] font-semibold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
-                      Auto-Detect
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Extracts product SKU name &amp; quantity (e.g. <span className="font-semibold text-slate-700 font-mono">Car Washer Gun-S5 (1)</span>) from invoices and prints it directly on shipping labels before packaging.
-                  </p>
-                </div>
-              </label>
             </div>
           )}
 
