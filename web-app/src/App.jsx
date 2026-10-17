@@ -92,7 +92,8 @@ import {
   ShoppingBag,
   Video,
   FileText,
-  Info
+  Info,
+  RotateCcw
 } from 'lucide-react';
 const LabelCropper = lazy(() => import('./LabelCropper'));
 const PdfToolsSuite = lazy(() => import('./PdfTools/PdfToolsSuite'));
@@ -5242,10 +5243,70 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Editable Days Input & Preset Buttons */}
+                              {/* Quick Action Reset & Expire Buttons */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const now = new Date();
+                                    const newEnd = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));
+                                    const preserveStatus = targetUser.status === 'on_hold' ? 'on_hold' : 'active';
+                                    await updateDoc(doc(db, 'users', targetUser.id), { 
+                                      trialEndDate: newEnd.toISOString(), 
+                                      trialStartDate: now.toISOString(),
+                                      status: preserveStatus 
+                                    });
+                                    const updated = { 
+                                      trialEndDate: newEnd.toISOString(), 
+                                      trialStartDate: now.toISOString(),
+                                      status: preserveStatus 
+                                    };
+                                    setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, ...updated } : u));
+                                    setAdminSettingsUser(prev => prev ? { ...prev, ...updated } : prev);
+                                    if (user?.uid === targetUser.id) {
+                                      setProfile(prev => ({ ...prev, ...updated }));
+                                    }
+                                    showToast(`Reset trial to default 3 days for ${targetUser.email || targetUser.name || 'user'}!`, 'success');
+                                  }}
+                                  className="flex-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  title="Reset trial to 3 days starting from today"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Reset to 3 Days</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const now = new Date();
+                                    const expiredDate = new Date(now.getTime() - 60000);
+                                    const preserveStatus = targetUser.status === 'on_hold' ? 'on_hold' : 'active';
+                                    await updateDoc(doc(db, 'users', targetUser.id), { 
+                                      trialEndDate: expiredDate.toISOString(), 
+                                      status: preserveStatus 
+                                    });
+                                    const updated = { 
+                                      trialEndDate: expiredDate.toISOString(), 
+                                      status: preserveStatus 
+                                    };
+                                    setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, ...updated } : u));
+                                    setAdminSettingsUser(prev => prev ? { ...prev, ...updated } : prev);
+                                    if (user?.uid === targetUser.id) {
+                                      setProfile(prev => ({ ...prev, ...updated }));
+                                    }
+                                    showToast(`Trial expired (0 days) for ${targetUser.email || targetUser.name || 'user'}!`, 'info');
+                                  }}
+                                  className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                                  title="Immediately expire trial"
+                                >
+                                  <span>Expire (0d)</span>
+                                </button>
+                              </div>
+
+                              {/* Editable Days Input & Action Buttons */}
                               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 space-y-2">
                                 <div className="flex items-center justify-between text-[11px] text-slate-300 font-medium">
-                                  <span>Add Extra Days:</span>
+                                  <span>Custom Days Control:</span>
                                   <div className="flex items-center gap-1">
                                     {[3, 7, 15, 30].map(d => (
                                       <button
@@ -5265,21 +5326,58 @@ export default function App() {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                  <div className="relative flex-1">
+                                  <div className="relative w-24">
                                     <input
                                       type="number"
                                       min="1"
                                       max="365"
                                       value={customTrialDays}
                                       onChange={(e) => setCustomTrialDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-orange-500"
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-orange-500"
                                       placeholder="Days"
                                     />
                                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">
-                                      days
+                                      d
                                     </span>
                                   </div>
 
+                                  {/* Set Exactly N Days from Today */}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const days = Math.max(1, parseInt(customTrialDays, 10) || 3);
+                                      const now = new Date();
+                                      const newEnd = new Date(now.getTime() + (days * 24 * 60 * 60 * 1000));
+                                      const preserveStatus = targetUser.status === 'on_hold' ? 'on_hold' : 'active';
+
+                                      await updateDoc(doc(db, 'users', targetUser.id), { 
+                                        trialEndDate: newEnd.toISOString(), 
+                                        trialStartDate: now.toISOString(),
+                                        status: preserveStatus 
+                                      });
+
+                                      const updated = { 
+                                        trialEndDate: newEnd.toISOString(), 
+                                        trialStartDate: now.toISOString(),
+                                        status: preserveStatus 
+                                      };
+
+                                      setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, ...updated } : u));
+                                      setAdminSettingsUser(prev => prev ? { ...prev, ...updated } : prev);
+
+                                      if (user?.uid === targetUser.id) {
+                                        setProfile(prev => ({ ...prev, ...updated }));
+                                      }
+
+                                      showToast(`Set validity to exactly ${days} days from today!`, 'success');
+                                    }}
+                                    className="flex-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shadow-sm transition-all cursor-pointer text-center"
+                                    title="Set validity to exactly this many days from today"
+                                  >
+                                    Set to {customTrialDays}d
+                                  </button>
+
+                                  {/* Add N Days to Existing Expiry */}
                                   <button
                                     type="button"
                                     onClick={async () => {
@@ -5296,34 +5394,25 @@ export default function App() {
                                         status: preserveStatus 
                                       });
 
-                                      setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { 
-                                        ...u, 
+                                      const updated = { 
                                         trialEndDate: newEnd.toISOString(), 
                                         trialStartDate: newStart,
                                         status: preserveStatus 
-                                      } : u));
+                                      };
 
-                                      setAdminSettingsUser(prev => prev ? { 
-                                        ...prev, 
-                                        trialEndDate: newEnd.toISOString(), 
-                                        trialStartDate: newStart,
-                                        status: preserveStatus 
-                                      } : prev);
+                                      setAllUsersList(prev => prev.map(u => u.id === targetUser.id ? { ...u, ...updated } : u));
+                                      setAdminSettingsUser(prev => prev ? { ...prev, ...updated } : prev);
 
                                       if (user?.uid === targetUser.id) {
-                                        setProfile(prev => ({ 
-                                          ...prev, 
-                                          trialEndDate: newEnd.toISOString(), 
-                                          trialStartDate: newStart,
-                                          status: preserveStatus 
-                                        }));
+                                        setProfile(prev => ({ ...prev, ...updated }));
                                       }
 
                                       showToast(`Added +${daysToAdd} days to ${targetUser.email || targetUser.name || 'user'}!`, 'success');
                                     }}
-                                    className="px-3 py-1 text-xs font-bold rounded-lg bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all cursor-pointer shrink-0"
+                                    className="flex-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all cursor-pointer text-center"
+                                    title="Add extra days on top of current expiry"
                                   >
-                                    +{customTrialDays} Days Trial
+                                    + Add {customTrialDays}d
                                   </button>
                                 </div>
                               </div>
