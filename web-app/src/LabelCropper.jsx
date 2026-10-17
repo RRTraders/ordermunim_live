@@ -2113,81 +2113,66 @@ export default function LabelCropper({
     if (isLabel && Array.isArray(textItems)) {
       // Find table left margin (e.g. from '#' or 'SELLER' column)
       const tableLeftItem = textItems.find(it => it.str && /^(?:#|SELLER|GSTIN)$/i.test(it.str.trim()));
-      const startX = (tableLeftItem && Array.isArray(tableLeftItem.transform)) ? tableLeftItem.transform[4] : 42;
+      const startX = (tableLeftItem && Array.isArray(tableLeftItem.transform)) ? tableLeftItem.transform[4] : 32;
 
       // 1. Detect Lithium ion line:
-      // pdf.js emits tokens word-by-word ('Lithium', 'batteries', '966', 'Section II')
       const lithiumItem = textItems.find(it => 
         it.str && Array.isArray(it.transform) && (
-          /\b(?:lithium|batteries)\b/i.test(it.str) || 
-          /\b966\b/.test(it.str) || 
-          /Section\s*II/i.test(it.str)
+          /lithium/i.test(it.str) || 
+          /batter/i.test(it.str) || 
+          /966/.test(it.str) || 
+          /Section/i.test(it.str)
         )
       );
 
       if (lithiumItem && Array.isArray(lithiumItem.transform)) {
-        // Find all text tokens on this line to determine where "Lithium ion..." starts on the X axis
-        const lithiumY = lithiumItem.transform[5];
+        const rawLithiumY = lithiumItem.transform[5];
+        // Ensure Y is within reasonable lower-half bounds (~160-205), otherwise use 180
+        const lithiumY = (rawLithiumY >= 150 && rawLithiumY <= 215) ? rawLithiumY : 180;
+        
         const sameLineItems = textItems.filter(it => 
           Array.isArray(it.transform) && 
-          Math.abs(it.transform[5] - lithiumY) < 4 && 
+          Math.abs(it.transform[5] - rawLithiumY) < 6 && 
           it.str && it.str.trim()
         );
         const lithiumMinX = sameLineItems.length > 0 
           ? Math.min(...sameLineItems.map(it => it.transform[4])) 
-          : 180;
+          : 185;
 
         // User requested: "not above line, print before line there is also white space like Car Washer Gun-S5 (1)"
         printCoord = {
           type: 'before_lithium',
-          x: Math.max(30, startX),
+          x: Math.max(28, Math.min(startX, 42)),
           y: lithiumY,
           maxX: Math.max(60, lithiumMinX - 8)
         };
       } else {
         // 2. Fallback: Lithium line is absent ("very rare case so if this line not available then print between 2 boxes white space")
-        // Find upper table header (GSTIN, INVOICE, ITEM TYPE)
+        // In Amazon 4x6 labels, the white space between the 2 boxes is at y = 180
         const upperHeaderItem = textItems.find(it => 
-          it.str && Array.isArray(it.transform) && /^(?:INVOICE|GSTIN|ITEM\s*TYPE)$/i.test(it.str.trim())
+          it.str && Array.isArray(it.transform) && /(?:INVOICE|GSTIN|ITEM|SELLER)/i.test(it.str.trim())
         );
-
-        // Find data row in upper table below header
-        let upperTableBottom = null;
-        if (upperHeaderItem) {
-          const upperRowItems = textItems.filter(it => 
-            Array.isArray(it.transform) && 
-            it.transform[5] < upperHeaderItem.transform[5] && 
-            it.transform[5] > upperHeaderItem.transform[5] - 30 && 
-            it.str && it.str.trim()
-          );
-          if (upperRowItems.length > 0) {
-            const minUpperY = Math.min(...upperRowItems.map(it => it.transform[5]));
-            upperTableBottom = minUpperY - 10;
-          } else {
-            upperTableBottom = upperHeaderItem.transform[5] - 28;
-          }
-        }
-
-        // Find lower box (routing box: STXA, STAL, MSTA, MRJA, KARD, ATSPL, etc.)
         const lowerBoxItem = textItems.find(it => 
-          it.str && Array.isArray(it.transform) && /\b(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL)\b/i.test(it.str)
+          it.str && Array.isArray(it.transform) && /(?:STXA|STAL|MSTA|MRJA|KARD|ATSPL|Sold)/i.test(it.str)
         );
 
-        let targetY = 280;
-        if (upperTableBottom !== null && lowerBoxItem) {
-          const lowerBoxTop = lowerBoxItem.transform[5] + 12;
-          targetY = (upperTableBottom + lowerBoxTop) / 2;
-        } else if (upperTableBottom !== null) {
-          targetY = upperTableBottom - 16;
-        } else if (lowerBoxItem) {
-          targetY = lowerBoxItem.transform[5] + 25;
+        let targetY = 180;
+        if (upperHeaderItem && lowerBoxItem) {
+          const calculatedMid = (upperHeaderItem.transform[5] - 30 + lowerBoxItem.transform[5] + 15) / 2;
+          if (calculatedMid >= 160 && calculatedMid <= 205) targetY = calculatedMid;
+        } else if (upperHeaderItem && upperHeaderItem.transform[5] > 240) {
+          const fromHeader = upperHeaderItem.transform[5] - 90;
+          if (fromHeader >= 160 && fromHeader <= 205) targetY = fromHeader;
+        } else if (lowerBoxItem && lowerBoxItem.transform[5] < 160) {
+          const fromLower = lowerBoxItem.transform[5] + 35;
+          if (fromLower >= 160 && fromLower <= 205) targetY = fromLower;
         }
 
         printCoord = {
           type: 'between_boxes',
-          x: Math.max(30, startX),
+          x: Math.max(28, Math.min(startX, 42)),
           y: targetY,
-          maxX: 350
+          maxX: 185
         };
       }
     }
@@ -2444,10 +2429,24 @@ export default function LabelCropper({
         // Automatically print detected SKU & Qty on shipping label
         if (item.skuText) {
           try {
-            let fontSize = 9;
-            const targetX = item.printCoord?.x || 42;
-            const targetY = item.printCoord?.y || 280;
-            const maxX = item.printCoord?.maxX || 350;
+            let fontSize = 8.5;
+            let targetX = 32;
+            let targetY = 180;
+            let maxX = 185;
+
+            if (item.printCoord?.y) {
+              if (item.printCoord.y >= 150 && item.printCoord.y <= 215) {
+                targetY = item.printCoord.y;
+              } else {
+                targetY = 180;
+              }
+            }
+            if (item.printCoord?.x && item.printCoord.x >= 25 && item.printCoord.x <= 50) {
+              targetX = item.printCoord.x;
+            }
+            if (item.printCoord?.maxX && item.printCoord.maxX > targetX + 40) {
+              maxX = Math.min(item.printCoord.maxX, 185);
+            }
             const maxAllowedWidth = Math.max(60, maxX - targetX);
 
             let textW = boldFont.widthOfTextAtSize(item.skuText, fontSize);
