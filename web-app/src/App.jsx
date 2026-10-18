@@ -833,11 +833,24 @@ export default function App() {
         const data = snap.data();
         setAppUpdateConfig(data);
         setBroadcastActive(Boolean(data.active));
-        if (data.versionCode !== undefined) setBroadcastVersionCode(data.versionCode);
-        if (data.versionName) setBroadcastVersionName(data.versionName);
-        if (data.title) setBroadcastTitle(data.title);
-        if (data.message) setBroadcastMessage(data.message);
-        if (data.downloadUrl) setBroadcastUrl(data.downloadUrl);
+        
+        // If Firestore remote broadcast is older than CURRENT_APP_VERSION_CODE (e.g., 51 vs 54),
+        // default the inputs to CURRENT_APP_VERSION_CODE (54, "6.4") so admin immediately sees v6.4!
+        if (data.versionCode !== undefined && data.versionCode >= CURRENT_APP_VERSION_CODE) {
+          setBroadcastVersionCode(data.versionCode);
+          if (data.versionName) setBroadcastVersionName(data.versionName);
+          if (data.title) setBroadcastTitle(data.title);
+          if (data.message) setBroadcastMessage(data.message);
+          if (data.downloadUrl) setBroadcastUrl(data.downloadUrl);
+        } else {
+          setBroadcastVersionCode(CURRENT_APP_VERSION_CODE);
+          setBroadcastVersionName(CURRENT_APP_VERSION_NAME);
+          setBroadcastTitle(`OrderMunim v${CURRENT_APP_VERSION_NAME} Update Available!`);
+          setBroadcastMessage(`OrderMunim v${CURRENT_APP_VERSION_NAME} is available with authentic store display name resolution (Kaanchan Export 1), strict 5-minute background sync, and multi-store session isolation.`);
+          setBroadcastUrl(`https://ordermunim.com/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`);
+          setBroadcastMode('force_immediate');
+        }
+
         if (data.updateMode) setBroadcastMode(data.updateMode);
         if (data.graceDays !== undefined) setBroadcastGraceDays(data.graceDays);
       } else {
@@ -1235,14 +1248,19 @@ export default function App() {
       const accList = [];
       snapshot.forEach((d) => {
         const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
-        // AUTO-MIGRATION: Convert legal name to brand store name "Kaanchan Export 1"
+        // AUTO-MIGRATION: Convert legal name to brand store name for primary store
         if (item.storeName && (
           item.storeName.includes('NAKARANI') || 
-          item.storeName.includes('KANCHANBEN') || 
-          item.storeName.toUpperCase().includes('NAKARANI')
+          item.storeName.includes('KANCHANBEN')
         )) {
-          item.storeName = 'Kaanchan Export 1';
-          updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(e => console.warn('[AutoRename] Failed:', e));
+          const e = (item.email || '').toLowerCase();
+          if (e.includes('kaanchan') || e.includes('vipul') || e.includes('kanchan')) {
+            item.storeName = 'Kaanchan Export 1';
+            updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(() => {});
+          } else if (item.identifier) {
+            item.storeName = `Meesho Store ${item.identifier.toUpperCase()}`;
+            updateDoc(doc(db, 'accounts', d.id), { storeName: item.storeName }).catch(() => {});
+          }
         }
         accList.push(item);
       });
@@ -1313,8 +1331,13 @@ export default function App() {
         const accList = [];
         snapshot.forEach((d) => {
           const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
-          if (item.storeName && (item.storeName.includes('NAKARANI') || item.storeName.includes('KANCHANBEN') || item.storeName.toUpperCase().includes('NAKARANI'))) {
-            item.storeName = 'Kaanchan Export 1';
+          if (item.storeName && (item.storeName.includes('NAKARANI') || item.storeName.includes('KANCHANBEN'))) {
+            const e = (item.email || '').toLowerCase();
+            if (e.includes('kaanchan') || e.includes('vipul') || e.includes('kanchan')) {
+              item.storeName = 'Kaanchan Export 1';
+            } else if (item.identifier) {
+              item.storeName = `Meesho Store ${item.identifier.toUpperCase()}`;
+            }
           }
           accList.push(item);
         });
@@ -2910,10 +2933,13 @@ export default function App() {
       
       if (finalStoreName && (
         finalStoreName.includes('NAKARANI') || 
-        finalStoreName.includes('KANCHANBEN') || 
-        finalStoreName.toUpperCase().includes('NAKARANI')
+        finalStoreName.includes('KANCHANBEN')
       )) {
-        finalStoreName = 'Kaanchan Export 1';
+        if (cleanEmail && (cleanEmail.includes('kaanchan') || cleanEmail.includes('vipul') || cleanEmail.includes('kanchan'))) {
+          finalStoreName = 'Kaanchan Export 1';
+        } else if (data?.identifier) {
+          finalStoreName = `Meesho Store ${data.identifier.toUpperCase()}`;
+        }
       }
       
       if (!finalStoreName || finalStoreName.toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || finalStoreName.toLowerCase() === cleanEmail.toLowerCase()) {
@@ -3150,10 +3176,13 @@ export default function App() {
       const publishedDate = new Date();
       const deadlineDate = new Date(Date.now() + graceDaysNum * 24 * 60 * 60 * 1000);
 
-      const cleanVerName = (broadcastVersionName.trim() || '5.3').replace(/^v/i, '');
-      let finalDownloadUrl = broadcastUrl.trim() || `https://raw.githubusercontent.com/RRTraders/ordermunim_live/main/ordermunim_v${cleanVerName}.apk`;
+      const cleanVerName = (broadcastVersionName.trim() || CURRENT_APP_VERSION_NAME).replace(/^v/i, '');
+      let finalDownloadUrl = broadcastUrl.trim() || `https://ordermunim.com/ordermunim_v${cleanVerName}.apk`;
       if (/ordermunim_v[0-9.]+\.apk/i.test(finalDownloadUrl)) {
         finalDownloadUrl = finalDownloadUrl.replace(/ordermunim_v[0-9.]+\.apk/i, `ordermunim_v${cleanVerName}.apk`);
+      }
+      if (finalDownloadUrl.includes('meesho-otp-app.web.app')) {
+        finalDownloadUrl = finalDownloadUrl.replace('https://meesho-otp-app.web.app', 'https://ordermunim.com');
       }
       let finalTitle = broadcastTitle.trim() || `New Update Available (v${cleanVerName})!`;
       if (/\(v[0-9.]+\)/i.test(finalTitle)) {
@@ -3452,11 +3481,16 @@ export default function App() {
         const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
         if (item.storeName && (
           item.storeName.includes('NAKARANI') || 
-          item.storeName.includes('KANCHANBEN') || 
-          item.storeName.toUpperCase().includes('NAKARANI')
+          item.storeName.includes('KANCHANBEN')
         )) {
-          item.storeName = 'Kaanchan Export 1';
-          updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(e => console.warn('[AutoRename Admin] Failed:', e));
+          const e = (item.email || '').toLowerCase();
+          if (e.includes('kaanchan') || e.includes('vipul') || e.includes('kanchan')) {
+            item.storeName = 'Kaanchan Export 1';
+            updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(() => {});
+          } else if (item.identifier) {
+            item.storeName = `Meesho Store ${item.identifier.toUpperCase()}`;
+            updateDoc(doc(db, 'accounts', d.id), { storeName: item.storeName }).catch(() => {});
+          }
         }
         accList.push(item);
       });
@@ -3475,6 +3509,25 @@ export default function App() {
     }, (error) => {
       console.warn("unsubSuggestions listener error:", error);
     });
+
+    // Auto-broadcast current app version (v6.4 / 54) to all clients if Firestore has an older version (e.g. 51)
+    getDoc(doc(db, 'config', 'app_update')).then((snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      if (!data || (data.versionCode || 0) < CURRENT_APP_VERSION_CODE) {
+        setDoc(doc(db, 'config', 'app_update'), {
+          active: true,
+          versionCode: CURRENT_APP_VERSION_CODE,
+          versionName: CURRENT_APP_VERSION_NAME,
+          title: `OrderMunim v${CURRENT_APP_VERSION_NAME} Update Available!`,
+          message: `OrderMunim v${CURRENT_APP_VERSION_NAME} is available with authentic store display name resolution (Kaanchan Export 1), strict 5-minute background sync, and multi-store session isolation.`,
+          downloadUrl: `https://ordermunim.com/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`,
+          updateMode: 'force_immediate',
+          graceDays: 2,
+          publishedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(err => console.warn('[AutoBroadcast] Failed:', err));
+      }
+    }).catch(() => {});
 
     return () => {
       unsubUsers();
@@ -8175,6 +8228,35 @@ export default function App() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Quick Fill Current Version Banner */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-xs">
+              <div>
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  Latest Compiled Release: v{CURRENT_APP_VERSION_NAME} (Code {CURRENT_APP_VERSION_CODE})
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5 block">
+                  Click to populate all fields with the compiled v{CURRENT_APP_VERSION_NAME} APK package.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setBroadcastVersionCode(CURRENT_APP_VERSION_CODE);
+                  setBroadcastVersionName(CURRENT_APP_VERSION_NAME);
+                  setBroadcastTitle(`OrderMunim v${CURRENT_APP_VERSION_NAME} Update Available!`);
+                  setBroadcastMessage(`OrderMunim v${CURRENT_APP_VERSION_NAME} is available with authentic store display name resolution (Kaanchan Export 1), strict 5-minute background sync, and multi-store session isolation.`);
+                  setBroadcastUrl(`https://ordermunim.com/ordermunim_v${CURRENT_APP_VERSION_NAME}.apk`);
+                  setBroadcastMode('force_immediate');
+                  showToast(`Populated with v${CURRENT_APP_VERSION_NAME} (Code ${CURRENT_APP_VERSION_CODE})`, 'info');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all cursor-pointer shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Fill v{CURRENT_APP_VERSION_NAME} (Code {CURRENT_APP_VERSION_CODE})
+              </button>
             </div>
 
             {/* Broadcast Settings Form */}
