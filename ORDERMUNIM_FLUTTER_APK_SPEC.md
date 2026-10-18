@@ -142,10 +142,54 @@ Webcam** and **Real-Time Firestore Cloud Sync** for the desktop web dashboard.
   ```
 * **Latency**: **~150ms**.
 
-### 4.4 Overview & Summary (Optional Dashboards)
-* **Overview**: `POST https://supplier.meesho.com/fulfillmentapi/api/returnRto/fetchOverviewV2`
-* **Orders**: `GET https://supplier.meesho.com/api/fulfillment/orders`
-* **Payouts**: `GET https://supplier.meesho.com/api/payouts/payments/all-ui-data`
+### 4.4 Live Return & RTO Overview Endpoint
+* **Method**: `POST`
+* **URL**: `https://supplier.meesho.com/fulfillmentapi/api/returnRto/fetchOverviewV2`
+* **Headers**: Authenticated via `CookieJar`.
+* **Payload**: `{}`
+* **Data Extracted**:
+  - Total pending return packets count
+  - Intransit return packets by courier partner
+  - Completed vs disputed RTO packages
+
+### 4.5 Orders & Shipping Label Processing (Complete Suite)
+This matches the full shipping operations extracted from the competitor architecture:
+
+#### A. Order Listing & Pending Queue
+* **List Active Orders**:
+  - `GET https://supplier.meesho.com/api/fulfillment/orders`
+  - Fetches active pending, ready-to-ship, and cancelled orders.
+* **Request Pending Orders**:
+  - `POST https://supplier.meesho.com/api/fulfillment/orders/reqPendingOrders`
+  - Triggers backend order compilation for newly placed orders.
+* **Pending Orders History**:
+  - `GET https://supplier.meesho.com/api/fulfillment/orders/fetchPendingOrdersHistory`
+  - Retrieves paginated list of historically fulfilled or pending orders.
+* **Update Pending Order Status**:
+  - `POST https://supplier.meesho.com/api/fulfillment/orders/updatePendingOrderStatus`
+  - Transitions orders to 'Ready to Ship' or 'Hold'.
+
+#### B. Shipping Label Generation & Download
+* **Generate & Download Shipping Labels**:
+  - `POST https://supplier.meesho.com/api/fulfillment/orders/reqDownloadLabelV2`
+  - Generates official Meesho shipping label PDFs with barcode/AWB.
+* **Label Download History**:
+  - `GET https://supplier.meesho.com/api/fulfillment/orders/fetchLabelDownloadHistory`
+  - Fetches previously generated label download URLs and timestamps.
+* **Update Label Download Status**:
+  - `POST https://supplier.meesho.com/api/fulfillment/orders/updateLabelDownloadStatus`
+  - Marks labels as downloaded/printed to prevent duplicate printing.
+* **Batch / Group Download Backend Flag**:
+  - `POST https://supplier.meesho.com/api/fulfillment/orders/updateGroupDownloadBackendFlag`
+  - Toggles batch PDF generation mode on Meesho backend.
+
+### 4.6 Payouts & Payment Dashboard
+* **All Payouts & Payment UI Data**:
+  - `GET https://supplier.meesho.com/api/payouts/payments/all-ui-data`
+  - Fetches settlement balances, previous payouts, and deducted returns.
+* **Upcoming Total Amount**:
+  - `GET https://supplier.meesho.com/api/payouts/payments/upcoming-total-amount`
+  - Returns upcoming payout date and net credit amount.
 
 ---
 
@@ -219,18 +263,14 @@ To protect sellers against fraudulent, damaged, or wrong-return claims:
 ## 8. Screen Flow & Navigation Architecture
 
 ```
-+-------------------------------------------------------------------+
-|                        BOTTOM NAVIGATION BAR                      |
-+-------------------+--------------------+--------------------------+
-| 1. [OTPs]         | 2. [CCTV Camera]   | 3. [Stores]              |
-| Live OTP Cards,   | 1-Tap Unboxing Rec | Add/Manage Meesho Stores |
-| Packet Counters,  | Burnt-in IST Stamp | Encrypted Credentials,   |
-| Buzzer Audio Mute | Gallery of Proofs  | Test Login Verification  |
-+-------------------+--------------------+--------------------------+
-| 4. [Payouts]      | 5. [Settings]                                 |
-| Upcoming balance, | Battery Optimization, Auto-Update Broadcast,  |
-| Next payout date  | Web Dashboard Sync Status                     |
-+-------------------+-----------------------------------------------+
++---------------------------------------------------------------------------------------+
+|                                 BOTTOM NAVIGATION BAR                                 |
++-------------------+--------------------+------------------------+---------------------+
+| 1. [OTPs]         | 2. [Orders & Labels| 3. [CCTV Camera]       | 4. [Stores & Payout]|
+| Live OTP Cards,   | Pending orders,    | 1-Tap Unboxing Rec,    | Multi-store setup,  |
+| Packet Counters,  | Label download,    | Burnt-in IST Stamp HUD,| Payouts balance,    |
+| Buzzer Audio Mute | Status transitions | Gallery of Proofs      | Battery settings    |
++-------------------+--------------------+------------------------+---------------------+
 ```
 
 ---
