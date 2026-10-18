@@ -37,7 +37,8 @@ import {
   query, 
   where, 
   deleteDoc, 
-  updateDoc 
+  updateDoc,
+  addDoc 
 } from 'firebase/firestore';
 import { 
   Phone, 
@@ -93,7 +94,11 @@ import {
   Video,
   FileText,
   Info,
-  RotateCcw
+  RotateCcw,
+  Lightbulb,
+  Upload,
+  Paperclip,
+  Send
 } from 'lucide-react';
 const LabelCropper = lazy(() => import('./LabelCropper'));
 const PdfToolsSuite = lazy(() => import('./PdfTools/PdfToolsSuite'));
@@ -148,16 +153,6 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
   const rawFirestoreOtp = acc.currentOtp;
   const rawFirestoreCourier = acc.courier;
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const todayIST = `${nowIST.getFullYear()}-${nowIST.getMonth()}-${nowIST.getDate()}`;
-  let isStaleDay = false;
-  if (acc.lastUpdated) {
-    const updatedIST = new Date(new Date(acc.lastUpdated).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const updatedDay = `${updatedIST.getFullYear()}-${updatedIST.getMonth()}-${updatedIST.getDate()}`;
-    if (updatedDay !== todayIST) {
-      isStaleDay = true;
-    }
-  }
   const hasFalseExpiredStatus = acc.status === 'session_expired' || acc.courier === 'Session Expired';
 
   if (hasFalseExpiredStatus && persistFirestore && acc.id) {
@@ -165,19 +160,6 @@ export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
       status: 'live',
       courier: acc.courier === 'Session Expired' ? 'No Return' : (acc.courier || 'No Return')
     }).catch(() => {});
-  }
-
-  // Only reset if it is actually from a previous day (midnight clean slate)
-  if (isStaleDay) {
-    if (persistFirestore && acc.id && ((acc.currentOtp && acc.currentOtp !== '----') || (Array.isArray(acc.otpList) && acc.otpList.length > 0))) {
-      updateDoc(doc(db, 'accounts', acc.id), {
-        currentOtp: '----',
-        courier: 'No Return',
-        handoverCount: 0,
-        otpList: []
-      }).catch(() => {});
-    }
-    return { ...acc, rawFirestoreOtp, rawFirestoreCourier, currentOtp: '----', courier: 'No Return', handoverCount: 0, otpList: [], status: 'live' };
   }
 
   // Synthesize otpList if missing so cards always render active OTPs with courier & count
@@ -479,6 +461,12 @@ export default function App() {
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [suggestionContact, setSuggestionContact] = useState('');
+  const [suggestionText, setSuggestionText] = useState('');
+  const [suggestionFile, setSuggestionFile] = useState(null);
+  const [suggestionSubmitting, setSuggestionSubmitting] = useState(false);
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false);
   const [showPdfComingSoonModal, setShowPdfComingSoonModal] = useState(false);
   const [ecomDropdownOpen, setEcomDropdownOpen] = useState(false);
   const ecomDropdownRef = useRef(null);
@@ -703,6 +691,10 @@ export default function App() {
     }
     if (showContactModal) {
       setShowContactModal(false);
+      return 'handled';
+    }
+    if (showSuggestionModal) {
+      setShowSuggestionModal(false);
       return 'handled';
     }
     if (showBroadcastModal) {
@@ -4172,7 +4164,7 @@ export default function App() {
                   : 'hover:text-[#083B82]'
               }`}
             >
-              <span>Webcam (Recorder)</span>
+              <span>Webcam</span>
               <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
                 activeTab === 'cropper' && activeCropperMarketplace === 'webcam'
                   ? 'scale-x-100'
@@ -4216,6 +4208,20 @@ export default function App() {
             >
               <span>Contact Us</span>
               <span className="absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 scale-x-0 group-hover:scale-x-100 origin-left" />
+            </button>
+
+            {/* 8. Suggestions (Black font & Yellow background next to Contact Us) */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowSuggestionModal(true);
+                setSuggestionSubmitted(false);
+              }}
+              className="px-3 py-1 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black rounded-lg text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-yellow-500/40 shrink-0"
+              title="Share repetitive manual work to convert into digital"
+            >
+              <Lightbulb className="w-3.5 h-3.5 fill-slate-950 text-slate-950 shrink-0" />
+              <span>Suggestions</span>
             </button>
           </nav>
 
@@ -6566,6 +6572,17 @@ export default function App() {
               >
                 Contact Us
               </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSuggestionModal(true);
+                  setSuggestionSubmitted(false);
+                }}
+                className="text-yellow-400 hover:text-yellow-300 font-bold transition-colors cursor-pointer"
+              >
+                Suggestions
+              </button>
             </div>
           </div>
         </div>
@@ -7039,6 +7056,33 @@ export default function App() {
                 )}
               </div>
 
+              {/* Suggestions & Contact Us Quick Actions */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileDrawerOpen(false);
+                    setShowContactModal(true);
+                  }}
+                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+                >
+                  <Phone className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Contact Us</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileDrawerOpen(false);
+                    setShowSuggestionModal(true);
+                    setSuggestionSubmitted(false);
+                  }}
+                  className="py-2.5 px-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-yellow-500/40 shadow-xs active:scale-95"
+                >
+                  <Lightbulb className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                  <span>Suggestions</span>
+                </button>
+              </div>
+
               {/* Broadcast for Admin */}
               {isSuperAdmin && (
                 <button
@@ -7291,6 +7335,243 @@ export default function App() {
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= SUGGESTIONS MODAL ================= */}
+      {showSuggestionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-yellow-400/20 border border-yellow-400/50 text-yellow-600 flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-5 h-5 fill-yellow-500 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">Suggest an Automation</h3>
+                  <p className="text-[11px] text-slate-500">Convert your repetitive manual work into digital tools</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSuggestionModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Informative Banner */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50 to-yellow-50/60 border border-yellow-200/90 text-xs text-slate-700 space-y-1.5">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                <span>Tell us your daily manual repetitive work:</span>
+              </div>
+              <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                Do you or your warehouse team spend hours on repetitive manual work? (Excel calculations, manual label cutting, matching return packets, copy-pasting tracking IDs, daily dispatch records...)
+              </p>
+              <p className="text-[11.5px] text-amber-900 font-semibold leading-relaxed">
+                Describe your workflow below and attach sample sheets or photos. Our engineering team will build custom automation tools to digitize your workflow!
+              </p>
+            </div>
+
+            {suggestionSubmitted ? (
+              <div className="py-8 text-center space-y-4 animate-in fade-in duration-200">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-base font-extrabold text-slate-900">Thank You for Your Suggestion!</h4>
+                  <p className="text-xs text-slate-600 max-w-sm mx-auto">
+                    Your request has been received by our engineering team. We review every suggestion and reach out to build digital tools that automate your workflow.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                  <a
+                    href={`https://wa.me/919484636090?text=${encodeURIComponent(
+                      `Hello OrderMunim Team,\n\nI just submitted a suggestion to automate manual work:\n\n${suggestionText}\n\nContact: ${suggestionContact || user?.email || user?.phoneNumber || 'Customer'}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    <span>Chat on WhatsApp Directly</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSuggestionSubmitted(false);
+                      setShowSuggestionModal(false);
+                      setSuggestionText('');
+                      setSuggestionFile(null);
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!suggestionText.trim()) {
+                    showToast('Please describe the manual work or feature you want digitized.', 'error');
+                    return;
+                  }
+                  setSuggestionSubmitting(true);
+                  try {
+                    const docData = {
+                      userId: user?.uid || 'guest',
+                      userEmail: user?.email || '',
+                      userName: user?.displayName || '',
+                      contact: (suggestionContact || '').trim() || user?.email || user?.phoneNumber || '',
+                      description: suggestionText.trim(),
+                      fileName: suggestionFile?.name || '',
+                      fileSize: suggestionFile?.size || 0,
+                      fileType: suggestionFile?.type || '',
+                      createdAt: new Date().toISOString(),
+                      status: 'new'
+                    };
+                    if (suggestionFile?.base64 && suggestionFile.size <= 700000) {
+                      docData.fileBase64 = suggestionFile.base64;
+                    }
+                    await addDoc(collection(db, 'suggestions'), docData);
+                    setSuggestionSubmitted(true);
+                    showToast('Suggestion submitted successfully! Thank you.', 'success');
+                  } catch (err) {
+                    console.error('Failed to submit suggestion:', err);
+                    setSuggestionSubmitted(true);
+                  } finally {
+                    setSuggestionSubmitting(false);
+                  }
+                }}
+                className="space-y-3.5 text-xs text-slate-700"
+              >
+                {/* 1. Description */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    Describe Your Manual Work / Task *
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={suggestionText}
+                    onChange={(e) => setSuggestionText(e.target.value)}
+                    required
+                    placeholder="e.g. Every day we spend 2 hours matching return tracking IDs against our Excel dispatch sheet to verify missing packets. We need an automated scanner/checker..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-yellow-500 focus:bg-white transition-colors resize-none leading-relaxed"
+                  />
+                  <p className="text-[10.5px] text-slate-500 mt-1">
+                    Explain the step-by-step process you want automated or digitized.
+                  </p>
+                </div>
+
+                {/* 2. Contact details */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    Your WhatsApp Number or Email (so our team can reach you) *
+                  </label>
+                  <input
+                    type="text"
+                    value={suggestionContact}
+                    onChange={(e) => setSuggestionContact(e.target.value)}
+                    placeholder="+91 98765 43210 or yourname@gmail.com"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-yellow-500 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                {/* 3. File attachment (Optional) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    Attach Sample PDF, Image or Document <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <div className="space-y-1.5">
+                    {suggestionFile ? (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-yellow-50/80 border border-yellow-300">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="w-4 h-4 text-yellow-700 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="font-bold text-xs text-slate-900 truncate max-w-[240px]">
+                              {suggestionFile.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {(suggestionFile.size / 1024).toFixed(1)} KB
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSuggestionFile(null)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-yellow-500 bg-slate-50/60 hover:bg-yellow-50/20 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all">
+                        <Upload className="w-5 h-5 text-slate-400" />
+                        <span className="text-[11px] font-bold text-slate-700">Click to attach sample PDF or image</span>
+                        <span className="text-[10px] text-slate-400">PDF, JPG, PNG, WEBP (Max 5MB)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/png,image/jpeg,image/webp,application/pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 5 * 1024 * 1024) {
+                              showToast('File size must be under 5MB', 'error');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (evt) => {
+                              setSuggestionFile({
+                                name: file.name,
+                                size: file.size,
+                                type: file.type,
+                                base64: evt.target?.result
+                              });
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Action Buttons */}
+                <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={suggestionSubmitting}
+                    className="w-full sm:flex-1 py-2.5 px-4 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-yellow-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 border border-yellow-500/30"
+                  >
+                    {suggestionSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    <span>{suggestionSubmitting ? 'Submitting...' : 'Submit Suggestion'}</span>
+                  </button>
+
+                  <a
+                    href={`https://wa.me/919484636090?text=${encodeURIComponent(
+                      `Hello OrderMunim Team,\n\nI have a suggestion to automate manual work:\n\n${suggestionText || '[Describe manual workflow here]'}\n\nContact: ${suggestionContact || user?.email || user?.phoneNumber || ''}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer shrink-0"
+                    title="Send suggestion directly via WhatsApp"
+                  >
+                    <span>Send via WhatsApp</span>
+                  </a>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

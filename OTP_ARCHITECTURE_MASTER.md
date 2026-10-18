@@ -51,19 +51,16 @@ All future updates, refactors, and builds must strictly adhere to this document.
     - Phone has rebooted (via `BootReceiver`).
 
 ================================================================================
-4. GOOGLE CHROME SESSION INTEGRATION & MIDNIGHT AUTO-RESET
+4. GOOGLE CHROME SESSION INTEGRATION & CONTINUOUS 24/7 REAL-TIME SYNC
 ================================================================================
 - Chrome Browser Cookie Sync:
   * If valid Meesho session cookies exist in Google Chrome for the same account,
     capture and utilize them for fetching live OTPs and syncing to Firestore.
-- Midnight Clean Slate (12:00 AM IST):
-  * Every night at 12:00 AM sharp, all past OTPs and packet handover counts 
-    are automatically wiped clean in Firestore and the app:
-    - `currentOtp: "----"`
-    - `courier: "No Return"`
-    - `handoverCount: 0`
-    - `otpList: []`
-  * Each morning begins with a 100% clean, fresh return delivery state.
+- Natural 24/7 Sync (No Artificial Midnight Wipe):
+  * In non-courier timing (06:00 PM to 10:00 AM IST), background polling fires 
+    every 60 minutes directly against Meesho's supplier API.
+  * If Meesho clears or updates return OTPs, the app receives the real-time 
+    state naturally without any synthetic date wipes or data loss.
 
 ================================================================================
 5. ENCRYPTED CREDENTIALS IN FIRESTORE (SURVIVES UPDATES & WIPES)
