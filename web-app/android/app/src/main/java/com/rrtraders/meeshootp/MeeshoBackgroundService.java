@@ -108,8 +108,9 @@ public class MeeshoBackgroundService extends Service {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
-        // User swiped app away from Recent Apps - schedule immediate OS alarm in 5s
-        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), 5);
+        // User swiped app away from Recent Apps - schedule next alarm strictly according to 5 min / 60 min schedule
+        long delay = getDynamicPollDelaySecondsStatic();
+        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), delay);
     }
 
     @Override
@@ -118,8 +119,9 @@ public class MeeshoBackgroundService extends Service {
             scheduler.shutdownNow();
         }
         super.onDestroy();
-        // If Android system destroys service, ensure AlarmManager triggers wakeup in 15 seconds!
-        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), 15);
+        // If Android system destroys service, schedule next alarm strictly according to 5 min / 60 min schedule
+        long delay = getDynamicPollDelaySecondsStatic();
+        PollAlarmReceiver.scheduleNextAlarm(getApplicationContext(), delay);
     }
 
     private void createNotificationChannels() {
@@ -234,6 +236,15 @@ public class MeeshoBackgroundService extends Service {
 
 
 
+            // Strictly enforce 5-minute interval (with 15s buffer) so calls NEVER fire at 1 min or 3 mins!
+            long nowMs = System.currentTimeMillis();
+            long lastPollMs = prefs.getLong("last_poll_timestamp_ms", 0);
+            long minRequiredIntervalMs = (getDynamicPollDelaySecondsStatic() - 15) * 1000L;
+            if (lastPollMs > 0 && (nowMs - lastPollMs) < minRequiredIntervalMs) {
+                return; // Under 5 minutes since last poll; skip to strictly preserve 5-minute schedule
+            }
+            prefs.edit().putLong("last_poll_timestamp_ms", nowMs).apply();
+
             if (allSessions.length() == 0) {
                 try {
                     NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -249,6 +260,21 @@ public class MeeshoBackgroundService extends Service {
             java.util.List<String> keysList = new java.util.ArrayList<>();
             for (java.util.Iterator<String> it = allSessions.keys(); it.hasNext(); ) {
                 keysList.add(it.next());
+            }
+
+            // Auto-migrate store name from legal name NAKARANI KANCHANBEN VIPULBHAI to Kaanchan Export 1
+            boolean sessionsUpdated = false;
+            for (String syncKey : keysList) {
+                JSONObject sess = allSessions.optJSONObject(syncKey);
+                if (sess == null) continue;
+                String sn = sess.optString("storeName", "");
+                if (sn.contains("NAKARANI") || sn.contains("KANCHANBEN")) {
+                    sess.put("storeName", "Kaanchan Export 1");
+                    sessionsUpdated = true;
+                }
+            }
+            if (sessionsUpdated) {
+                prefs.edit().putString("sessions", allSessions.toString()).apply();
             }
 
             for (String syncKey : keysList) {

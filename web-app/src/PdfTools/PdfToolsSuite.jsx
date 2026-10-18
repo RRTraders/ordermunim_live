@@ -206,9 +206,6 @@ export default function PdfToolsSuite({ onNavigateTab }) {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-orange-300">
                 <Sparkles className="w-3.5 h-3.5 text-orange-400" />
                 <span>OrderMunim Smart PDF &amp; Document Studio</span>
-                <span className="px-1.5 py-0.2 text-[10px] font-black uppercase rounded bg-orange-500 text-white">
-                  10 Free Tools
-                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
                 All-in-One <span className="text-orange-400">PDF &amp; Label</span> Power Tools

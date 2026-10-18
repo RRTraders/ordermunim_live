@@ -39,4 +39,4 @@ It automatically launches:
 1. Cloudflare Secure HTTPS Tunnel
 2. Node.js Playwright Background Scraper (`server.js`)
 
-OTPs are scraped every 3 minutes directly from Meesho Seller Portal and pushed to Firestore in real time!
+OTPs are synchronized every 5 minutes during courier hours (10:00 AM - 06:00 PM IST) and every 60 minutes during off-hours directly from Meesho Seller Portal and pushed to Firestore in real time!

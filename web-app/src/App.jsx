@@ -146,8 +146,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 53;
-const CURRENT_APP_VERSION_NAME = "6.3";
+const CURRENT_APP_VERSION_CODE = 54;
+const CURRENT_APP_VERSION_NAME = "6.4";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;
@@ -402,6 +402,9 @@ export default function App() {
   const [refreshingId, setRefreshingId] = useState(null);
   const [connectStep, setConnectStep] = useState(1); // 1 = enter details, 2 = install extension
   const [generatedSyncKey, setGeneratedSyncKey] = useState('');
+  const [editingStore, setEditingStore] = useState(null); // { id: string, name: string }
+  const [editStoreNameInput, setEditStoreNameInput] = useState('');
+  const [isSavingStoreName, setIsSavingStoreName] = useState(false);
 
   const [activeTab, setActiveTab] = useState(() => {
     try {
@@ -606,7 +609,8 @@ export default function App() {
   const [adminInputPass, setAdminInputPass] = useState('');
   const [allUsersList, setAllUsersList] = useState([]);
   const [allPlatformAccounts, setAllPlatformAccounts] = useState([]);
-  const [adminUserTab, setAdminUserTab] = useState('activated'); // 'activated' | 'pending'
+  const [allSuggestionsList, setAllSuggestionsList] = useState([]);
+  const [adminUserTab, setAdminUserTab] = useState('activated'); // 'activated' | 'pending' | 'suggestions'
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminCurrentPage, setAdminCurrentPage] = useState(1);
@@ -675,6 +679,10 @@ export default function App() {
     // 3. If any modal is open, close it
     if (adminSettingsUser) {
       setAdminSettingsUser(null);
+      return 'handled';
+    }
+    if (editingStore) {
+      setEditingStore(null);
       return 'handled';
     }
     if (showAddModal) {
@@ -988,7 +996,11 @@ export default function App() {
       const unsubAcc = onSnapshot(q, (snapshot) => {
         const accList = [];
         snapshot.forEach((d) => {
-          accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
+          const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
+          if (item.storeName && (item.storeName.includes('NAKARANI') || item.storeName.includes('KANCHANBEN') || item.storeName.toUpperCase().includes('NAKARANI'))) {
+            item.storeName = 'Kaanchan Export 1';
+          }
+          accList.push(item);
         });
         setAccounts(accList);
       });
@@ -1222,7 +1234,17 @@ export default function App() {
     const unsubAcc = onSnapshot(q, (snapshot) => {
       const accList = [];
       snapshot.forEach((d) => {
-        accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
+        const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
+        // AUTO-MIGRATION: Convert legal name to brand store name "Kaanchan Export 1"
+        if (item.storeName && (
+          item.storeName.includes('NAKARANI') || 
+          item.storeName.includes('KANCHANBEN') || 
+          item.storeName.toUpperCase().includes('NAKARANI')
+        )) {
+          item.storeName = 'Kaanchan Export 1';
+          updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(e => console.warn('[AutoRename] Failed:', e));
+        }
+        accList.push(item);
       });
       setAccounts(accList);
       try { localStorage.setItem('cached_user_accounts', JSON.stringify(accList)); } catch {}
@@ -1237,6 +1259,15 @@ export default function App() {
           const rawSessions = localStorage.getItem('native_meesho_sessions');
           const currentSessions = rawSessions ? JSON.parse(rawSessions) : {};
           let needsSync = false;
+          for (const k of Object.keys(currentSessions)) {
+            if (currentSessions[k].storeName && (
+              currentSessions[k].storeName.includes('NAKARANI') || 
+              currentSessions[k].storeName.includes('KANCHANBEN')
+            )) {
+              currentSessions[k].storeName = 'Kaanchan Export 1';
+              needsSync = true;
+            }
+          }
           for (const acc of accList) {
             if (!acc.id) continue;
             const key = acc.syncKey || acc.id;
@@ -1281,7 +1312,11 @@ export default function App() {
       const unsub = onSnapshot(q, (snapshot) => {
         const accList = [];
         snapshot.forEach((d) => {
-          accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
+          const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
+          if (item.storeName && (item.storeName.includes('NAKARANI') || item.storeName.includes('KANCHANBEN') || item.storeName.toUpperCase().includes('NAKARANI'))) {
+            item.storeName = 'Kaanchan Export 1';
+          }
+          accList.push(item);
         });
         setAccounts(accList);
       });
@@ -1299,6 +1334,7 @@ export default function App() {
   const pollAllNativeSessionsRef = useRef(null);
   const hasInitialPolledAfterAccountsRef = useRef(false);
   const pendingForcePollRef = useRef(false);
+  const lastPollTimestampRef = useRef(0);
 
   const resolveRealIdentifier = (accOrSess) => {
     if (!accOrSess) return '';
@@ -1582,6 +1618,15 @@ export default function App() {
         }
         return;
       }
+
+      // Strictly enforce 5-minute interval (with 15s buffer) so calls NEVER fire at 1 min or 3 mins!
+      const now = Date.now();
+      const minInterval = getPollIntervalMs() - 15000;
+      if (!forceInstant && lastPollTimestampRef.current > 0 && (now - lastPollTimestampRef.current) < minInterval) {
+        return; // Under 5 minutes since last poll; skip to strictly preserve 5-minute schedule
+      }
+      lastPollTimestampRef.current = now;
+
       isPollingRef.current = true;
       try {
         const rawSessions = localStorage.getItem('native_meesho_sessions');
@@ -2858,8 +2903,18 @@ export default function App() {
 
       const targetSyncKey = existingStore ? existingStore.id : syncKey;
       const isDataEmailFallback = data?.storeName && cleanEmail && (data.storeName.trim().toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || data.storeName.trim().toLowerCase() === cleanEmail.toLowerCase());
-      const finalStoreName = (data?.storeName && !isDataEmailFallback ? data.storeName.trim() : null) || 
+      const userCustomName = newStoreName ? newStoreName.trim() : '';
+      let finalStoreName = userCustomName || 
+        (data?.storeName && !isDataEmailFallback ? data.storeName.trim() : null) || 
         (existingStore?.storeName && !isDataEmailFallback ? existingStore.storeName.trim() : null);
+      
+      if (finalStoreName && (
+        finalStoreName.includes('NAKARANI') || 
+        finalStoreName.includes('KANCHANBEN') || 
+        finalStoreName.toUpperCase().includes('NAKARANI')
+      )) {
+        finalStoreName = 'Kaanchan Export 1';
+      }
       
       if (!finalStoreName || finalStoreName.toLowerCase() === cleanEmail.split('@')[0].trim().toLowerCase() || finalStoreName.toLowerCase() === cleanEmail.toLowerCase()) {
         setModalError('Meesho store verification failed: authentic store name could not be verified from supplier.meesho.com.');
@@ -2961,6 +3016,42 @@ export default function App() {
     setShowAddModal(true);
   };
 
+
+  // Rename store handler
+  const handleOpenRenameStore = (storeId, currentName) => {
+    setEditingStore({ id: storeId, name: currentName });
+    setEditStoreNameInput(currentName || '');
+  };
+
+  const handleSaveRenameStore = async () => {
+    if (!editingStore || !editStoreNameInput.trim()) return;
+    const newName = editStoreNameInput.trim();
+    setIsSavingStoreName(true);
+    try {
+      await updateDoc(doc(db, 'accounts', editingStore.id), { storeName: newName });
+      if (isNativeMobile()) {
+        try {
+          const raw = localStorage.getItem('native_meesho_sessions');
+          if (raw) {
+            const sessions = JSON.parse(raw);
+            for (const k of Object.keys(sessions)) {
+              if (sessions[k].docId === editingStore.id || k === editingStore.id) {
+                sessions[k].storeName = newName;
+              }
+            }
+            localStorage.setItem('native_meesho_sessions', JSON.stringify(sessions));
+            syncBackgroundSessions(sessions, false, user?.uid);
+          }
+        } catch {}
+      }
+      showToast(`Store renamed to "${newName}"`, 'success');
+      setEditingStore(null);
+    } catch (err) {
+      showToast(`Error renaming store: ${err.message}`, 'error');
+    } finally {
+      setIsSavingStoreName(false);
+    }
+  };
 
   // Delete an account with fancy confirmation dialog
   const handleDeleteAccount = (accId, storeName) => {
@@ -3307,7 +3398,7 @@ export default function App() {
     }
   };
 
-  // Handle Request Exact Alarm Permission for 2-Minute Background Refresh
+  // Handle Request Exact Alarm Permission for 5-Minute Background Refresh
   const handleRequestExactAlarmPermission = async () => {
     if (isNativeMobile()) {
       showToast('Opening Alarms & Reminders settings...', 'info');
@@ -3315,7 +3406,7 @@ export default function App() {
         const res = await requestExactAlarmPermission();
         if (res?.alreadyGranted) {
           setCanScheduleExactAlarms(true);
-          showToast('✓ 2-Minute Background Alarm Permission is already active!', 'success');
+          showToast('✓ 5-Minute Background Alarm Permission is already active!', 'success');
         } else {
           showToast('Please enable "Allow setting alarms and reminders" toggle.', 'info');
         }
@@ -3358,18 +3449,49 @@ export default function App() {
     const unsubAllAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
       const accList = [];
       snapshot.forEach((d) => {
-        accList.push(sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true));
+        const item = sanitizeStaleAccountOtp({ id: d.id, ...d.data() }, true);
+        if (item.storeName && (
+          item.storeName.includes('NAKARANI') || 
+          item.storeName.includes('KANCHANBEN') || 
+          item.storeName.toUpperCase().includes('NAKARANI')
+        )) {
+          item.storeName = 'Kaanchan Export 1';
+          updateDoc(doc(db, 'accounts', d.id), { storeName: 'Kaanchan Export 1' }).catch(e => console.warn('[AutoRename Admin] Failed:', e));
+        }
+        accList.push(item);
       });
       setAllPlatformAccounts(accList);
     }, (error) => {
       console.warn("unsubAllAccounts listener error:", error);
     });
 
+    const unsubSuggestions = onSnapshot(collection(db, 'suggestions'), (snapshot) => {
+      const sList = [];
+      snapshot.forEach((d) => {
+        sList.push({ id: d.id, ...d.data() });
+      });
+      sList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      setAllSuggestionsList(sList);
+    }, (error) => {
+      console.warn("unsubSuggestions listener error:", error);
+    });
+
     return () => {
       unsubUsers();
       unsubAllAccounts();
+      unsubSuggestions();
     };
   }, [isSuperAdmin, activeTab, adminAuthenticated]);
+
+  const handleDeleteSuggestion = async (sId) => {
+    if (!window.confirm('Are you sure you want to delete this suggestion?')) return;
+    try {
+      await deleteDoc(doc(db, 'suggestions', sId));
+      showToast('Suggestion removed.', 'info');
+    } catch (e) {
+      showToast('Failed to delete suggestion: ' + e.message, 'error');
+    }
+  };
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
@@ -4184,7 +4306,6 @@ export default function App() {
               }`}
             >
               <span>PDF Tools</span>
-              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md shadow-xs">10 Tools</span>
               <span className={`absolute bottom-0 left-0 w-full h-[2.5px] rounded-full bg-orange-500 transition-transform duration-200 ${
                 activeTab === 'pdf-tools' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100 origin-left'
               }`} />
@@ -4656,7 +4777,7 @@ export default function App() {
                     }`}
                   >
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{canScheduleExactAlarms ? '✓ 2-Minute Alarm: Enabled' : '⚡ Enable 2-Minute Background Alarm (Tap to Allow)'}</span>
+                    <span>{canScheduleExactAlarms ? '✓ 5-Minute Alarm: Enabled' : '⚡ Enable 5-Minute Background Alarm (Tap to Allow)'}</span>
                   </button>
                 </div>
               </div>
@@ -4733,12 +4854,14 @@ export default function App() {
                   <span>•</span>
                   <span>Total Stores: <strong className="text-cyan-400">{allPlatformAccounts.length}</strong></span>
                   <span>•</span>
+                  <span>Suggestions: <strong className="text-yellow-400 font-bold">{allSuggestionsList.length}</strong></span>
+                  <span>•</span>
                   <span>Monthly Revenue: <strong className="text-amber-400 font-mono">₹{(allPlatformAccounts.length * 249).toLocaleString('en-IN')}</strong></span>
                 </div>
               </div>
             </div>
 
-            {/* User Tab Switcher: Activated vs Pending Activation with Search & Pagination */}
+            {/* User Tab Switcher: Activated vs Pending Activation vs Suggestions */}
             {(() => {
               const clientUsers = allUsersList.filter(u => u.role !== 'super_admin');
               const activatedUsers = clientUsers.filter(u => u.emailVerified !== false);
@@ -4800,6 +4923,25 @@ export default function App() {
                         Pending Activation ({pendingUsers.length})
                         {pendingUsers.length > 0 && (
                           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAdminUserTab('suggestions'); setAdminCurrentPage(1); }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 relative cursor-pointer ${
+                          adminUserTab === 'suggestions'
+                            ? 'bg-yellow-400 text-slate-950 shadow-md font-black'
+                            : 'text-yellow-400 hover:text-yellow-300 bg-yellow-400/10 border border-yellow-400/30'
+                        }`}
+                      >
+                        <Lightbulb className={`w-3.5 h-3.5 ${adminUserTab === 'suggestions' ? 'text-slate-950' : 'text-yellow-400'}`} />
+                        Client Suggestions ({allSuggestionsList.length})
+                        {allSuggestionsList.length > 0 && (
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                            adminUserTab === 'suggestions' ? 'bg-slate-900 text-yellow-400' : 'bg-yellow-400 text-slate-950'
+                          }`}>
+                            {allSuggestionsList.length}
+                          </span>
                         )}
                       </button>
                     </div>
@@ -5092,8 +5234,128 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Suggestions View */}
+                  {adminUserTab === 'suggestions' && (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-start justify-between gap-3 text-xs text-yellow-200">
+                        <div className="flex items-center gap-2 font-medium">
+                          <Lightbulb className="w-4 h-4 text-yellow-400 shrink-0" />
+                          <span>
+                            Client requests for repetitive manual work to convert into digital automation tools. Review client needs, download sample files, and click "Chat on WhatsApp" to follow up.
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-yellow-300 bg-yellow-950/80 px-2.5 py-1 rounded-lg shrink-0 border border-yellow-500/30">
+                          {allSuggestionsList.length} Total
+                        </span>
+                      </div>
+
+                      {allSuggestionsList.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-slate-500 space-y-2 bg-slate-950/60 rounded-2xl border border-slate-800/60">
+                          <Lightbulb className="w-8 h-8 text-yellow-500/40 mx-auto mb-1" />
+                          <p className="font-semibold text-slate-300">No client suggestions submitted yet.</p>
+                          <p className="text-slate-500">When users submit manual work via the "Suggestions" button in the top navbar, they will appear here instantly.</p>
+                        </div>
+                      ) : (
+                        allSuggestionsList.map((s, idx) => {
+                          const contactClean = (s.contact || s.userEmail || '').trim();
+                          const phoneDigits = contactClean.replace(/[^0-9]/g, '');
+                          const waPhone = phoneDigits.length >= 10 ? (phoneDigits.startsWith('91') ? phoneDigits : `91${phoneDigits.slice(-10)}`) : '';
+                          const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Recent';
+
+                          return (
+                            <div key={s.id} className="bg-slate-950 border border-yellow-500/30 hover:border-yellow-400/60 rounded-2xl p-5 space-y-4 shadow-md transition-all">
+                              {/* Header: Contact & Timestamp */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="px-2 py-0.5 rounded-lg bg-yellow-400 text-slate-950 font-mono font-black text-xs shrink-0 shadow-sm">
+                                      #{idx + 1}
+                                    </span>
+                                    <span className="font-bold text-white text-base">
+                                      👤 {s.userName || 'Client'} — {contactClean || 'No contact provided'}
+                                    </span>
+                                    {s.userEmail && s.userEmail !== contactClean && (
+                                      <span className="text-[11px] text-slate-400 font-mono">
+                                        ({s.userEmail})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-3">
+                                    <span>🕒 Submitted: <strong className="text-slate-300">{dateStr}</strong></span>
+                                    {s.userId && s.userId !== 'guest' && (
+                                      <span className="font-mono text-slate-500">UID: {s.userId}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                                  {waPhone && (
+                                    <a
+                                      href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
+                                        `Hello ${s.userName || 'Seller'},\n\nWe received your automation suggestion on OrderMunim:\n"${(s.description || '').slice(0, 100)}..."\n\nOur engineering team is reviewing this to build a digital automation tool for you!`
+                                      )}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+                                      title="Open WhatsApp chat with client"
+                                    >
+                                      <Send className="w-3.5 h-3.5" />
+                                      Chat on WhatsApp
+                                    </a>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSuggestion(s.id)}
+                                    className="px-3 py-2 text-xs font-bold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                                    title="Delete this suggestion"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Manual Workflow Description */}
+                              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 mb-1.5 flex items-center gap-1">
+                                  <FileText className="w-3 h-3" />
+                                  Manual Work / Workflow to Digitize:
+                                </div>
+                                {s.description}
+                              </div>
+
+                              {/* Attachment preview / download if any */}
+                              {(s.fileName || s.fileBase64) && (
+                                <div className="flex items-center gap-3 pt-1">
+                                  {s.fileBase64 ? (
+                                    <a
+                                      href={s.fileBase64}
+                                      download={s.fileName || 'sample_document'}
+                                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-colors"
+                                    >
+                                      <Paperclip className="w-3.5 h-3.5 text-cyan-400" />
+                                      <span>Download Attachment: <strong>{s.fileName || 'Attached File'}</strong> {s.fileSize ? `(${(s.fileSize / 1024).toFixed(1)} KB)` : ''}</span>
+                                      <DownloadCloud className="w-3.5 h-3.5 ml-1 text-cyan-400" />
+                                    </a>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                                      <Paperclip className="w-3.5 h-3.5" />
+                                      {s.fileName} {s.fileSize ? `(${(s.fileSize / 1024).toFixed(1)} KB)` : ''} (File metadata only)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
                   {/* Pagination Controls Bar */}
-                  {totalUsersCount > 0 && (
+                  {totalUsersCount > 0 && adminUserTab !== 'suggestions' && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800/80 text-xs text-slate-400">
                       <div>
                         Showing <strong className="text-white">{startIndex + 1}</strong> to <strong className="text-white">{Math.min(startIndex + ADMIN_PAGE_SIZE, totalUsersCount)}</strong> of <strong className="text-cyan-400 font-mono">{totalUsersCount}</strong> {adminUserTab === 'activated' ? 'activated' : 'pending'} accounts
@@ -5662,7 +5924,7 @@ export default function App() {
                   <div>
                     <h4 className="font-bold text-xs text-amber-950">Enable Background Return Refresh</h4>
                     <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
-                      Android requires "Alarms & Reminders" permission to update Meesho OTPs every 2 minutes in the background. Tap to allow.
+                      Android requires "Alarms & Reminders" permission to update Meesho OTPs every 5 minutes in the background. Tap to allow.
                     </p>
                   </div>
                 </div>
@@ -6278,7 +6540,7 @@ export default function App() {
                       }}
                       className="w-full py-2.5 px-4 rounded-xl bg-blue-50 hover:bg-[#083B82] text-[#083B82] hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                     >
-                      <span>Open PDF Tools Suite (10)</span>
+                      <span>Open PDF Tools Suite</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -6592,7 +6854,7 @@ export default function App() {
       {/* ================= ADD STORE MODAL (CREDENTIALS - MOBILE APP ONLY) ================= */}
       {showAddModal && isNativeMobile() && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
 
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -7127,7 +7389,7 @@ export default function App() {
                     }`}
                   >
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{canScheduleExactAlarms ? '2-Minute Alarm: Enabled ✓' : '2-Minute Alarm: Tap to Allow'}</span>
+                    <span>{canScheduleExactAlarms ? '5-Minute Alarm: Enabled ✓' : '5-Minute Alarm: Tap to Allow'}</span>
                   </button>
                 </div>
               )}

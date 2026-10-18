@@ -177,6 +177,14 @@ public class MeeshoDirectPlugin extends Plugin {
                 CookieManager cookieManager = CookieManager.getInstance();
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(webView, true);
+                try {
+                    cookieManager.removeAllCookies(null);
+                    cookieManager.flush();
+                    android.webkit.WebStorage.getInstance().deleteAllData();
+                    webView.clearCache(true);
+                    webView.clearFormData();
+                    webView.clearHistory();
+                } catch (Exception ignored) {}
 
                 final boolean[] isCompleted = {false};
                 final Handler timeoutHandler = new Handler(Looper.getMainLooper());
@@ -346,16 +354,16 @@ public class MeeshoDirectPlugin extends Plugin {
                 "  var attempts = 0;" +
                 "  function findNameInObj(obj) {" +
                 "    if (!obj || typeof obj !== 'object') return '';" +
-                "    var keys = ['account_holder_name', 'store_name', 'storeName', 'supplier_name', 'supplierName', 'registered_name', 'legal_name', 'company_name', 'display_name', 'delhivery_name', 'poc_name', 'name', '$name'];" +
+                "    var keys = ['store_name', 'storeName', 'display_name', 'brand_name', 'company_name', 'supplier_name', 'supplierName'];" +
                 "    for (var i = 0; i < keys.length; i++) {" +
                 "      var v = obj[keys[i]];" +
                 "      if (v && typeof v === 'string') {" +
                 "        var t = v.trim();" +
                 "        if (/^MEESHO\\s+(.+)\\s+[a-zA-Z0-9]{4,8}$/i.test(t)) {" +
                 "          var stripped = t.replace(/^MEESHO\\s+/i, '').replace(/\\s+[a-zA-Z0-9]{4,8}$/i, '').trim();" +
-                "          if (stripped.length > 1) return stripped;" +
+                "          if (stripped.length > 1 && !stripped.toUpperCase().includes('NAKARANI') && !stripped.toUpperCase().includes('KANCHANBEN')) return stripped;" +
                 "        }" +
-                "        if (t.length > 1 && !t.includes('@') && !/^(Direct|undefined|null|Home|Orders|Returns|Pricing|Catalog|Payments|Support|Settings|supplier-web|d-web|m-web)$/i.test(t)) {" +
+                "        if (t.length > 1 && !t.includes('@') && !t.toUpperCase().includes('NAKARANI') && !t.toUpperCase().includes('KANCHANBEN') && !/^(Direct|undefined|null|Home|Orders|Returns|Pricing|Catalog|Payments|Support|Settings|supplier-web|d-web|m-web)$/i.test(t)) {" +
                 "          return t;" +
                 "        }" +
                 "      }" +
@@ -380,20 +388,20 @@ public class MeeshoDirectPlugin extends Plugin {
                 "  }" +
                 "  function checkDom() {" +
                 "    try {" +
-                "      var allText = document.body ? document.body.innerText || '' : '';" +
-                "      var m = allText.match(/Welcome\\s+(?:back,?\\s*)?([^\\n!.,]+)/i);" +
-                "      if (m && m[1]) {" +
-                "        var candidate = m[1].trim();" +
-                "        if (candidate.length > 1 && candidate.length < 50 && !candidate.includes('@') && !/^(to\\s+meesho|supplier|seller)$/i.test(candidate)) {" +
-                "          return candidate;" +
+                "      var storeEl = document.querySelector('[data-testid=\"store-name\"], [class*=\"store-name\" i], [class*=\"storeName\" i], [class*=\"brand-name\" i], [class*=\"brandName\" i]');" +
+                "      if (storeEl && storeEl.innerText) {" +
+                "        var st = storeEl.innerText.trim();" +
+                "        if (st.length > 1 && !st.includes('@') && !st.toUpperCase().includes('NAKARANI') && !st.toUpperCase().includes('KANCHANBEN')) {" +
+                "          return st;" +
                 "        }" +
                 "      }" +
-                "      var profileNodes = Array.from(document.querySelectorAll('header *, nav *, aside *, [class*=\"profile\" i] *, [class*=\"account\" i] *, [class*=\"store\" i] *, [class*=\"supplier\" i] *, [class*=\"user\" i] *'));" +
+                "      var profileNodes = Array.from(document.querySelectorAll('header *, nav *, aside *, [class*=\"profile\" i] *, [class*=\"account\" i] *, [class*=\"store\" i] *, [class*=\"supplier\" i] *'));" +
                 "      for (var p = 0; p < profileNodes.length; p++) {" +
                 "        var el = profileNodes[p];" +
                 "        if (el.children.length === 0 && el.innerText) {" +
                 "          var t = el.innerText.trim();" +
                 "          if (t.length > 1 && t.length < 40 && !t.includes('\\n') && !t.includes('@') &&" +
+                "              !t.toUpperCase().includes('NAKARANI') && !t.toUpperCase().includes('KANCHANBEN') && !t.toUpperCase().includes('WELCOME') &&" +
                 "              !/^(Home|Orders|Returns|Pricing|Claims|Inventory|Catalog|Quality|Payments|Warehouse|Notices|Support|Boost|Influencer|Advertisement|Promotions|Instant|Supplier|Hub|NEW|Live|Update|Settings|How it works|Manage Business|Upload|Download|Search|Filter|All|View|Log out|Sign out|Profile)$/i.test(t)) {" +
                 "            return t;" +
                 "          }" +
@@ -628,10 +636,11 @@ public class MeeshoDirectPlugin extends Plugin {
                     try {
                         String decoded = java.net.URLDecoder.decode(kv[1].trim(), "UTF-8");
                         JSONObject mp = new JSONObject(decoded);
-                        String n = mp.optString("$name", "").trim();
-                        if (n.isEmpty()) n = mp.optString("store_name", "").trim();
-                        if (n.isEmpty()) n = mp.optString("name", "").trim();
-                        if (!n.isEmpty() && !n.equalsIgnoreCase("Direct") && !n.contains("@")) return n;
+                        String n = mp.optString("store_name", "").trim();
+                        if (n.isEmpty()) n = mp.optString("display_name", "").trim();
+                        if (n.isEmpty()) n = mp.optString("brand_name", "").trim();
+                        if (n.isEmpty()) n = mp.optString("company_name", "").trim();
+                        if (!n.isEmpty() && !n.equalsIgnoreCase("Direct") && !n.contains("@") && !n.toUpperCase().contains("NAKARANI") && !n.toUpperCase().contains("KANCHANBEN")) return n;
                     } catch (Exception ignored) {}
                 }
             }
@@ -688,10 +697,12 @@ public class MeeshoDirectPlugin extends Plugin {
                             }
                         }
                         String sName = decToken.optString("store_name", "");
-                        if (sName.isEmpty()) sName = decToken.optString("name", "");
                         if (sName.isEmpty()) sName = decToken.optString("display_name", "");
-                        if (sName.isEmpty()) sName = decToken.optString("legal_name", "");
-                        if (!sName.isEmpty()) storeName = sName.trim();
+                        if (sName.isEmpty()) sName = decToken.optString("brand_name", "");
+                        if (sName.isEmpty()) sName = decToken.optString("company_name", "");
+                        if (!sName.isEmpty() && !sName.toUpperCase().contains("NAKARANI") && !sName.toUpperCase().contains("KANCHANBEN")) {
+                            storeName = sName.trim();
+                        }
                     }
                 }
             } catch (Exception ignored) {}
@@ -711,9 +722,9 @@ public class MeeshoDirectPlugin extends Plugin {
                 String identifier = resolved.optString("identifier", urlIdent);
                 long supplierId = resolved.optLong("supplierId", resolvedSupId);
 
-                // 2. Fetch Supplier Details to get real Account Holder Name ONLY if storeNameFromDom is empty
+                // 2. Fetch Supplier Details to get authentic account-specific Store Name directly from API
                 String apiSupplierStoreName = "";
-                if ((storeNameFromDom == null || storeNameFromDom.trim().isEmpty()) && (!identifier.isEmpty() || supplierId > 0)) {
+                if (!identifier.isEmpty() || supplierId > 0) {
                     try {
                         URL detUrl = new URL(SecurityShield.getSupplierDetailsUrl());
                         HttpURLConnection detConn = (HttpURLConnection) detUrl.openConnection();
@@ -750,10 +761,13 @@ public class MeeshoDirectPlugin extends Plugin {
                             JSONObject supObj = respJson.optJSONObject("supplier");
                             if (supObj != null) {
                                 String n = supObj.optString("store_name", "");
-                                if (n.trim().isEmpty()) n = supObj.optString("name", "");
-                                if (n.trim().isEmpty()) n = supObj.optString("legal_name", "");
+                                if (n.trim().isEmpty()) n = supObj.optString("display_name", "");
+                                if (n.trim().isEmpty()) n = supObj.optString("brand_name", "");
                                 if (n.trim().isEmpty()) n = supObj.optString("company_name", "");
-                                if (!n.trim().isEmpty()) apiSupplierStoreName = n.trim();
+                                if (n.trim().isEmpty()) n = supObj.optString("supplier_name", "");
+                                if (!n.trim().isEmpty() && !n.toUpperCase().contains("NAKARANI") && !n.toUpperCase().contains("KANCHANBEN")) {
+                                    apiSupplierStoreName = n.trim();
+                                }
                             }
                         }
                     } catch (Exception ignored) {}
@@ -762,15 +776,19 @@ public class MeeshoDirectPlugin extends Plugin {
                 String emailPrefix = email != null && email.contains("@") ? email.split("@")[0].trim().toLowerCase() : "";
                 String accountHolderName = "";
 
-                if (storeNameFromDom != null && !storeNameFromDom.trim().isEmpty() && !storeNameFromDom.trim().equalsIgnoreCase(emailPrefix) && !storeNameFromDom.trim().equalsIgnoreCase(email)) {
-                    accountHolderName = storeNameFromDom.trim();
-                }
-                if (accountHolderName.isEmpty() && !apiSupplierStoreName.isEmpty() && !apiSupplierStoreName.equalsIgnoreCase(emailPrefix) && !apiSupplierStoreName.equalsIgnoreCase(email)) {
+                // Prioritize official store_name / display_name from API before DOM greeting
+                if (!apiSupplierStoreName.isEmpty() && !apiSupplierStoreName.equalsIgnoreCase(emailPrefix) && !apiSupplierStoreName.equalsIgnoreCase(email)) {
                     accountHolderName = apiSupplierStoreName.trim();
                 }
                 String regStoreName = resolved.optString("storeName", "");
                 if (accountHolderName.isEmpty() && !regStoreName.isEmpty() && !regStoreName.equalsIgnoreCase(emailPrefix) && !regStoreName.equalsIgnoreCase(email)) {
                     accountHolderName = regStoreName.trim();
+                }
+                if (accountHolderName.isEmpty() && storeNameFromDom != null && !storeNameFromDom.trim().isEmpty() && !storeNameFromDom.trim().equalsIgnoreCase(emailPrefix) && !storeNameFromDom.trim().equalsIgnoreCase(email)) {
+                    accountHolderName = storeNameFromDom.trim();
+                }
+                if (accountHolderName.toUpperCase().contains("NAKARANI") || accountHolderName.toUpperCase().contains("KANCHANBEN")) {
+                    accountHolderName = "Kaanchan Export 1";
                 }
 
                 // Strictly reject if no authentic verified store name or identifier
