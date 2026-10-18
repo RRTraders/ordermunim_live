@@ -1,0 +1,46 @@
+name: ordermunim_flutter
+description: "OrderMunim - High-Volume Marketplace Seller Suite (Direct REST Engine, Night Batch Scheduler, CCTV Proof, Firestore Sync)"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Direct HTTP REST & Cookie Persistence
+  dio: ^5.7.0
+  cookie_jar: ^4.0.8
+  dio_cookie_manager: ^3.1.1
+
+  # Cloud Sync with OrderMunim Web Portal
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+
+  # Background Scheduling & Alarm Engine (12:00 AM Night-Batch)
+  android_alarm_manager_plus: ^4.0.4
+  flutter_background: ^1.3.1
+
+  # Notifications & High-Priority Audio Buzzer
+  flutter_local_notifications: ^17.2.3
+  audioplayers: ^6.0.0
+
+  # Hardware CCTV Camera with Live Timestamp
+  camera: ^0.11.0+2
+
+  # Secure Storage & Persistence
+  shared_preferences: ^2.3.2
+  flutter_secure_storage: ^9.2.2
+  intl: ^0.19.0
+  path_provider: ^2.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
