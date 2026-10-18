@@ -146,8 +146,8 @@ class CropperErrorBoundary extends React.Component {
   }
 }
 
-const CURRENT_APP_VERSION_CODE = 54;
-const CURRENT_APP_VERSION_NAME = "6.4";
+const CURRENT_APP_VERSION_CODE = 55;
+const CURRENT_APP_VERSION_NAME = "6.5";
 
 export const sanitizeStaleAccountOtp = (acc, persistFirestore = false) => {
   if (!acc) return acc;

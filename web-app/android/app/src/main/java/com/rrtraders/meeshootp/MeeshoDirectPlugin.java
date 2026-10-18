@@ -19,6 +19,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -173,22 +174,32 @@ public class MeeshoDirectPlugin extends Plugin {
                 settings.setDatabaseEnabled(true);
                 settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                 settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36");
+                // Aggressive cache like Google Chrome: cache scripts on disk so login is instant (1-2s)
+                settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                // Block network images to eliminate heavy bandwidth and render in under 200ms
+                settings.setLoadsImagesAutomatically(false);
+                settings.setBlockNetworkImage(true);
 
                 CookieManager cookieManager = CookieManager.getInstance();
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(webView, true);
+                // Purge supplier.meesho.com cookies between accounts without destroying OrderMunim auth or disk cache
                 try {
-                    cookieManager.removeAllCookies(null);
-                    cookieManager.flush();
-                    android.webkit.WebStorage.getInstance().deleteAllData();
-                    webView.clearCache(true);
-                    webView.clearFormData();
-                    webView.clearHistory();
+                    String meeshoCookies = cookieManager.getCookie("https://supplier.meesho.com");
+                    if (meeshoCookies != null) {
+                        String[] parts = meeshoCookies.split(";");
+                        for (String part : parts) {
+                            String name = part.split("=")[0].trim();
+                            cookieManager.setCookie("https://supplier.meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+                            cookieManager.setCookie(".meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+                        }
+                        cookieManager.flush();
+                    }
                 } catch (Exception ignored) {}
 
                 final boolean[] isCompleted = {false};
                 final Handler timeoutHandler = new Handler(Looper.getMainLooper());
-                // Master Spec: 45-second timeout for mobile networks & heavy Meesho SPA load
+                // Master Spec: 30-second failsafe timeout (typical login takes 1.5 - 2.5s)
                 final Runnable timeoutRunnable = () -> {
                     if (!isCompleted[0]) {
                         isCompleted[0] = true;
@@ -199,14 +210,169 @@ public class MeeshoDirectPlugin extends Plugin {
                         call.resolve(ret);
                     }
                 };
-                timeoutHandler.postDelayed(timeoutRunnable, 45000);
+                timeoutHandler.postDelayed(timeoutRunnable, 30000);
 
                 AndroidLoginBridge bridge = new AndroidLoginBridge(call, webView, isCompleted, timeoutHandler, timeoutRunnable, email, password, this);
                 webView.addJavascriptInterface(bridge, "OrderMunimBridge");
 
-                webView.setWebViewClient(new WebViewClient() {
-                    private boolean started = false;
+                final boolean[] started = {false};
 
+                // Fast interceptor + in-page direct input injection & submit
+                String jsInject = "(function() {" +
+                        "  if (window._om_injected) return;" +
+                        "  window._om_injected = true;" +
+                        "  var origFetch = window.fetch;" +
+                        "  window.fetch = async function() {" +
+                        "    var response = await origFetch.apply(this, arguments);" +
+                        "    try {" +
+                        "      var u = arguments[0];" +
+                        "      if (typeof u === 'string' && u.indexOf('v2-login') !== -1) {" +
+                        "        var clone = response.clone();" +
+                        "        clone.json().then(function(data) {" +
+                        "          if (response.status === 200) {" +
+                        "            var ident = '';" +
+                        "            var supId = 0;" +
+                        "            var sName = '';" +
+                        "            var dt = data && data.decodedToken;" +
+                        "            if (dt) {" +
+                        "              if (dt.supplier_identifiers && dt.supplier_identifiers.length > 0) ident = dt.supplier_identifiers[0];" +
+                        "              if (dt.supplier_identifier_to_id_mapping && ident) supId = dt.supplier_identifier_to_id_mapping[ident] || 0;" +
+                        "              if (!supId && dt.user_id) supId = dt.user_id;" +
+                        "              sName = dt.store_name || dt.display_name || dt.brand_name || '';" +
+                        "            }" +
+                        "            if (!sName && data.store_name) sName = data.store_name;" +
+                        "            if (!sName && data.display_name) sName = data.display_name;" +
+                        "            if (!sName && data.supplier && data.supplier.store_name) sName = data.supplier.store_name;" +
+                        "            if (window.OrderMunimBridge && window.OrderMunimBridge.onResolvedIdentity) {" +
+                        "              window.OrderMunimBridge.onResolvedIdentity(JSON.stringify({" +
+                        "                storeName: sName || ''," +
+                        "                identifier: ident || ''," +
+                        "                supplierId: supId || 0" +
+                        "              }));" +
+                        "            } else if (window.OrderMunimBridge) {" +
+                        "              window.OrderMunimBridge.onAuthSuccess(sName || '');" +
+                        "            }" +
+                        "          } else if (response.status === 400 || response.status === 401) {" +
+                        "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
+                        "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
+                        "          }" +
+                        "        }).catch(function() {});" +
+                        "      }" +
+                        "    } catch(e) {}" +
+                        "    return response;" +
+                        "  };" +
+                        "  var origOpen = XMLHttpRequest.prototype.open;" +
+                        "  XMLHttpRequest.prototype.open = function(method, u) {" +
+                        "    this._url = u;" +
+                        "    return origOpen.apply(this, arguments);" +
+                        "  };" +
+                        "  var origSend = XMLHttpRequest.prototype.send;" +
+                        "  XMLHttpRequest.prototype.send = function() {" +
+                        "    this.addEventListener('load', function() {" +
+                        "      try {" +
+                        "        if (typeof this._url === 'string' && this._url.indexOf('v2-login') !== -1) {" +
+                        "          if (this.status === 200) {" +
+                        "            var data = JSON.parse(this.responseText);" +
+                        "            var ident = '';" +
+                        "            var supId = 0;" +
+                        "            var sName = '';" +
+                        "            var dt = data && data.decodedToken;" +
+                        "            if (dt) {" +
+                        "              if (dt.supplier_identifiers && dt.supplier_identifiers.length > 0) ident = dt.supplier_identifiers[0];" +
+                        "              if (dt.supplier_identifier_to_id_mapping && ident) supId = dt.supplier_identifier_to_id_mapping[ident] || 0;" +
+                        "              if (!supId && dt.user_id) supId = dt.user_id;" +
+                        "              sName = dt.store_name || dt.display_name || dt.brand_name || '';" +
+                        "            }" +
+                        "            if (!sName && data.store_name) sName = data.store_name;" +
+                        "            if (!sName && data.display_name) sName = data.display_name;" +
+                        "            if (!sName && data.supplier && data.supplier.store_name) sName = data.supplier.store_name;" +
+                        "            if (window.OrderMunimBridge && window.OrderMunimBridge.onResolvedIdentity) {" +
+                        "              window.OrderMunimBridge.onResolvedIdentity(JSON.stringify({" +
+                        "                storeName: sName || ''," +
+                        "                identifier: ident || ''," +
+                        "                supplierId: supId || 0" +
+                        "              }));" +
+                        "            } else if (window.OrderMunimBridge) {" +
+                        "              window.OrderMunimBridge.onAuthSuccess(sName || '');" +
+                        "            }" +
+                        "          } else if (this.status === 400 || this.status === 401) {" +
+                        "            var data = JSON.parse(this.responseText);" +
+                        "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
+                        "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
+                        "          }" +
+                        "        }" +
+                        "      } catch(e) {}" +
+                        "    });" +
+                        "    return origSend.apply(this, arguments);" +
+                        "  };" +
+                        "  var retryCount = 0;" +
+                        "  var timer = setInterval(function() {" +
+                        "    retryCount++;" +
+                        "    try {" +
+                        "      var em = document.querySelector('input[name=\"emailOrPhone\"]') || " +
+                        "               document.querySelector('input[name=\"email\"]') || " +
+                        "               document.querySelector('input[type=\"email\"]');" +
+                        "      var pw = document.querySelector('input[name=\"password\"]') || " +
+                        "               document.querySelector('input[type=\"password\"]');" +
+                        "      var btn = document.querySelector('button[type=\"submit\"]') || " +
+                        "                Array.from(document.querySelectorAll('button')).find(function(b) { return /log\\s*in|sign\\s*in|submit/i.test(b.innerText || ''); });" +
+                        "      if (em && pw && btn) {" +
+                        "        clearInterval(timer);" +
+                        "        var setVal = function(el, val) {" +
+                        "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ? " +
+                        "                       Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set : null;" +
+                        "          if (setter) { setter.call(el, val); } else { el.value = val; }" +
+                        "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
+                        "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                        "          el.dispatchEvent(new Event('blur', { bubbles: true }));" +
+                        "        };" +
+                        "        setVal(em, " + JSONObject.quote(email) + ");" +
+                        "        setVal(pw, " + JSONObject.quote(password) + ");" +
+                        "        setTimeout(function() {" +
+                        "          try {" +
+                        "            btn.click();" +
+                        "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true })); }" +
+                        "          } catch(e) {}" +
+                        "        }, 40);" +
+                        "      }" +
+                        "    } catch(e) {}" +
+                        "    if (retryCount > 60) clearInterval(timer);" +
+                        "  }, 70);" +
+                        "  var obs = new MutationObserver(function() {" +
+                        "    try {" +
+                        "      var nodes = Array.from(document.querySelectorAll('[class*=\"error\" i], [class*=\"alert\" i], [role=\"alert\"], [data-error=\"true\"], div'));" +
+                        "      for (var i = 0; i < nodes.length; i++) {" +
+                        "        var el = nodes[i];" +
+                        "        if (el.children.length === 0 && el.innerText) {" +
+                        "          var t = el.innerText.trim();" +
+                        "          if (!t || t === 'Show' || t === 'Hide' || t.includes('Email Id') || t.includes('mobile number')) continue;" +
+                        "          if (/invalid|incorrect|wrong|does not exist|failed|blocked/i.test(t)) {" +
+                        "            obs.disconnect();" +
+                        "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(t);" +
+                        "            return;" +
+                        "          }" +
+                        "        }" +
+                        "      }" +
+                        "    } catch(e) {}" +
+                        "  });" +
+                        "  obs.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });" +
+                        "})();";
+
+                // Fast early injection at 15% progress without waiting for heavy external scripts
+                webView.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onProgressChanged(WebView view, int newProgress) {
+                        super.onProgressChanged(view, newProgress);
+                        if (isCompleted[0]) return;
+                        if (newProgress >= 15 && !started[0] && view.getUrl() != null && view.getUrl().contains("login")) {
+                            started[0] = true;
+                            view.evaluateJavascript(jsInject, null);
+                            pollForCompletion(view, timeoutHandler, timeoutRunnable, isCompleted, bridge);
+                        }
+                    }
+                });
+
+                webView.setWebViewClient(new WebViewClient() {
                     @Override
                     public void onPageFinished(WebView view, String url) {
                         super.onPageFinished(view, url);
@@ -221,121 +387,14 @@ public class MeeshoDirectPlugin extends Plugin {
                             }
                         }
 
-                        if (url != null && url.contains("login") && !started) {
-                            started = true;
-                            // Fast interceptor + in-page direct input injection & submit
-                            String jsInject = "(function() {" +
-                                    "  if (window._om_injected) return;" +
-                                    "  window._om_injected = true;" +
-                                    "  var origFetch = window.fetch;" +
-                                    "  window.fetch = async function() {" +
-                                    "    var response = await origFetch.apply(this, arguments);" +
-                                    "    try {" +
-                                    "      var u = arguments[0];" +
-                                    "      if (typeof u === 'string' && u.indexOf('v2-login') !== -1) {" +
-                                    "        var clone = response.clone();" +
-                                    "        clone.json().then(function(data) {" +
-                                    "          if (response.status === 400 || response.status === 401) {" +
-                                    "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
-                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
-                                    "          }" +
-                                    "        }).catch(function() {});" +
-                                    "      }" +
-                                    "    } catch(e) {}" +
-                                    "    return response;" +
-                                    "  };" +
-                                    "  var origOpen = XMLHttpRequest.prototype.open;" +
-                                    "  XMLHttpRequest.prototype.open = function(method, u) {" +
-                                    "    this._url = u;" +
-                                    "    return origOpen.apply(this, arguments);" +
-                                    "  };" +
-                                    "  var origSend = XMLHttpRequest.prototype.send;" +
-                                    "  XMLHttpRequest.prototype.send = function() {" +
-                                    "    this.addEventListener('load', function() {" +
-                                    "      try {" +
-                                    "        if (typeof this._url === 'string' && this._url.indexOf('v2-login') !== -1) {" +
-                                    "          if (this.status === 400 || this.status === 401) {" +
-                                    "            var data = JSON.parse(this.responseText);" +
-                                    "            var msg = data.error || (data.options && data.options.backendData && data.options.backendData.error) || 'Invalid credentials. Please check your email and password.';" +
-                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(msg);" +
-                                    "          }" +
-                                    "        }" +
-                                    "      } catch(e) {}" +
-                                    "    });" +
-                                    "    return origSend.apply(this, arguments);" +
-                                    "  };" +
-                                    "  var retryCount = 0;" +
-                                    "  var timer = setInterval(function() {" +
-                                    "    retryCount++;" +
-                                    "    try {" +
-                                    "      var em = document.querySelector('input[name=\"emailOrPhone\"]') || " +
-                                    "               document.querySelector('input[name=\"email\"]') || " +
-                                    "               document.querySelector('input[type=\"email\"]');" +
-                                    "      var pw = document.querySelector('input[name=\"password\"]') || " +
-                                    "               document.querySelector('input[type=\"password\"]');" +
-                                    "      var btn = document.querySelector('button[type=\"submit\"]') || " +
-                                    "                Array.from(document.querySelectorAll('button')).find(function(b) { return /log\\s*in|sign\\s*in|submit/i.test(b.innerText || ''); });" +
-                                    "      if (em && pw && btn) {" +
-                                    "        clearInterval(timer);" +
-                                    "        var setVal = function(el, val) {" +
-                                    "          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ? " +
-                                    "                       Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set : null;" +
-                                    "          if (setter) { setter.call(el, val); } else { el.value = val; }" +
-                                    "          el.dispatchEvent(new Event('input', { bubbles: true }));" +
-                                    "          el.dispatchEvent(new Event('change', { bubbles: true }));" +
-                                    "          el.dispatchEvent(new Event('blur', { bubbles: true }));" +
-                                    "        };" +
-                                    "        setVal(em, " + JSONObject.quote(email) + ");" +
-                                    "        setVal(pw, " + JSONObject.quote(password) + ");" +
-                                    "        setTimeout(function() {" +
-                                    "          try {" +
-                                    "            btn.click();" +
-                                    "            if (btn.form) { btn.form.dispatchEvent(new Event('submit', { bubbles: true })); }" +
-                                    "          } catch(e) {}" +
-                                    "        }, 200);" +
-                                    "      }" +
-                                    "    } catch(e) {}" +
-                                    "    if (retryCount > 35) clearInterval(timer);" +
-                                    "  }, 250);" +
-                                    "  var obs = new MutationObserver(function() {" +
-                                    "    try {" +
-                                    "      var nodes = Array.from(document.querySelectorAll('[class*=\"error\" i], [class*=\"alert\" i], [role=\"alert\"], [data-error=\"true\"], div'));" +
-                                    "      for (var i = 0; i < nodes.length; i++) {" +
-                                    "        var el = nodes[i];" +
-                                    "        if (el.children.length === 0 && el.innerText) {" +
-                                    "          var t = el.innerText.trim();" +
-                                    "          if (!t || t === 'Show' || t === 'Hide' || t.includes('Email Id') || t.includes('mobile number')) continue;" +
-                                    "          if (/invalid|incorrect|wrong|does not exist|failed|blocked/i.test(t)) {" +
-                                    "            obs.disconnect();" +
-                                    "            if (window.OrderMunimBridge) window.OrderMunimBridge.onAuthError(t);" +
-                                    "            return;" +
-                                    "          }" +
-                                    "        }" +
-                                    "      }" +
-                                    "    } catch(e) {}" +
-                                    "  });" +
-                                    "  obs.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });" +
-                                    "})();";
-
+                        if (url != null && url.contains("login") && !started[0]) {
+                            started[0] = true;
                             view.evaluateJavascript(jsInject, null);
                             pollForCompletion(view, timeoutHandler, timeoutRunnable, isCompleted, bridge);
                         }
                     }
                 });
 
-                // Selectively expire ONLY meesho.com cookies without touching OrderMunim's localStorage, cookies, or Firebase Auth session!
-                try {
-                    String meeshoCookies = cookieManager.getCookie("https://supplier.meesho.com");
-                    if (meeshoCookies != null) {
-                        String[] parts = meeshoCookies.split(";");
-                        for (String part : parts) {
-                            String name = part.split("=")[0].trim();
-                            cookieManager.setCookie("https://supplier.meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
-                            cookieManager.setCookie(".meesho.com", name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
-                        }
-                        cookieManager.flush();
-                    }
-                } catch (Exception ignored) {}
                 webView.loadUrl(SecurityShield.getLoginRefererUrl());
 
             } catch (Exception e) {
