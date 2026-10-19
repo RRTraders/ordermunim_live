@@ -29,8 +29,8 @@ class MeeshoApiService {
   late final PersistCookieJar _cookieJar;
   bool _isInitialized = false;
 
-  static const String _defaultUserAgent =
-      'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36';
+  static const String _desktopUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 
   MeeshoApiService({required this.accountId});
 
@@ -43,13 +43,17 @@ class MeeshoApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: 'https://supplier.meesho.com',
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 12),
+        receiveTimeout: const Duration(seconds: 12),
+        // Allow all status codes < 500 so 400, 401, 403 do not crash into DioException
+        validateStatus: (status) => status != null && status < 500,
         headers: {
-          'Accept': 'application/json, text/plain, */*',
-          'User-Agent': _defaultUserAgent,
-          'Origin': 'https://supplier.meesho.com',
-          'Referer': 'https://supplier.meesho.com/panel/v3/new/root/login',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'User-Agent': _desktopUserAgent,
+          'Accept-Language': 'en-US,en;q=0.9',
+          'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"Windows"',
         },
       ),
     );
@@ -86,7 +90,11 @@ class MeeshoApiService {
             '/panel/v3/new/root/login',
             options: Options(
               headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'User-Agent': _desktopUserAgent,
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'none',
               },
             ),
           );
@@ -122,12 +130,20 @@ class MeeshoApiService {
             'identifier': 'login',
             'client-type': 'd-web',
             'client-package-version': '1.0.41',
+            'user-agent': _desktopUserAgent,
             'origin': 'https://supplier.meesho.com',
             'referer': 'https://supplier.meesho.com/panel/v3/new/root/login',
+            'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
           },
         ),
       );
 
+      // 200 OK: Successful Login
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data is Map<String, dynamic>
             ? response.data as Map<String, dynamic>
@@ -188,7 +204,30 @@ class MeeshoApiService {
         );
       }
 
-      final errorMsg = response.data?['message'] ?? response.data?['error'] ?? 'Login failed (${response.statusCode})';
+      // 400 or 401: Invalid Credentials
+      if (response.statusCode == 400 || response.statusCode == 401) {
+        final resData = response.data;
+        String? msg;
+        if (resData is Map) {
+          msg = resData['error']?.toString() ??
+              resData['message']?.toString() ??
+              resData['options']?['backendData']?['error']?.toString();
+        }
+        msg ??= 'Invalid email or password. Please verify your Meesho login credentials.';
+        return MeeshoAuthResult(success: false, errorMessage: msg);
+      }
+
+      // 403: Edge restriction fallback handling
+      if (response.statusCode == 403) {
+        return MeeshoAuthResult(
+          success: false,
+          errorMessage: 'Meesho security verification required. Please check your credentials or network connection.',
+        );
+      }
+
+      final errorMsg = response.data is Map
+          ? (response.data['message'] ?? response.data['error'] ?? 'Login failed (${response.statusCode})')
+          : 'Login failed (${response.statusCode})';
       return MeeshoAuthResult(success: false, errorMessage: errorMsg.toString());
     } on DioException catch (e) {
       final resData = e.response?.data;
@@ -198,7 +237,12 @@ class MeeshoApiService {
             resData['message']?.toString() ??
             resData['options']?['backendData']?['error']?.toString();
       }
-      msg ??= e.message ?? 'Network error connecting to Meesho';
+      if (e.response?.statusCode == 400 || e.response?.statusCode == 401) {
+        msg ??= 'Invalid email or password. Please check your credentials.';
+      } else if (e.response?.statusCode == 403) {
+        msg ??= 'Meesho security check failed. Please verify credentials.';
+      }
+      msg ??= 'Network error connecting to Meesho. Please try again.';
       return MeeshoAuthResult(success: false, errorMessage: msg);
     } catch (e) {
       return MeeshoAuthResult(success: false, errorMessage: e.toString());
