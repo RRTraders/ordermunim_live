@@ -158,12 +158,12 @@ class PaymentsTab extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.emerald.withOpacity(0.4)),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
           ),
           child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Upcoming Settlement Total', style: TextStyle(color: Colors.slate400, fontSize: 13)),
+              Text('Upcoming Settlement Total', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
               SizedBox(height: 8),
               Text('₹23,516.51', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 28)),
             ],
@@ -219,7 +219,7 @@ class ReturnOtpTab extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Packets: 4', style: TextStyle(color: Colors.slate400, fontSize: 12)),
+                    Text('Packets: 4', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                     Text('Synced to Web Dashboard', style: TextStyle(color: Colors.green, fontSize: 12)),
                   ],
                 ),
@@ -256,7 +256,7 @@ class NightScheduleTab extends StatelessWidget {
                 const SizedBox(height: 6),
                 const Text(
                   'Accepts pending orders and downloads batch shipping labels while Meesho servers are quiet.',
-                  style: TextStyle(color: Colors.slate400, fontSize: 12),
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
