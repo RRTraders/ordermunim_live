@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/cctv_unboxing_camera_screen.dart';
+import 'screens/stores_tab.dart';
 import 'services/night_batch_scheduler_service.dart';
 
 void main() async {
@@ -278,40 +278,6 @@ class NightScheduleTab extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// 5. Stores & Proof Tab (Add store + CCTV Camera launcher)
-class StoresAndProofTab extends StatelessWidget {
-  const StoresAndProofTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Stores & CCTV Proof'), backgroundColor: const Color(0xFF0B132B)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CctvUnboxingCameraScreen(storeName: 'Kaanchan Export 1'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.videocam),
-            label: const Text('Launch Unboxing CCTV Camera (IST HUD)', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
