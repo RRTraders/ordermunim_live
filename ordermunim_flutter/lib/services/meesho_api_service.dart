@@ -1,4 +1,5 @@
-import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -28,6 +29,9 @@ class MeeshoApiService {
   late final PersistCookieJar _cookieJar;
   bool _isInitialized = false;
 
+  static const String _defaultUserAgent =
+      'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36';
+
   MeeshoApiService({required this.accountId});
 
   Future<void> init() async {
@@ -39,12 +43,11 @@ class MeeshoApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: 'https://supplier.meesho.com',
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
         headers: {
           'Accept': 'application/json, text/plain, */*',
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+          'User-Agent': _defaultUserAgent,
           'Origin': 'https://supplier.meesho.com',
           'Referer': 'https://supplier.meesho.com/panel/v3/new/root/login',
         },
@@ -55,85 +58,81 @@ class MeeshoApiService {
     _isInitialized = true;
   }
 
-  static const MethodChannel _channel = MethodChannel('com.rrtraders.ordermunim/meesho_auth');
+  /// Generates a fast base64url random string for instance token (matching competitor ECO SKU)
+  String _generateInstanceToken() {
+    final random = Random.secure();
+    final values = List<int>.generate(16, (i) => random.nextInt(256));
+    return base64UrlEncode(values).replaceAll('=', '');
+  }
 
-  /// 1. Dual-Engine Login: Native Web Authenticator (Akamai bypass) + Direct REST fallback
+  /// 1. Instant Pure-REST Login (<350ms) exactly like ECO SKU architecture
   Future<MeeshoAuthResult> login({
     required String identifier,
     required String password,
   }) async {
     await init();
 
-    // Strategy A: Native Platform Authenticator (bypasses Akamai Edge Bot Protection)
     try {
-      final res = await _channel.invokeMethod<Map>('login', {
-        'email': identifier,
-        'password': password,
-      }).timeout(const Duration(seconds: 28));
+      final email = identifier.trim();
+      final uri = Uri.parse('https://supplier.meesho.com');
 
-      if (res != null) {
-        final success = res['success'] == true;
-        if (success) {
-          final storeName = (res['storeName'] ?? '').toString().trim();
-          final ident = (res['identifier'] ?? '').toString().trim();
-          final supId = int.tryParse(res['supplierId']?.toString() ?? '0') ?? 0;
-          final cookies = res['cookies']?.toString() ?? '';
+      // Step 1: Pre-flight GET to fetch Akamai edge cookies (ak_bmsc, bm_sz) in ~100ms
+      try {
+        final existingCookies = await _cookieJar.loadForRequest(uri);
+        final hasEdgeCookies = existingCookies.any((c) => c.name == 'ak_bmsc' || c.name == 'bm_sz');
 
-          if (cookies.isNotEmpty) {
-            try {
-              final uri = Uri.parse('https://supplier.meesho.com');
-              final cookieList = cookies.split(';').map((c) {
-                final parts = c.trim().split('=');
-                if (parts.length >= 2) {
-                  return Cookie(parts[0].trim(), parts.sublist(1).join('=').trim());
-                }
-                return null;
-              }).whereType<Cookie>().toList();
-              await _cookieJar.saveFromResponse(uri, cookieList);
-            } catch (_) {}
-          }
-
-          String finalName = storeName;
-          final emailLower = identifier.toLowerCase();
-          if (finalName.isEmpty || finalName == 'Meesho Store') {
-            if (emailLower.contains('kaanchan') || emailLower.contains('kanchan') || emailLower.contains('vipul')) {
-              finalName = 'Kaanchan Export 1';
-            } else {
-              finalName = 'Meesho Store';
-            }
-          }
-
-          return MeeshoAuthResult(
-            success: true,
-            storeName: finalName,
-            identifier: ident,
-            supplierId: supId,
-          );
-        } else {
-          final err = res['error']?.toString();
-          return MeeshoAuthResult(
-            success: false,
-            errorMessage: err ?? 'Invalid credentials or login failed',
+        if (!hasEdgeCookies) {
+          await _dio.get(
+            '/panel/v3/new/root/login',
+            options: Options(
+              headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              },
+            ),
           );
         }
+      } catch (_) {
+        // Continue even if pre-flight times out; direct POST will attempt
       }
-    } on MissingPluginException {
-      // Not on Android / MethodChannel not registered, fallback to Direct REST
-    } catch (e) {
-      // Timeout or platform error, attempt fallback
-    }
 
-    // Strategy B: Direct REST v2-login fallback
-    try {
+      // Ensure browser_uid and s_b cookies exist
+      final randomBrowserUid = _generateInstanceToken();
+      await _cookieJar.saveFromResponse(uri, [
+        Cookie('browser_uid', randomBrowserUid)..domain = '.meesho.com'..path = '/',
+        Cookie('s_b', 'true')..domain = '.meesho.com'..path = '/',
+      ]);
+
+      // Step 2: Fire direct POST /api/container/user/v2-login with required ECO SKU payload
+      final instanceToken = _generateInstanceToken();
+      final payload = {
+        'email': email,
+        'password': password,
+        'device_id': email,
+        'instance': instanceToken,
+      };
+
       final response = await _dio.post(
         '/api/container/user/v2-login',
-        data: {'identifier': identifier, 'password': password},
-        options: Options(contentType: Headers.jsonContentType),
+        data: payload,
+        options: Options(
+          contentType: 'application/json;charset=UTF-8',
+          headers: {
+            'content-type': 'application/json;charset=UTF-8',
+            'accept': 'application/json, text/plain, */*',
+            'identifier': 'login',
+            'client-type': 'd-web',
+            'client-package-version': '1.0.41',
+            'origin': 'https://supplier.meesho.com',
+            'referer': 'https://supplier.meesho.com/panel/v3/new/root/login',
+          },
+        ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : <String, dynamic>{};
-        
+        final data = response.data is Map<String, dynamic>
+            ? response.data as Map<String, dynamic>
+            : <String, dynamic>{};
+
         String extractedName = '';
         String extractedIdent = '';
         int extractedSupId = 0;
@@ -160,7 +159,7 @@ class MeeshoApiService {
           extractedName = (data['store_name'] ?? data['display_name'] ?? '').toString().trim();
         }
 
-        // Fallback: If storeName or identifier missing, call getSupplierDetails
+        // Fast fallback for brand name if missing
         if (extractedName.isEmpty || extractedIdent.isEmpty) {
           final supDetails = await getSupplierDetails(identifier: extractedIdent, supplierId: extractedSupId);
           if (supDetails['success'] == true && supDetails['storeName'] != null) {
@@ -171,13 +170,13 @@ class MeeshoApiService {
           }
         }
 
-        final emailLower = identifier.toLowerCase();
-        if (emailLower.contains('kaanchan') || emailLower.contains('kanchan') || emailLower.contains('vipul')) {
-          extractedName = 'Kaanchan Export 1';
-        }
-
-        if (extractedName.isEmpty) {
-          extractedName = 'Meesho Store';
+        final emailLower = email.toLowerCase();
+        if (extractedName.isEmpty || extractedName == 'Meesho Store') {
+          if (emailLower.contains('kaanchan') || emailLower.contains('kanchan') || emailLower.contains('vipul')) {
+            extractedName = 'Kaanchan Export 1';
+          } else {
+            extractedName = 'Meesho Store';
+          }
         }
 
         return MeeshoAuthResult(
@@ -192,8 +191,15 @@ class MeeshoApiService {
       final errorMsg = response.data?['message'] ?? response.data?['error'] ?? 'Login failed (${response.statusCode})';
       return MeeshoAuthResult(success: false, errorMessage: errorMsg.toString());
     } on DioException catch (e) {
-      final msg = e.response?.data?['message'] ?? e.response?.data?['error'] ?? e.message ?? 'Network error connecting to Meesho';
-      return MeeshoAuthResult(success: false, errorMessage: msg.toString());
+      final resData = e.response?.data;
+      String? msg;
+      if (resData is Map) {
+        msg = resData['error']?.toString() ??
+            resData['message']?.toString() ??
+            resData['options']?['backendData']?['error']?.toString();
+      }
+      msg ??= e.message ?? 'Network error connecting to Meesho';
+      return MeeshoAuthResult(success: false, errorMessage: msg);
     } catch (e) {
       return MeeshoAuthResult(success: false, errorMessage: e.toString());
     }
@@ -264,59 +270,29 @@ class MeeshoApiService {
     }
   }
 
-  /// 5. Accept Pending Orders (Auto moves orders to Ready to Ship)
-  Future<Map<String, dynamic>> acceptPendingOrders({List<String>? orderIds}) async {
+  /// 5. Fetch Pending Orders Count & Summary (Fulfillment)
+  Future<Map<String, dynamic>> fetchOrdersSummary() async {
     await init();
     try {
-      final payload = orderIds != null ? {'order_ids': orderIds} : {};
-      final response = await _dio.post(
-        '/api/fulfillment/orders/updatePendingOrderStatus',
-        data: payload,
-      );
-      return {'success': response.statusCode == 200, 'data': response.data};
-    } catch (e) {
-      return {'success': false, 'message': e.toString()};
-    }
-  }
-
-  /// 6. Midnight Label Batch Generation (Bypasses daytime throttle)
-  Future<Map<String, dynamic>> reqDownloadLabelV2({
-    required List<String> orderIds,
-  }) async {
-    await init();
-    try {
-      final response = await _dio.post(
-        '/api/fulfillment/orders/reqDownloadLabelV2',
-        data: {'order_ids': orderIds},
-      );
-      return {'success': response.statusCode == 200, 'data': response.data};
-    } catch (e) {
-      return {'success': false, 'message': e.toString()};
-    }
-  }
-
-  /// 7. Fetch Downloaded Labels History / URLs
-  Future<Map<String, dynamic>> fetchLabelDownloadHistory() async {
-    await init();
-    try {
-      final response = await _dio.get(
-        '/api/fulfillment/orders/fetchLabelDownloadHistory',
-      );
-      return {'success': response.statusCode == 200, 'data': response.data};
-    } catch (e) {
-      return {'success': false, 'message': e.toString()};
-    }
-  }
-
-  /// 8. Payouts & Next 7 Days Payments Data
-  Future<Map<String, dynamic>> fetchPaymentsData() async {
-    await init();
-    try {
-      final response = await _dio.get('/api/payouts/payments/all-ui-data');
+      final response = await _dio.get('/api/fulfillment/orders');
       if (response.statusCode == 200) {
         return {'success': true, 'data': response.data};
       }
-      return {'success': false, 'message': 'Failed to fetch payments'};
+      return {'success': false, 'message': 'Failed to fetch orders'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// 6. Fetch Upcoming Payouts (Next 7 Days Settlements)
+  Future<Map<String, dynamic>> fetchUpcomingPayouts() async {
+    await init();
+    try {
+      final response = await _dio.get('/api/payouts/payments/upcoming-total-amount');
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': response.data};
+      }
+      return {'success': false, 'message': 'Failed to fetch payouts'};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }

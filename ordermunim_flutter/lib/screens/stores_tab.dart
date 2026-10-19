@@ -172,10 +172,10 @@ class _StoresAndProofTabState extends State<StoresAndProofTab> {
                                 final authResult = await api
                                     .login(identifier: email, password: password)
                                     .timeout(
-                                      const Duration(seconds: 30),
+                                      const Duration(seconds: 8),
                                       onTimeout: () => MeeshoAuthResult(
                                         success: false,
-                                        errorMessage: 'Login timed out. Please check your credentials or internet connection.',
+                                        errorMessage: 'Connection timed out. Please check your internet connection.',
                                       ),
                                     );
 
