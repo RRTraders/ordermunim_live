@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -54,12 +55,75 @@ class MeeshoApiService {
     _isInitialized = true;
   }
 
-  /// 1. Direct Instant Login (200ms) with full Identity Extraction
+  static const MethodChannel _channel = MethodChannel('com.rrtraders.ordermunim/meesho_auth');
+
+  /// 1. Dual-Engine Login: Native Web Authenticator (Akamai bypass) + Direct REST fallback
   Future<MeeshoAuthResult> login({
     required String identifier,
     required String password,
   }) async {
     await init();
+
+    // Strategy A: Native Platform Authenticator (bypasses Akamai Edge Bot Protection)
+    try {
+      final res = await _channel.invokeMethod<Map>('login', {
+        'email': identifier,
+        'password': password,
+      }).timeout(const Duration(seconds: 28));
+
+      if (res != null) {
+        final success = res['success'] == true;
+        if (success) {
+          final storeName = (res['storeName'] ?? '').toString().trim();
+          final ident = (res['identifier'] ?? '').toString().trim();
+          final supId = int.tryParse(res['supplierId']?.toString() ?? '0') ?? 0;
+          final cookies = res['cookies']?.toString() ?? '';
+
+          if (cookies.isNotEmpty) {
+            try {
+              final uri = Uri.parse('https://supplier.meesho.com');
+              final cookieList = cookies.split(';').map((c) {
+                final parts = c.trim().split('=');
+                if (parts.length >= 2) {
+                  return Cookie(parts[0].trim(), parts.sublist(1).join('=').trim());
+                }
+                return null;
+              }).whereType<Cookie>().toList();
+              await _cookieJar.saveFromResponse(uri, cookieList);
+            } catch (_) {}
+          }
+
+          String finalName = storeName;
+          final emailLower = identifier.toLowerCase();
+          if (finalName.isEmpty || finalName == 'Meesho Store') {
+            if (emailLower.contains('kaanchan') || emailLower.contains('kanchan') || emailLower.contains('vipul')) {
+              finalName = 'Kaanchan Export 1';
+            } else {
+              finalName = 'Meesho Store';
+            }
+          }
+
+          return MeeshoAuthResult(
+            success: true,
+            storeName: finalName,
+            identifier: ident,
+            supplierId: supId,
+          );
+        } else {
+          final err = res['error']?.toString();
+          return MeeshoAuthResult(
+            success: false,
+            errorMessage: err ?? 'Invalid credentials or login failed',
+          );
+        }
+      }
+    } on MissingPluginException {
+      // Not on Android / MethodChannel not registered, fallback to Direct REST
+    } catch (e) {
+      // Timeout or platform error, attempt fallback
+    }
+
+    // Strategy B: Direct REST v2-login fallback
     try {
       final response = await _dio.post(
         '/api/container/user/v2-login',
@@ -107,7 +171,6 @@ class MeeshoApiService {
           }
         }
 
-        // Master Spec rule for primary store matching Kaanchan Export 1
         final emailLower = identifier.toLowerCase();
         if (emailLower.contains('kaanchan') || emailLower.contains('kanchan') || emailLower.contains('vipul')) {
           extractedName = 'Kaanchan Export 1';

@@ -1,7 +1,5 @@
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'meesho_api_service.dart';
-import 'firestore_sync_service.dart';
 
 class NightBatchSchedulerService {
   static const int midnightBatchAlarmId = 9901;

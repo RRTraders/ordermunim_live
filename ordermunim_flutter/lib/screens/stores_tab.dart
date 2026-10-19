@@ -166,51 +166,66 @@ class _StoresAndProofTabState extends State<StoresAndProofTab> {
                                 errorMessage = null;
                               });
 
-                              final accountId = 'MSH_${DateTime.now().millisecondsSinceEpoch}';
-                              final api = MeeshoApiService(accountId: accountId);
-                              final authResult = await api.login(identifier: email, password: password);
+                              try {
+                                final accountId = 'MSH_${DateTime.now().millisecondsSinceEpoch}';
+                                final api = MeeshoApiService(accountId: accountId);
+                                final authResult = await api
+                                    .login(identifier: email, password: password)
+                                    .timeout(
+                                      const Duration(seconds: 30),
+                                      onTimeout: () => MeeshoAuthResult(
+                                        success: false,
+                                        errorMessage: 'Login timed out. Please check your credentials or internet connection.',
+                                      ),
+                                    );
 
-                              if (!authResult.success) {
+                                if (!authResult.success) {
+                                  setModalState(() {
+                                    isAuthenticating = false;
+                                    errorMessage = authResult.errorMessage ?? 'Authentication failed. Please check credentials.';
+                                  });
+                                  return;
+                                }
+
+                                // Create verified account
+                                final newAcc = MeeshoAccount(
+                                  id: accountId,
+                                  email: email,
+                                  password: password,
+                                  storeName: authResult.storeName,
+                                  identifier: authResult.identifier,
+                                  supplierId: authResult.supplierId,
+                                  lastLoginTime: DateTime.now(),
+                                  isActive: true,
+                                );
+
+                                // Save to encrypted local vault
+                                await AccountVaultService.saveAccount(newAcc);
+
+                                // Non-blocking background sync to Firestore (never freezes UI)
+                                FirestoreSyncService.syncDeliveryOtp(
+                                  accountId: accountId,
+                                  storeName: authResult.storeName,
+                                  otp: '',
+                                  courier: '',
+                                  packetCount: 0,
+                                ).timeout(const Duration(seconds: 2)).catchError((_) {});
+
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  _loadAccounts();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Successfully connected: ${authResult.storeName}'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
                                 setModalState(() {
                                   isAuthenticating = false;
-                                  errorMessage = authResult.errorMessage ?? 'Authentication failed';
+                                  errorMessage = 'Error connecting store: $e';
                                 });
-                                return;
-                              }
-
-                              // Create verified account
-                              final newAcc = MeeshoAccount(
-                                id: accountId,
-                                email: email,
-                                password: password,
-                                storeName: authResult.storeName,
-                                identifier: authResult.identifier,
-                                supplierId: authResult.supplierId,
-                                lastLoginTime: DateTime.now(),
-                                isActive: true,
-                              );
-
-                              // Save to local vault
-                              await AccountVaultService.saveAccount(newAcc);
-
-                              // Sync store identity to Firestore for desktop web view
-                              await FirestoreSyncService.syncDeliveryOtp(
-                                accountId: accountId,
-                                storeName: authResult.storeName,
-                                otp: '',
-                                courier: '',
-                                packetCount: 0,
-                              );
-
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                _loadAccounts();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Connected store: ${authResult.storeName}'),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
                               }
                             },
                       child: isAuthenticating
