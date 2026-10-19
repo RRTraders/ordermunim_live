@@ -1,11 +1,21 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/stores_tab.dart';
 import 'services/account_vault_service.dart';
 import 'services/night_batch_scheduler_service.dart';
 
+class _MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = _MyHttpOverrides();
   try {
     await Firebase.initializeApp();
   } catch (e) {

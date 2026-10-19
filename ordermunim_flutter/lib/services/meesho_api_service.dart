@@ -4,9 +4,11 @@ import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MeeshoAuthResult {
   final bool success;
+  final bool requiresVerification;
   final String? errorMessage;
   final String storeName;
   final String identifier;
@@ -15,6 +17,7 @@ class MeeshoAuthResult {
 
   MeeshoAuthResult({
     required this.success,
+    this.requiresVerification = false,
     this.errorMessage,
     this.storeName = '',
     this.identifier = '',
@@ -30,7 +33,7 @@ class MeeshoApiService {
   bool _isInitialized = false;
 
   static const String _desktopUserAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   MeeshoApiService({required this.accountId});
 
@@ -51,9 +54,6 @@ class MeeshoApiService {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
           'User-Agent': _desktopUserAgent,
           'Accept-Language': 'en-US,en;q=0.9',
-          'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-          'sec-ch-ua-mobile': '?0',
-          'sec-ch-ua-platform': '"Windows"',
         },
       ),
     );
@@ -62,11 +62,35 @@ class MeeshoApiService {
     _isInitialized = true;
   }
 
+  /// Saves raw cookies (e.g. from in-app web verification) into the account jar
+  Future<void> saveCookies(List<Cookie> cookies) async {
+    await init();
+    final uri = Uri.parse('https://supplier.meesho.com');
+    await _cookieJar.saveFromResponse(uri, cookies);
+  }
+
   /// Generates a fast base64url random string for instance token (matching competitor ECO SKU)
   String _generateInstanceToken() {
     final random = Random.secure();
     final values = List<int>.generate(16, (i) => random.nextInt(256));
     return base64UrlEncode(values).replaceAll('=', '');
+  }
+
+  /// Persistent device ID (matching ECO SKU eco_sku_cached_device_id pattern)
+  Future<String> _getPersistentDeviceId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? id = prefs.getString('ordermunim_device_id');
+      if (id == null || id.isEmpty) {
+        final random = Random.secure();
+        final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+        id = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+        await prefs.setString('ordermunim_device_id', id);
+      }
+      return id;
+    } catch (_) {
+      return _generateInstanceToken();
+    }
   }
 
   /// 1. Instant Pure-REST Login (<350ms) exactly like ECO SKU architecture
@@ -80,7 +104,7 @@ class MeeshoApiService {
       final email = identifier.trim();
       final uri = Uri.parse('https://supplier.meesho.com');
 
-      // Step 1: Pre-flight GET to fetch Akamai edge cookies (ak_bmsc, bm_sz) in ~100ms
+      // Step 1: Pre-flight GET to fetch Akamai edge cookies (ak_bmsc, bm_sz, _abck) in ~100ms
       try {
         final existingCookies = await _cookieJar.loadForRequest(uri);
         final hasEdgeCookies = existingCookies.any((c) => c.name == 'ak_bmsc' || c.name == 'bm_sz');
@@ -112,10 +136,11 @@ class MeeshoApiService {
 
       // Step 2: Fire direct POST /api/container/user/v2-login with required ECO SKU payload
       final instanceToken = _generateInstanceToken();
+      final deviceId = await _getPersistentDeviceId();
       final payload = {
         'email': email,
         'password': password,
-        'device_id': email,
+        'device_id': deviceId,
         'instance': instanceToken,
       };
 
@@ -129,16 +154,10 @@ class MeeshoApiService {
             'accept': 'application/json, text/plain, */*',
             'identifier': 'login',
             'client-type': 'd-web',
-            'client-package-version': '1.0.41',
+            'client-package-version': '1.0.28',
             'user-agent': _desktopUserAgent,
             'origin': 'https://supplier.meesho.com',
             'referer': 'https://supplier.meesho.com/panel/v3/new/root/login',
-            'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
           },
         ),
       );
@@ -221,7 +240,8 @@ class MeeshoApiService {
       if (response.statusCode == 403) {
         return MeeshoAuthResult(
           success: false,
-          errorMessage: 'Meesho security verification required. Please check your credentials or network connection.',
+          requiresVerification: true,
+          errorMessage: 'Meesho security verification required.',
         );
       }
 

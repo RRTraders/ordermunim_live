@@ -3,6 +3,7 @@ import '../services/account_vault_service.dart';
 import '../services/meesho_api_service.dart';
 import '../services/firestore_sync_service.dart';
 import 'cctv_unboxing_camera_screen.dart';
+import 'meesho_web_login_modal.dart';
 
 class StoresAndProofTab extends StatefulWidget {
   const StoresAndProofTab({super.key});
@@ -124,14 +125,50 @@ class _StoresAndProofTabState extends State<StoresAndProofTab> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              errorMessage!,
-                              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                          Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  errorMessage!,
+                                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF06B6D4)),
+                                foregroundColor: const Color(0xFF06B6D4),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                              ),
+                              icon: const Icon(Icons.verified_user_outlined, size: 16),
+                              label: const Text('Complete 1-Click Verification', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              onPressed: () async {
+                                final verified = await MeeshoWebLoginModal.show(
+                                  context,
+                                  initialEmail: emailController.text.trim(),
+                                  initialPassword: passwordController.text,
+                                );
+                                if (verified == true && context.mounted) {
+                                  Navigator.pop(context);
+                                  _loadAccounts();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Store Connected Successfully!'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
                             ),
                           ),
                         ],
@@ -172,12 +209,37 @@ class _StoresAndProofTabState extends State<StoresAndProofTab> {
                                 final authResult = await api
                                     .login(identifier: email, password: password)
                                     .timeout(
-                                      const Duration(seconds: 8),
+                                      const Duration(seconds: 10),
                                       onTimeout: () => MeeshoAuthResult(
                                         success: false,
                                         errorMessage: 'Connection timed out. Please check your internet connection.',
                                       ),
                                     );
+
+                                if (authResult.requiresVerification) {
+                                  setModalState(() {
+                                    isAuthenticating = false;
+                                    errorMessage = 'Meesho security verification required.';
+                                  });
+                                  if (context.mounted) {
+                                    final verified = await MeeshoWebLoginModal.show(
+                                      context,
+                                      initialEmail: email,
+                                      initialPassword: password,
+                                    );
+                                    if (verified == true && context.mounted) {
+                                      Navigator.pop(context);
+                                      _loadAccounts();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Store Connected Successfully!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                  return;
+                                }
 
                                 if (!authResult.success) {
                                   setModalState(() {
@@ -238,6 +300,41 @@ class _StoresAndProofTabState extends State<StoresAndProofTab> {
                               'Verify & Connect Store',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                             ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF94A3B8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.language, size: 16, color: Color(0xFF06B6D4)),
+                      label: const Text(
+                        'Connect via Official Meesho Web Login',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: isAuthenticating
+                          ? null
+                          : () async {
+                              final verified = await MeeshoWebLoginModal.show(
+                                context,
+                                initialEmail: emailController.text.trim(),
+                                initialPassword: passwordController.text,
+                              );
+                              if (verified == true && context.mounted) {
+                                Navigator.pop(context);
+                                _loadAccounts();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Store Connected Successfully!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            },
                     ),
                   ),
                 ],

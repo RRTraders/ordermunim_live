@@ -31,6 +31,9 @@ dependencies:
   # Hardware CCTV Camera with Live Timestamp
   camera: ^0.11.0+2
 
+  # In-App Verification & Captcha Fallback (for Akamai Bot Security Challenge)
+  webview_flutter: ^4.10.0
+
   # Secure Storage & Persistence
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^9.2.2
